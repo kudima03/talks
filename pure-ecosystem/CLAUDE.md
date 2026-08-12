@@ -1,0 +1,82 @@
+# Pure ecosystem talk — working notes
+
+Guidance for anyone (human or agent) editing the talks in this folder.
+
+## Layout
+
+```
+pure-ecosystem/
+├── CLAUDE.md   ← this file
+├── en/         ← English scripts (pure-ecosystem-talk.md)
+└── ru/         ← Russian scripts
+```
+
+One folder per language. Scripts are **spoken-delivery text**, not slide bullets — continuous prose meant to be read aloud.
+
+## Speaker
+
+Dmitry Kurochkin (`kudima03`) — .NET developer, author and main contributor of the Pure ecosystem (~75 NuGet packages, one repository per package). Source repos live under `/Users/dmitry/RiderProjects/` as `Pure.*` and `PureQL*`.
+
+## Attribution — non-negotiable
+
+Elegant Objects is **Yegor Bugaenko's** invention. He did the thinking, the research, wrote the books, and took the criticism. Pure is an implementation of those ideas for .NET with some divergences.
+
+Credit him in the first minute. Never open with a provocative "your code is wrong" hook — it reads as loud and as borrowed thunder. Open plainly and give credit first.
+
+## Vocabulary
+
+| Use | Never use |
+|---|---|
+| read-only field, computed field | getter, accessor, property-with-logic |
+| **native field** — `BoolValue` / `NumberValue` / `TextValue` | "the value property" |
+| transformation of data | manipulation of data |
+| "a sequential set of object states" | "an object" (when describing a written-down transformation) |
+
+**Native fields** are the bridge point between .NET and the ecosystem. They are forced to exist, and they are *always computed, never stored*. Full evaluation happens when one is read.
+
+## Doctrine to state correctly
+
+- **The transformation lives in constructors.** One primary constructor assigns fields; it must be **private**, and it is the *only* constructor allowed to assign. Every other constructor is a conversion that wraps its inputs in objects and delegates. That delegation chain *is* the transformation.
+- **Object state is initialised only via composition in constructor delegation.** Don't describe fields as "some stored, some computed" — that framing was rejected.
+- **Determined hashes, stated positively.** Say "we use determined hashes instead," never "we deprecate / destroy / reject `GetHashCode`." The reason to lead with: `GetHashCode` differs between program runs, so it cannot be identity. What we want is the hash of an **object state snapshot**.
+- **Order matters:** determined hashes must be explained *before* the switch that uses them.
+- **Collections follow from hashes:** because built-in `GetHashCode` is unused, framework collections cannot be used — the ecosystem ships collection wrappers keyed on determined hashes.
+- **Allocator = one short thought, no hedging paragraph.** "Determined hashes open doors for allocator implementations: objects are immutable and their state can be determined, so the allocator can check whether an object with the same state is already allocated and return the existing reference instead." Not built yet — but state it briefly and move on.
+- **Mental power:** it takes more mental power to *design*, but the design is much simpler, better and more satisfying to *read* than the classic alternative. Do not frame this as a cost the audience must accept.
+- **Adapters** are the real cost. Keep it general — "everything that meets classic .NET needs a wrapper." The main thought: write the adapter, or implement as large a domain as possible inside the ecosystem, evaluate via a native field at the edge, and go further. Do not enumerate individual adapter packages.
+- **Testing is a headline benefit,** not an afterthought: everything is bounded, immutable, thread-safe.
+
+## Style rules
+
+- No absolute clock references in spoken text ("by minute twenty", "the last third of this talk"). Section headers carry a duration (`≈ 5 min`) only.
+- Prefer showing a code snippet over a bare `[SHOW: …]` cue. If a beat needs a slide, write the snippet.
+- Delivery marks: `[PAUSE]`, `[LONG PAUSE]`, `**bold**` for vocal stress, `[SHOW: …]` for slide cues. Use sparingly so they keep meaning.
+- Pacing: ~128–140 spoken words per minute. A 30-minute slot is ≈ 3,900–4,200 spoken words (excluding code blocks).
+- Avoid over-aggressive framing. Confident and direct is right; combative is not.
+- Every named example must be a **concrete, named, reusable, testable** type with immutable state — e.g. `Millenium : IDate` rather than an anonymous literal.
+
+## Code snippets
+
+Quote **verbatim from the source repos** and re-check before committing. Do not quote package READMEs — several disagree with their own code (`Materialized`, `Cached`, `Choices`, `Switches`, `Linq.Conditions`).
+
+Two deliberate exceptions in the current English script, both requested in review:
+
+1. **`DateChoice`** is shown in idiomatic constructor-delegation form (public ctor composes three `NumberChoice<ushort>` and delegates; private ctor assigns). The shipped type instead evaluates `_condition.BoolValue` inside each field. The script teaches the intended pattern.
+2. **`Millenium`** is an illustrative type, not a shipped one.
+
+## Out of scope for this talk
+
+- Relational schema and PureQL — a separate talk.
+- `Pure.Primitives.Materialized` — **obsolete**, do not present it. Evaluation is explained via native fields instead.
+- Do not mention `Pure.Serialization.Json` or `Pure.RelationalSchema.Conditions` (no `.cs` files shipped), or the three placeholder `FakeTests` projects.
+
+## Accuracy guardrails
+
+Verified during the scan; keep the script honest about these:
+
+- There is **no custom allocator**. The collections are `FrozenDictionary`/`FrozenSet` + `Lazy<T>` + immutability. Allocation is an opportunity, never a claim.
+- The `int` hash is **not eliminated** — 256-bit identity folds back to an int for bucket selection in `EqualityComparerByDeterminedHash`. Frame it as "demoted from an identity to a bucket index."
+
+## Workflow
+
+Deliver via PR. Address review comments in the **same** PR rather than opening a new one.
