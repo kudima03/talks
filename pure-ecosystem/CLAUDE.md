@@ -15,7 +15,7 @@ One folder per language. Scripts are **spoken-delivery text**, not slide bullets
 
 ## Speaker
 
-Dmitry Kurochkin (`kudima03`) — .NET developer, author and main contributor of the Pure ecosystem (~75 NuGet packages, one repository per package). Source repos live under `/Users/dmitry/RiderProjects/` as `Pure.*` and `PureQL*`.
+Dmitry Kurochkin (`kudima03`) — .NET developer, author and main contributor of the Pure ecosystem (~75 NuGet packages, one repository per package). Source repos live under `/Users/dmitry/RiderProjects/` as `Pure.*` and `PureQL*`, and are public on GitHub under `kudima03` — verify snippets from there when the local checkout is not available (`gh api repos/kudima03/<repo>/git/trees/HEAD?recursive=1`, then raw.githubusercontent.com).
 
 ## Attribution — non-negotiable
 
@@ -45,11 +45,14 @@ Credit him in the first minute. Never open with a provocative "your code is wron
 - **Mental power:** it takes more mental power to *design*, but the design is much simpler, better and more satisfying to *read* than the classic alternative. Do not frame this as a cost the audience must accept.
 - **Adapters** are the real cost. Keep it general — "everything that meets classic .NET needs a wrapper." The main thought: write the adapter, or implement as large a domain as possible inside the ecosystem, evaluate via a native field at the edge, and go further. Do not enumerate individual adapter packages.
 - **Testing is a headline benefit,** not an afterthought: everything is bounded, immutable, thread-safe.
+- **Naming: what a component *is*, not what it does.** `ConcatenatedString`, `Sum`, `Difference`, `CurrentTime`, `Millenium`. Never `StringConcatenator`, `Calculate`, `TimeProvider`. A composition read aloud should be a noun phrase.
 
 ## Style rules
 
 - No absolute clock references in spoken text ("by minute twenty", "the last third of this talk"). Section headers carry a duration (`≈ 5 min`) only.
 - Prefer showing a code snippet over a bare `[SHOW: …]` cue. If a beat needs a slide, write the snippet.
+- Show *usage* as well as declaration — a composition the audience can read as one expression (`new WrappedString(new LeftCurlyBracketString(), new RandomString(), new RightCurlyBracketString())`).
+- Where a mechanism would otherwise be shown as internal LINQ, draw it instead — the switch's branch selection is a tree diagram, not a `.Where(…)`.
 - Delivery marks: `[PAUSE]`, `[LONG PAUSE]`, `**bold**` for vocal stress, `[SHOW: …]` for slide cues. Use sparingly so they keep meaning.
 - Pacing: ~128–140 spoken words per minute. A 30-minute slot is ≈ 3,900–4,200 spoken words (excluding code blocks).
 - Avoid over-aggressive framing. Confident and direct is right; combative is not.
@@ -59,10 +62,15 @@ Credit him in the first minute. Never open with a provocative "your code is wron
 
 Quote **verbatim from the source repos** and re-check before committing. Do not quote package READMEs — several disagree with their own code (`Materialized`, `Cached`, `Choices`, `Switches`, `Linq.Conditions`).
 
-Two deliberate exceptions in the current English script, both requested in review:
+Deliberate exceptions in the current English script, all requested in review:
 
 1. **`DateChoice`** is shown in idiomatic constructor-delegation form (public ctor composes three `NumberChoice<ushort>` and delegates; private ctor assigns). The shipped type instead evaluates `_condition.BoolValue` inside each field. The script teaches the intended pattern.
 2. **`Millenium`** is an illustrative type, not a shipped one.
+3. **`TotalWithVat`** is an illustrative type, not a shipped one — a domain-level example of the same delegation pattern, composed only from shipped `Sum<T>` / `Product<T>`.
+
+Snippets are trimmed for the slide: the `GetHashCode` / `ToString` / `GetEnumerator` members that every shipped record carries are cut. Nothing else is altered.
+
+Prefer non-primitive samples. `Int`'s four constructors were rejected in review as a primitive example; `WrappedString` carries the same lesson (only the private ctor assigns) and is one layer up.
 
 ## Out of scope for this talk
 

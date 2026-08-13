@@ -56,7 +56,7 @@ Everything in Pure comes out of five rules. I will spend the rest of the talk sh
 
 Let me expand the first one, because it is where I read Elegant Objects differently, and I would rather say it myself than have you notice it later.
 
-Elegant Objects argues against exposing state. Pure is built almost entirely out of read-only fields. That looks like a contradiction, and it deserves thirty seconds.
+Elegant Objects argues against exposing state. Pure is built almost entirely out of read-only fields. That looks like a contradiction, and it deserves a proper explanation.
 
 In classical .NET, a field holds a value and an accessor hands it to you. That is the thing worth objecting to — the object becomes a bag you reach into. In Pure, a field is not an accessor bolted onto stored state. **The field is the state.** And that state is established in exactly one place: [PAUSE] the constructor, by composing other objects, and delegating from one constructor to the next.
 
@@ -175,7 +175,7 @@ The naive answer is "into the fields." That is half true, and it is the half tha
 
 **The transformation lives in the constructors.**
 
-Every component has one primary constructor. That primary constructor takes the values of the fields — whatever custom types they happen to be — and it does exactly one thing. It assigns them. No work. No validation. No allocation of results. Assignment.
+Every component has one primary constructor. That primary constructor takes the values of the fields — whatever custom types they happen to be — and it does exactly one thing. It assigns them. No work. No validation. No evaluation of results. Assignment.
 
 **Every other constructor is a conversion.** It takes some other shape of input, wraps it in objects, and delegates — either straight to the primary constructor, or through another constructor on the way. And that delegation chain, that little cascade of `: this(new Something(...))`, **is** the transformation.
 
@@ -197,42 +197,53 @@ Two constructors. The bottom one is primary — three fields in, three assignmen
 Now the same pattern doing something more interesting.
 
 ```csharp
-public Int(int value)
-    : this(new Lazy<int>(() => value)) { }
-
-public Int(INumber<ushort> value)
-    : this(new Lazy<int>(() => value.NumberValue)) { }
-
-public Int(INumber<short> value)
-    : this(new Lazy<int>(() => value.NumberValue)) { }
-
-private Int(Lazy<int> lazyValue)
+public sealed record WrappedString : IString
 {
-    _lazyValue = lazyValue;
+    private readonly IString _concatenated;
+
+    public WrappedString(IString encloser, IString wrappedValue)
+        : this(encloser, wrappedValue, encloser) { }
+
+    public WrappedString(IString prefix, IString wrappedValue, IString suffix)
+        : this(new ConcatenatedString(prefix, wrappedValue, suffix)) { }
+
+    private WrappedString(IString concatenated)
+    {
+        _concatenated = concatenated;
+    }
+
+    public string TextValue => _concatenated.TextValue;
 }
 ```
 
-Four constructors, and the only one that touches a field is **private**. Every public entry point is a conversion that wraps its input and hands it down. Widening a `ushort` to an `int` is not a cast written in a method body. It is a constructor delegating.
+Three constructors, and the only one that touches a field is **private**. Every public entry point is a conversion that composes objects and hands them down. The two-argument version says "the same thing on both sides" by delegating with the encloser twice. The three-argument version does the actual work — and look at what "the actual work" is. [PAUSE] It builds a `ConcatenatedString`, which I will show you in a moment, and passes it along.
 
-And here is my favourite, because it is a whole logical operator written without a single line of logic.
+Nothing is wrapped. There is no wrapping code anywhere in that class. A wrapped string simply **holds a concatenation** and reports its text.
+
+And that pattern is not confined to primitives. Here is a domain type built the same way.
 
 ```csharp
-public sealed record NotEmptyCondition<T> : IBool
+public sealed record TotalWithVat : INumber<decimal>
 {
-    private readonly IEnumerable<T> _values;
+    private readonly INumber<decimal> _total;
 
-    public NotEmptyCondition(IEnumerable<T> values)
+    public TotalWithVat(INumber<decimal> net, INumber<decimal> rate)
+        : this(new Sum<decimal>(net, new Product<decimal>(net, rate))) { }
+
+    private TotalWithVat(INumber<decimal> total)
     {
-        _values = values;
+        _total = total;
     }
 
-    public bool BoolValue => new Not(new EmptyCondition<T>(_values)).BoolValue;
+    public decimal NumberValue => _total.NumberValue;
 }
 ```
 
 [PAUSE]
 
-"Not empty" is not implemented. It is **composed**. `Not` of `Empty`. That is the entire class. Boolean algebra, done by putting one object inside another object.
+There is no arithmetic in that class. Not one operator. The rule "add the tax to the net amount" is written as a `Sum` of the net and a `Product` — a tree of objects, assembled in a constructor and standing still.
+
+And notice what you got for free by naming it. `TotalWithVat` is a type. It goes anywhere an `INumber<decimal>` is accepted, it can be put inside another calculation, and you can test it by constructing it and reading one field.
 
 [SHOW: `ConcatenatedString`]
 
@@ -259,6 +270,27 @@ The component implements the interface and expresses the transformation at the s
 And now the consequence, which is rule four. [PAUSE] What did that constructor actually do? It assigned a field. That is all. **Nothing was concatenated.** No string exists. If you build a graph of ten thousand of these, you have allocated ten thousand small objects and performed exactly zero string operations.
 
 Nothing runs except `new`.
+
+So this is what a program actually looks like written this way.
+
+```csharp
+IString placeholder = new WrappedString(
+    new LeftCurlyBracketString(),
+    new RandomString(),
+    new RightCurlyBracketString()
+);
+
+INumber<int> result = new Sum<int>(
+    new Difference<int>(new Int(10), new Int(3)),
+    new Product<int>(new Int(2), new Int(4))
+);
+```
+
+Two statements, and both of them are declarations. No string was built. No arithmetic was performed. Not even the random string was generated — `RandomString` holds a `Lazy<string>` that has never been asked. [PAUSE] What you are looking at is the shape of the answer, not the answer.
+
+And while these are on the screen, let me say something about the names, because it is a rule and not a habit.
+
+**We name a component for what it is, not for what it does.** `ConcatenatedString`. `Sum`. `Difference`. `CurrentTime`. Not `StringConcatenator`, not `Calculate`, not `TimeProvider`. [PAUSE] A component is not an agent that performs an action — it is a value that stands for one. So it gets the name of the value: a sum, a difference, a wrapped string, the current time. Read either of those declarations out loud and you are reading a noun phrase, not a procedure. That is deliberate.
 
 [LONG PAUSE]
 
@@ -322,25 +354,9 @@ Sixteen random bytes, unique per type, prepended before hashing. So the number z
 
 There is a direct consequence, and it is not a small one. [PAUSE] If we do not use `GetHashCode`, **we cannot use the framework's collections.** A `Dictionary` or a `HashSet` asks its keys for a hash code, and our objects do not answer that question.
 
-So the ecosystem ships its own collection wrappers, and they work through determined hashes instead:
+So the ecosystem ships its own collection wrappers, and they work through determined hashes instead. Two keys are the same when their byte sequences are the same — equality is decided by comparing two hundred and fifty-six bits, exactly. The integer underneath has not disappeared — but it has been **demoted from an identity to a bucket index**. It no longer answers "are these the same." It only answers "roughly where should I look," and collisions there are harmless, because the real comparison is exact.
 
-```csharp
-public bool Equals(T? x, T? y)
-{
-    return _determinedHashFactory(x!).SequenceEqual(_determinedHashFactory(y!));
-}
-
-public int GetHashCode(T obj)
-{
-    HashCode hash = new();
-    hash.AddBytes(_determinedHashFactory(obj).ToArray());
-    return hash.ToHashCode();
-}
-```
-
-Equality is decided by comparing two hundred and fifty-six bits, exactly. The integer underneath has not disappeared — but it has been **demoted from an identity to a bucket index**. It no longer answers "are these the same." It only answers "roughly where should I look," and collisions there are harmless, because the real comparison is exact.
-
-And notice the shape of it: `Func<T, IDeterminedHash>`, passed into the constructor. The dictionary never asks its keys who they are. **The caller decides what identity means, and hands it in.**
+And notice how such a collection learns what identity is — it is handed a `Func<T, IDeterminedHash>` in its constructor. The dictionary never asks its keys who they are. **The caller decides what identity means, and hands it in.**
 
 [PAUSE]
 
@@ -379,7 +395,23 @@ The condition is an object. Both branches are objects. And the choice itself —
 
 That is the whole trick, and it is worth stating slowly. An `if` that produces a string **is** a string. It is not a control structure that yields a value. It is a value that happens to have a decision inside it.
 
-Which means it composes. You can put a choice inside a concatenation, inside another choice, inside a cache, and nothing downstream needs to know a decision is in there.
+Which means it composes.
+
+```csharp
+INumber<int> count = new Int(3);
+
+IString label = new WrappedString(
+    new LeftCurlyBracketString(),
+    new StringChoice(
+        new GreaterThanCondition<int>(count, new Zero<int>()),
+        new String(count),
+        new EmptyString()
+    ),
+    new RightCurlyBracketString()
+);
+```
+
+The `WrappedString` has no idea there is a branch inside it. It was handed an `IString`, and that is all it will ever know. [PAUSE] You can put a choice inside a concatenation, inside another choice, inside a cache — and nothing downstream needs to know a decision is in there.
 
 Now let me show you what happens when the target interface has more than one field. Remember `IDate` — three numbers, no native field.
 
@@ -435,15 +467,26 @@ public StringSwitch(
 )
 ```
 
-```csharp
-IEnumerable<byte> parameterHash = _hashFactory(_parameter);
+And this is the whole machine. Nothing else is in there.
 
-IEnumerable<IString> filteredBranches = _branches
-    .Where(x => parameterHash.SequenceEqual(_hashFactory(x.Key)))
-    .Select(x => x.Value);
+```
+new StringSwitch<IDayOfWeek>(today, branches, day => new DeterminedHash(day))
+
+  parameter
+    today ─────────────▶ hashFactory ─▶ 3f a1 c7 …  (32 bytes)
+                                             │
+                                             │  SequenceEqual
+                                             ▼
+  branches
+    ├── new Monday()   ─▶ hashFactory ─▶ 9c 2e 44 …    ✗
+    ├── new Saturday() ─▶ hashFactory ─▶ 3f a1 c7 …    ✓ ─▶ new String("Weekend")
+    └── new Sunday()   ─▶ hashFactory ─▶ 71 0b 9d …    ✗
+                                                            └── the only branch read
 ```
 
-The switch does not ask the objects whether they are equal. It is **told how to identify them** — `Func<TSelector, IDeterminedHash>`, handed in through the constructor — and it compares byte sequences.
+Hash the parameter. Hash each key. Keep the branch whose bytes match — and read only that one. The two that lost are still sitting there, unevaluated, and they will stay that way.
+
+[PAUSE] Notice what is **not** in that picture. No `==`. No `Equals`. No virtual dispatch to ask an object about itself. The switch does not ask the objects whether they are equal. It is **told how to identify them** — `Func<TSelector, IDeterminedHash>`, handed in through the constructor — and it compares byte sequences.
 
 [PAUSE] **Identity is a constructor parameter.**
 
@@ -479,7 +522,7 @@ Let me finish where I started.
 
 A program transforms data, and its result is data. If you believe that, then a program should not be a list of instructions that produce a transformation. **A program should be the transformation** — written down, composed, and standing there unperformed until someone needs it.
 
-That is what all of this is for. Not the interfaces, not the hashes, not the seventy-five packages. Those are consequences. The idea is that you should be able to write your entire program as a composition of `new`, hand it to someone, and have it be **completely inert**.
+That is what all of this is for. Not the interfaces, not the hashes. Those are consequences. The idea is that you should be able to write your entire program as a composition of `new`, hand it to someone, and have it be **completely inert**.
 
 And at the edges, Pure disappears completely. The wire sees a string. The database sees a column. The client sees a primitive. None of them can tell. All of this exists only inside the process, between the first constructor and the moment a native field is read.
 
