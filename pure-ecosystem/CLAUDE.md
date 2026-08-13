@@ -45,7 +45,7 @@ Credit him in the first minute. Never open with a provocative "your code is wron
 - **Mental power:** it takes more mental power to *design*, but the design is much simpler, better and more satisfying to *read* than the classic alternative. Do not frame this as a cost the audience must accept.
 - **Adapters** are the real cost. Keep it general — "everything that meets classic .NET needs a wrapper." The main thought: write the adapter, or implement as large a domain as possible inside the ecosystem, evaluate via a native field at the edge, and go further. Do not enumerate individual adapter packages.
 - **Testing is a headline benefit,** not an afterthought: everything is bounded, immutable, thread-safe.
-- **Naming: what a component *is*, not what it does.** `ConcatenatedString`, `Sum`, `Difference`, `CurrentTime`, `Millenium`. Never `StringConcatenator`, `Calculate`, `TimeProvider`. A composition read aloud should be a noun phrase.
+- **Naming: what a component *is*, not what it does.** `ConcatenatedString`, `Sum`, `Difference`, `CurrentTime`, `Millennium`. Never `StringConcatenator`, `Calculate`, `TimeProvider`. A composition read aloud should be a noun phrase.
 
 ## Style rules
 
@@ -56,7 +56,7 @@ Credit him in the first minute. Never open with a provocative "your code is wron
 - Delivery marks: `[PAUSE]`, `[LONG PAUSE]`, `**bold**` for vocal stress, `[SHOW: …]` for slide cues. Use sparingly so they keep meaning.
 - Pacing: ~128–140 spoken words per minute. A 30-minute slot is ≈ 3,900–4,200 spoken words (excluding code blocks).
 - Avoid over-aggressive framing. Confident and direct is right; combative is not.
-- Every named example must be a **concrete, named, reusable, testable** type with immutable state — e.g. `Millenium : IDate` rather than an anonymous literal.
+- Every named example must be a **concrete, named, reusable, testable** type with immutable state — e.g. `Millennium : IDate` rather than an anonymous literal.
 
 ## Code snippets
 
@@ -65,7 +65,7 @@ Quote **verbatim from the source repos** and re-check before committing. Do not 
 Deliberate exceptions in the current English script, all requested in review:
 
 1. **`DateChoice`** is shown in idiomatic constructor-delegation form (public ctor composes three `NumberChoice<ushort>` and delegates; private ctor assigns). The shipped type instead evaluates `_condition.BoolValue` inside each field. The script teaches the intended pattern.
-2. **`Millenium`** is an illustrative type, not a shipped one.
+2. **`Millennium`** is an illustrative type, not a shipped one.
 3. **`TotalWithVat`** is an illustrative type, not a shipped one — a domain-level example of the same delegation pattern, composed only from shipped `Sum<T>` / `Product<T>`.
 
 Snippets are trimmed for the slide: the `GetHashCode` / `ToString` / `GetEnumerator` members that every shipped record carries are cut. Nothing else is altered.

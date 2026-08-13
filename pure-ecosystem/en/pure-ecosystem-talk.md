@@ -138,9 +138,9 @@ public interface IDate
 Here is what you build on top of that:
 
 ```csharp
-public sealed record Millenium : IDate
+public sealed record Millennium : IDate
 {
-    public Millenium()
+    public Millennium()
     {
         Day = new UShort(1);
         Month = new UShort(1);
@@ -156,10 +156,10 @@ public sealed record Millenium : IDate
 And you use it like this:
 
 ```csharp
-IDate birthday = new Millenium();
+IDate birthday = new Millennium();
 ```
 
-Look at what that gives you. Not a `DateTime` with a magic value in it, and not a constant buried in some static helper. [PAUSE] A **named** type. `Millenium`. It has a name, so it explains itself at the call site. It is reusable anywhere an `IDate` is accepted. It is testable entirely on its own. And its state is fixed at construction and can never become anything else.
+Look at what that gives you. Not a `DateTime` with a magic value in it, and not a constant buried in some static helper. [PAUSE] A **named** type. `Millennium`. It has a name, so it explains itself at the call site. It is reusable anywhere an `IDate` is accepted. It is testable entirely on its own. And its state is fixed at construction and can never become anything else.
 
 That is what I mean by composition starting at the bottom. If your primitives are opaque, you can compose your domain objects all you like — the composition stops the moment you touch a `string`. Here it never stops.
 
