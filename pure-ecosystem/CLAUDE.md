@@ -36,7 +36,10 @@ Credit him in the first minute. Never open with a provocative "your code is wron
 
 ## Doctrine to state correctly
 
-- **The transformation lives in constructors.** One primary constructor assigns fields; it must be **private**, and it is the *only* constructor allowed to assign. Every other constructor is a conversion that wraps its inputs in objects and delegates. That delegation chain *is* the transformation.
+- **The transformation lives in constructors.** Exactly one constructor assigns fields, and as soon as a component has a second constructor that assigning one is **private**. Every other constructor is a conversion that composes its inputs into objects and delegates. That delegation chain *is* the transformation. (State it that way — single-constructor components like `ConcatenatedString` and `Sum<T>` do assign publicly, so "the assigning ctor is always private" contradicts the very first snippet.)
+- **Attribution wording.** "The concept and the inspiration were taken from Elegant Objects"; the core ideas are taken **from the Elegant Objects concept**, but this is *not* Elegant Objects ported to .NET — in a lot of places the implementation differs from how the author sees it.
+- **Classic code is "a sequential set of instructions"** — that is what is written down. "A sequential set of *object* states" is the Pure alternative. Data states are what happen at runtime; don't call the written artefact that.
+- **Elegant Objects argues against exposing *fields*** (not "state").
 - **Object state is initialised only via composition in constructor delegation.** Don't describe fields as "some stored, some computed" — that framing was rejected.
 - **Determined hashes, stated positively.** Say "we use determined hashes instead," never "we deprecate / destroy / reject `GetHashCode`." The reason to lead with: `GetHashCode` differs between program runs, so it cannot be identity. What we want is the hash of an **object state snapshot**.
 - **Order matters:** determined hashes must be explained *before* the switch that uses them.
@@ -46,6 +49,8 @@ Credit him in the first minute. Never open with a provocative "your code is wron
 - **Adapters** are the real cost. Keep it general — "everything that meets classic .NET needs a wrapper." The main thought: write the adapter, or implement as large a domain as possible inside the ecosystem, evaluate via a native field at the edge, and go further. Do not enumerate individual adapter packages.
 - **Testing is a headline benefit,** not an afterthought: everything is bounded, immutable, thread-safe.
 - **Naming: what a component *is*, not what it does.** `ConcatenatedString`, `Sum`, `Difference`, `CurrentTime`, `Millennium`. Never `StringConcatenator`, `Calculate`, `TimeProvider`. A composition read aloud should be a noun phrase.
+- **Evaluation is not memoised.** A composition keeps no result — read `.TextValue` twice and the graph is walked twice. `CachedString` (a `Lazy<string>` with `ExecutionAndPublication`) is the opt-in, and it is just another `IString` in the graph. Note the exception: `Lazy`-backed leaves such as `Int` and `RandomString` do hold their value once read.
+- **Identity is not framed as "a constructor parameter."** That beat was cut in review — say the switch is *told how to identify* its keys via a determined state hash, and stop there.
 
 ## Style rules
 
@@ -71,6 +76,20 @@ Deliberate exceptions in the current English script, all requested in review:
 Snippets are trimmed for the slide: the `GetHashCode` / `ToString` / `GetEnumerator` members that every shipped record carries are cut. Nothing else is altered.
 
 Prefer non-primitive samples. `Int`'s four constructors were rejected in review as a primitive example; `WrappedString` carries the same lesson (only the private ctor assigns) and is one layer up.
+
+## One job per beat
+
+Review has twice flagged **semantic duplication** in section 4 — constructor delegation re-explained under every snippet, "nothing ran" restated three times, and the "named / reusable / testable" point repeated from `Millennium`. Each snippet now carries exactly one idea, and nothing earns a second explanation:
+
+| Snippet | Its one job |
+|---|---|
+| `ConcatenatedString` | the component *is* the interface — and its ctor only assigned, so nothing runs except `new` |
+| `WrappedString` | the delegation chain; only the private ctor assigns; even defaults are objects |
+| `TotalWithVat` | the same shape at domain level — a business rule as a tree of objects |
+| usage samples | what a program looks like; the compositions are cheap values to move around |
+| `CachedString` | evaluation happens per read, and caching is one more object in the graph |
+
+Before adding a paragraph, check it is not the previous point in new words.
 
 ## Out of scope for this talk
 

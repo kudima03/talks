@@ -20,9 +20,9 @@ Good afternoon, colleagues.
 
 My name is Dmitry Kurochkin. I am a .NET developer, and I am the author and the main contributor of an ecosystem called Pure.
 
-Before I say anything else, I want to be precise about what is mine and what is not. [PAUSE] The ideas I am going to show you today were not invented by me. They come from Elegant Objects — from Yegor Bugaenko. He is the one who did the thinking, the research, wrote the books and took the criticism for it.
+Before I say anything else, I want to be precise about what is mine and what is not. [PAUSE] The ideas I am going to show you today were not invented by me. The concept and the inspiration were taken from Elegant Objects — from Yegor Bugaenko. He is the one who did the thinking, the research, wrote the books and took the criticism for it.
 
-What I did is smaller and more concrete. I took those ideas and I implemented them for .NET, in a form you can install from NuGet and use this afternoon. And in a few places, I read them differently than he does.
+What I did is smaller and more concrete. The core ideas are taken from the Elegant Objects concept — but this is not Elegant Objects ported to .NET. [PAUSE] In a lot of places the implementation is genuinely different from the way the author sees it, and I will point at those places as we go.
 
 So the question I want to answer today is this. What does a .NET program actually look like if you take those ideas seriously — all the way down? Not down to your domain model. Not down to your service layer. [PAUSE] All the way down to primitives.
 
@@ -38,9 +38,9 @@ Whatever your program is — a web service, a report generator, a trading system
 
 [PAUSE]
 
-Now look at how we normally write that transformation. We write a sequence of instructions that *performs* it. We say: take this, do that, check this, assign that, return. The transformation exists only while the CPU is running. Before that, it is a recipe. After that, it is gone. What we have written down is not the transformation. It is a sequential set of data states for producing it.
+Now look at how we normally write that transformation. We write a sequence of instructions that *performs* it. Take this, do that, check this, assign that, return. Run them, and the data walks through one state after another — and that walk is the transformation. It exists only while the CPU is running. Before that, it is a recipe. After that, it is gone. [PAUSE] So what we have written down is not the transformation. It is **a sequential set of instructions** for producing it.
 
-So here is the alternative. [PAUSE] What if we wrote the transformation down **as a sequential set of object states**? Not the steps that compute the result — the result itself, in unevaluated form. A thing that already *is* the answer, and simply has not been asked yet.
+So here is the alternative. [PAUSE] What if we wrote the transformation down **as a sequential set of object states** instead? Not the steps that compute the result — the result itself, in unevaluated form. A thing that already *is* the answer, and simply has not been asked yet.
 
 Then a program stops being a sequence of instructions. A program becomes a **composition**. You build a graph of objects, each one standing for one small transformation, and at the very end — once — you read a field, and the whole thing collapses into a value.
 
@@ -56,7 +56,7 @@ Everything in Pure comes out of five rules. I will spend the rest of the talk sh
 
 Let me expand the first one, because it is where I read Elegant Objects differently, and I would rather say it myself than have you notice it later.
 
-Elegant Objects argues against exposing state. Pure is built almost entirely out of read-only fields. That looks like a contradiction, and it deserves a proper explanation.
+Elegant Objects argues against exposing fields. Pure is built almost entirely out of read-only fields. That looks like a contradiction, and it deserves a proper explanation.
 
 In classical .NET, a field holds a value and an accessor hands it to you. That is the thing worth objecting to — the object becomes a bag you reach into. In Pure, a field is not an accessor bolted onto stored state. **The field is the state.** And that state is established in exactly one place: [PAUSE] the constructor, by composing other objects, and delegating from one constructor to the next.
 
@@ -175,26 +175,35 @@ The naive answer is "into the fields." That is half true, and it is the half tha
 
 **The transformation lives in the constructors.**
 
-Every component has one primary constructor. That primary constructor takes the values of the fields — whatever custom types they happen to be — and it does exactly one thing. It assigns them. No work. No validation. No evaluation of results. Assignment.
+Every component has **exactly one constructor that assigns fields**. It takes the fields already in their final types and it does one thing — assignment. No work. No validation. No evaluation of results. And the moment a component has a second constructor, that assigning one becomes **private**, so there is no way around it.
 
-**Every other constructor is a conversion.** It takes some other shape of input, wraps it in objects, and delegates — either straight to the primary constructor, or through another constructor on the way. And that delegation chain, that little cascade of `: this(new Something(...))`, **is** the transformation.
+**Every other constructor is a conversion.** It takes some other shape of input, composes objects out of it, and delegates — straight to the assigning constructor, or through another conversion on the way. And that delegation chain, that little cascade of `: this(new Something(...))`, **is** the transformation.
+
+Start with the simplest component in the ecosystem.
 
 ```csharp
-public Substring(IString source, INumber<ushort> length)
-    : this(source, new Zero<ushort>(), length)
-{ }
-
-public Substring(IString source, INumber<ushort> startIndex, INumber<ushort> length)
+public sealed record ConcatenatedString : IString
 {
-    _source = source;
-    _startIndex = startIndex;
-    _length = length;
+    private readonly IEnumerable<IString> _parameters;
+
+    public ConcatenatedString(params IEnumerable<IString> parameters)
+    {
+        _parameters = parameters;
+    }
+
+    public string TextValue => string.Concat(_parameters.Select(x => x.TextValue));
 }
 ```
 
-Two constructors. The bottom one is primary — three fields in, three assignments out. The top one is the convenience overload, and notice how it supplies its default. Not `0`. **`new Zero<ushort>()`.** Even the absent argument is an object.
+`ConcatenatedString` is not a helper. It is not a builder. It does not *produce* an `IString`. [PAUSE] **It is an `IString`.** The component implements the interface and expresses the transformation at the same time — and those are not two responsibilities, they are one.
 
-Now the same pattern doing something more interesting.
+Now look at what its constructor actually did. It assigned a field. [PAUSE] **Nothing was concatenated.** No string exists. Build a graph of ten thousand of these and you have allocated ten thousand small objects and performed exactly zero string operations.
+
+That is rule four, and it fits in four words. Nothing runs except `new`.
+
+[PAUSE]
+
+Now the delegation, one layer up.
 
 ```csharp
 public sealed record WrappedString : IString
@@ -216,11 +225,11 @@ public sealed record WrappedString : IString
 }
 ```
 
-Three constructors, and the only one that touches a field is **private**. Every public entry point is a conversion that composes objects and hands them down. The two-argument version says "the same thing on both sides" by delegating with the encloser twice. The three-argument version does the actual work — and look at what "the actual work" is. [PAUSE] It builds a `ConcatenatedString`, which I will show you in a moment, and passes it along.
+Three constructors, and the only one that touches a field is **private**. The three-argument version composes a `ConcatenatedString` out of its inputs and hands it down. The two-argument version does not even do that much — it fills the missing suffix by passing the encloser a second time, and delegates sideways.
 
-Nothing is wrapped. There is no wrapping code anywhere in that class. A wrapped string simply **holds a concatenation** and reports its text.
+So nothing is wrapped. There is no wrapping code in that class at all. [PAUSE] A wrapped string **holds a concatenation** and reports its text. And notice how the missing argument was supplied — with an object, not a value. That holds even for the dullest defaults in the ecosystem: a start index of zero is `new Zero<ushort>()`, never `0`.
 
-And that pattern is not confined to primitives. Here is a domain type built the same way.
+The shape does not change when you leave the primitives behind.
 
 ```csharp
 public sealed record TotalWithVat : INumber<decimal>
@@ -239,39 +248,9 @@ public sealed record TotalWithVat : INumber<decimal>
 }
 ```
 
-[PAUSE]
+Same three parts: a private constructor that assigns, a public one that composes, a field that reports. But read the public one out loud. [PAUSE] *The total is the sum of the net amount and the product of the net amount and the rate.* That is the business rule, and it is the entire implementation. No arithmetic, not one operator — and nowhere for a step to hide, because there are no steps.
 
-There is no arithmetic in that class. Not one operator. The rule "add the tax to the net amount" is written as a `Sum` of the net and a `Product` — a tree of objects, assembled in a constructor and standing still.
-
-And notice what you got for free by naming it. `TotalWithVat` is a type. It goes anywhere an `INumber<decimal>` is accepted, it can be put inside another calculation, and you can test it by constructing it and reading one field.
-
-[SHOW: `ConcatenatedString`]
-
-```csharp
-public sealed record ConcatenatedString : IString
-{
-    private readonly IEnumerable<IString> _parameters;
-
-    public ConcatenatedString(params IEnumerable<IString> parameters)
-    {
-        _parameters = parameters;
-    }
-
-    public string TextValue => string.Concat(_parameters.Select(x => x.TextValue));
-}
-```
-
-Now the point I want to land hard. [PAUSE] `ConcatenatedString` is not a helper. It is not a builder. It does not *produce* an `IString`.
-
-**It is an `IString`.**
-
-The component implements the interface and expresses the transformation at the same time — those are not two responsibilities, they are one. `new ConcatenatedString(a, b)` can be passed to anything that wants a string, stored in a field of type `IString`, put inside another `ConcatenatedString`, decorated, cached. It is a first-class citizen of the type system, and it is also an unperformed operation.
-
-And now the consequence, which is rule four. [PAUSE] What did that constructor actually do? It assigned a field. That is all. **Nothing was concatenated.** No string exists. If you build a graph of ten thousand of these, you have allocated ten thousand small objects and performed exactly zero string operations.
-
-Nothing runs except `new`.
-
-So this is what a program actually looks like written this way.
+So this is what a program looks like written this way.
 
 ```csharp
 IString placeholder = new WrappedString(
@@ -286,7 +265,7 @@ INumber<int> result = new Sum<int>(
 );
 ```
 
-Two statements, and both of them are declarations. No string was built. No arithmetic was performed. Not even the random string was generated — `RandomString` holds a `Lazy<string>` that has never been asked. [PAUSE] What you are looking at is the shape of the answer, not the answer.
+Two statements — and what you are holding afterwards are ordinary values. Pass them to a method, store them in a field, return them from a factory, drop them into a larger composition. Every one of those moves is free, because there is nothing inside them but references to other objects.
 
 And while these are on the screen, let me say something about the names, because it is a rule and not a habit.
 
@@ -296,11 +275,36 @@ And while these are on the screen, let me say something about the names, because
 
 So where does it ever end? If nothing computes, when does anything happen?
 
-It happens at the native field. That is the whole answer.
+It happens at the native field. That is the whole answer. The moment somebody reads `.TextValue` — or `.BoolValue`, or `.NumberValue` — the graph is walked, every deferred operation runs in order, and a concrete .NET value comes out the other side.
 
-The moment somebody reads `.TextValue` — or `.BoolValue`, or `.NumberValue` — the graph is walked, every deferred operation runs in order, and a concrete .NET value comes out the other side. Before that call, your entire program is inert. It is a description of an answer, holding still, having done nothing.
+Which raises the question I always get next. [PAUSE] What if I read it twice?
 
-Your program is a graph of constructors. Then, once, at the very end, someone reads a native field — and the graph runs.
+Then it runs twice. A `ConcatenatedString` keeps no result — it is a description, and descriptions do not remember. So when you want the answer kept, you say so, and you say it the way you say everything else here: with a constructor.
+
+```csharp
+public sealed record CachedString : IString
+{
+    private readonly Lazy<string> _lazyValue;
+
+    public CachedString(IString value)
+        : this(
+            new Lazy<string>(
+                () => value.TextValue,
+                LazyThreadSafetyMode.ExecutionAndPublication
+            )
+        )
+    { }
+
+    private CachedString(Lazy<string> lazyValue)
+    {
+        _lazyValue = lazyValue;
+    }
+
+    public string TextValue => _lazyValue.Value;
+}
+```
+
+An `IString` that holds an `IString`. Wrap any composition in it and the graph underneath is walked exactly once, thread-safely, however many times somebody reads it. [PAUSE] Caching here is not a framework feature and not a flag on a base class. It is one more object in the graph — and you decide where in the graph it sits.
 
 ---
 
@@ -355,8 +359,6 @@ Sixteen random bytes, unique per type, prepended before hashing. So the number z
 There is a direct consequence, and it is not a small one. [PAUSE] If we do not use `GetHashCode`, **we cannot use the framework's collections.** A `Dictionary` or a `HashSet` asks its keys for a hash code, and our objects do not answer that question.
 
 So the ecosystem ships its own collection wrappers, and they work through determined hashes instead. Two keys are the same when their byte sequences are the same — equality is decided by comparing two hundred and fifty-six bits, exactly. The integer underneath has not disappeared — but it has been **demoted from an identity to a bucket index**. It no longer answers "are these the same." It only answers "roughly where should I look," and collisions there are harmless, because the real comparison is exact.
-
-And notice how such a collection learns what identity is — it is handed a `Func<T, IDeterminedHash>` in its constructor. The dictionary never asks its keys who they are. **The caller decides what identity means, and hands it in.**
 
 [PAUSE]
 
@@ -447,7 +449,7 @@ public sealed record DateChoice : IDate
 
 [PAUSE]
 
-Look at the structure, because it is the pattern from section four applied to branching. The public constructor performs no branching at all — it **composes three smaller choices**, one per field, and delegates. The private constructor assigns. And that is a rule I hold everywhere in the ecosystem: **only one constructor may assign fields, and it is private.** Every other constructor has to earn its way there by composing objects.
+Look at the structure — it is the constructor pattern you have already seen, now applied to branching. The public constructor performs no branching at all. It **composes three smaller choices**, one per field, and delegates to the private one that assigns.
 
 The result is that there is no single branch point. The `if` is **distributed across every field of the interface**, and each one is decided independently, at the moment it is read. If you only ever ask for the year, the day is never chosen. That branch never happens at all.
 
@@ -475,7 +477,7 @@ new StringSwitch<IDayOfWeek>(today, branches, day => new DeterminedHash(day))
   parameter
     today ─────────────▶ hashFactory ─▶ 3f a1 c7 …  (32 bytes)
                                              │
-                                             │  SequenceEqual
+                                             │  Comparison
                                              ▼
   branches
     ├── new Monday()   ─▶ hashFactory ─▶ 9c 2e 44 …    ✗
@@ -486,9 +488,7 @@ new StringSwitch<IDayOfWeek>(today, branches, day => new DeterminedHash(day))
 
 Hash the parameter. Hash each key. Keep the branch whose bytes match — and read only that one. The two that lost are still sitting there, unevaluated, and they will stay that way.
 
-[PAUSE] Notice what is **not** in that picture. No `==`. No `Equals`. No virtual dispatch to ask an object about itself. The switch does not ask the objects whether they are equal. It is **told how to identify them** — `Func<TSelector, IDeterminedHash>`, handed in through the constructor — and it compares byte sequences.
-
-[PAUSE] **Identity is a constructor parameter.**
+[PAUSE] Notice what is **not** in that picture. No `==`. No `Equals`. No virtual dispatch to ask an object about itself. The switch does not ask the objects whether they are equal. It is **told how to identify them** via a determined state hash.
 
 ---
 
@@ -510,7 +510,7 @@ The second thing is often stated as an objection, and I think it is stated wrong
 
 A word on how this is packaged, because it matters.
 
-Pure is about seventy-five NuGet packages. One repository per package. One pipeline per package. Not a monolithic SDK — [PAUSE] and that is deliberate, not an accident of growth.
+The Pure ecosystem is about seventy-five NuGet packages. One repository per package. One pipeline per package. Not a monolithic SDK — [PAUSE] and that is deliberate, not an accident of growth.
 
 A monolithic SDK forces a decision on you: all of it or none of it. And with an idea this opinionated, "all of it" is not a reasonable thing to ask of anyone. So instead: you want lazy boolean algebra and nothing else? Take one package. You want deterministic hashing in an otherwise completely conventional codebase? Take one package — it is three lines of interface, and it does not drag a philosophy in behind it.
 
