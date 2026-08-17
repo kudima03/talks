@@ -6,12 +6,16 @@ Guidance for anyone (human or agent) editing the talks in this folder.
 
 ```
 pure-ecosystem/
-├── CLAUDE.md   ← this file
-├── en/         ← English scripts (pure-ecosystem-talk.md)
-└── ru/         ← Russian scripts
+├── CLAUDE.md       ← this file
+├── en/             ← English
+│   ├── pure-ecosystem-talk.md
+│   └── slides/     ← Beamer deck (see its README)
+└── ru/             ← Russian
 ```
 
 One folder per language. Scripts are **spoken-delivery text**, not slide bullets — continuous prose meant to be read aloud.
+
+**The script is the source of truth.** Slides carry code, diagrams and short statements; the spoken beats live in `\note{}` beside each frame. Change the script first, then the deck — and keep the frame's `\note{}` matching the paragraph it delivers.
 
 ## Speaker
 
