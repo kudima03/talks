@@ -1,0 +1,142 @@
+% Pure -- a minimal beamer theme for the Pure ecosystem talks.
+%
+%   \usetheme{pure}
+%
+% Design rules this theme exists to enforce:
+%   * One thought per slide. Prose belongs in the script, not on the wall.
+%   * One accent colour, used inline on the word that matters: \hi{...}
+%   * Chapter transitions are questions on a dark slide: \thoughtbody
+%   * A number is a better slide than a paragraph: \bignum
+%
+\NeedsTeXFormat{LaTeX2e}
+\ProvidesPackage{beamerthemepure}[2026/08/17 v1.0 Pure talk theme]
+
+\RequirePackage{xcolor}
+\RequirePackage{listings}
+\RequirePackage{tikz}
+\RequirePackage{amssymb}
+
+% ---------------------------------------------------------------- palette --
+\definecolor{ink}{HTML}{1F2328}
+\definecolor{accent}{HTML}{C2410C}
+\definecolor{muted}{HTML}{6B7280}
+\definecolor{rule}{HTML}{D8D5CE}
+\definecolor{paper}{HTML}{FBFAF7}
+\definecolor{night}{HTML}{22303A}
+\definecolor{dim}{HTML}{9CA7B0}   % muted, but legible on night
+\definecolor{kw}{HTML}{1D4ED8}
+\definecolor{str}{HTML}{15803D}
+
+% ------------------------------------------------------------- handstroke --
+% An underline that looks drawn by hand, for the one phrase per slide that
+% carries the point. Degrades to a plain underline when absent.
+\newif\ifhavehandstroke
+\IfFileExists{handstroke.sty}{\havehandstroketrue}{\havehandstrokefalse}
+\ifhavehandstroke
+  \RequirePackage[colored,color=accent]{handstroke}
+\else
+  \newcommand{\handstroke}[2][]{\underline{#2}}
+\fi
+
+% -------------------------------------------------------------- structure --
+\setbeamercolor{normal text}{fg=ink,bg=paper}
+\setbeamercolor{background canvas}{bg=paper}
+\setbeamercolor{structure}{fg=accent}
+\setbeamercolor{frametitle}{fg=ink}
+\setbeamercolor{itemize item}{fg=accent}
+\setbeamercolor{itemize subitem}{fg=muted}
+\setbeamercolor{enumerate item}{fg=accent}
+\setbeamerfont{frametitle}{size=\large,series=\bfseries}
+\setbeamerfont{footline}{size=\scriptsize}
+\setbeamertemplate{navigation symbols}{}
+\setbeamertemplate{itemize items}[circle]
+
+\setbeamertemplate{frametitle}{%
+  \vspace{1.1em}%
+  \usebeamerfont{frametitle}\usebeamercolor[fg]{frametitle}\insertframetitle%
+  \vspace{0.2em}\newline%
+  {\color{rule}\rule{\textwidth}{0.6pt}}%
+}
+
+% Who is talking, shown bottom-right. Override in the document if needed.
+\newcommand{\thehandle}{@kudima03}
+
+\setbeamertemplate{footline}{%
+  \hbox to \paperwidth{%
+    \hspace{1.6em}%
+    {\usebeamerfont{footline}\color{muted}\insertshorttitle}%
+    \hfill
+    {\usebeamerfont{footline}\color{muted}\thehandle\quad\insertframenumber}%
+    \hspace{1.6em}%
+  }%
+  \vspace{0.9em}%
+}
+
+% --------------------------------------------------------------- elements --
+% Inline highlight. The workhorse: one or two per slide, never a whole line.
+\newcommand{\hi}[1]{\textcolor{accent}{#1}}
+
+% Quiet supporting line.
+\newcommand{\aside}[1]{{\color{muted}\small #1}}
+
+% Short bold heading inside a titleless frame.
+\newcommand{\banner}[1]{{\large\bfseries #1}\par\vspace{0.9em}}
+
+\newcommand{\hrulethin}[1]{{\color{rule}\rule{#1\textwidth}{0.6pt}}}
+
+% A statement that owns its slide.
+\newcommand{\bigline}[1]{%
+  \vfill
+  \begin{center}
+    \begin{minipage}{0.88\textwidth}
+      \centering\Large\bfseries #1
+    \end{minipage}
+  \end{center}
+  \vfill
+}
+
+% A figure that owns its slide: \bignum{75}{NuGet packages}
+\newcommand{\bignum}[2]{%
+  \begin{center}
+    {\fontsize{54}{58}\selectfont\bfseries\color{accent}#1}\par
+    \vspace{0.7em}
+    {\large #2}
+  \end{center}%
+}
+
+% Chapter transition. Put \darkslide inside a group, before the frame:
+%   {\darkslide \begin{frame}[plain] \thoughtbody{Why?} \end{frame}}
+\newcommand{\darkslide}{\setbeamercolor{background canvas}{bg=night}}
+\newcommand{\thoughtbody}[1]{%
+  \color{paper}%
+  \vfill
+  \begin{center}
+    \begin{minipage}{0.82\textwidth}
+      \centering\LARGE #1
+    \end{minipage}
+  \end{center}
+  \vfill
+}
+
+% ------------------------------------------------------------------- code --
+\lstdefinestyle{csharp}{%
+  language=[Sharp]C,
+  basicstyle=\ttfamily\footnotesize,
+  keywordstyle=\color{kw},
+  commentstyle=\color{muted}\itshape,
+  stringstyle=\color{str},
+  morekeywords={record,params,var,init,with},
+  emph={IString,INumber,IBool,IDate,IChar,IDeterminedHash,IDayOfWeek,ITime},
+  emphstyle=\color{accent},
+  showstringspaces=false,
+  columns=fullflexible,
+  keepspaces=true,
+  tabsize=4,
+  breaklines=false,
+  aboveskip=0.4em,
+  belowskip=0.2em,
+  xleftmargin=0.5em,
+}
+\lstset{style=csharp}
+
+\endinput
