@@ -34,7 +34,6 @@
 % ------------------------------------------------------------------ title --
 \begin{frame}[plain]
   \vfill
-  {\color{muted}\footnotesize\MakeUppercase{Elegant Objects in .NET}\par}
   \vspace{1.0em}
   {\huge\bfseries A Program Is Nothing But \texttt{new}\par}
   \vspace{0.9em}
@@ -53,7 +52,7 @@
 \section{Where this comes from}
 
 \begin{frame}[plain]
-  \chapterpage{1}{Where this comes from}{Elegant Objects, its author, and the
+  \chapterpage{}{Where this comes from}{Elegant Objects, its author, and the
     places where Pure does not follow it.}
 \end{frame}
 \note{Budget: 1.5 minutes. Credit first, before anything else.}
@@ -98,7 +97,7 @@
 \section{The premise}
 
 \begin{frame}[plain]
-  \chapterpage{2}{What a program is}{Instructions that have to run, against
+  \chapterpage{}{What a program is}{Instructions that have to run, against
     object states that already exist.}
 \end{frame}
 \note{Budget: 3.5 minutes.}
@@ -173,7 +172,7 @@
 \section{Why .NET stops you}
 
 \begin{frame}[plain]
-  \chapterpage{3}{Why .NET stops you}{Sealed primitives, no seam in the base
+  \chapterpage{}{Why .NET stops you}{Sealed primitives, no seam in the base
     class library, and the nine interfaces that replace them.}
 \end{frame}
 \note{Budget: 6 minutes.}
@@ -320,7 +319,7 @@ IDate birthday = new Millennium();
 \section{Where the work goes}
 
 \begin{frame}[plain]
-  \chapterpage{4}{Where the work goes}{No methods, so the transformation is
+  \chapterpage{}{Where the work goes}{No methods, so the transformation is
     written as a chain of constructor delegation.}
 \end{frame}
 \note{Budget: 5.5 minutes. This is the centre of the talk.}
@@ -560,7 +559,7 @@ public sealed record CachedString : IString
 \section{Identity}
 
 \begin{frame}[plain]
-  \chapterpage{5}{Identity}{Why \texttt{GetHashCode} cannot be identity, what
+  \chapterpage{}{Identity}{Why \texttt{GetHashCode} cannot be identity, what
     replaces it, and what that costs.}
 \end{frame}
 \note{Budget: 5.5 minutes. Principle five -- the one that looked out of place
@@ -674,7 +673,7 @@ private static readonly byte[] TypePrefix =
 \section{Control flow}
 
 \begin{frame}[plain]
-  \chapterpage{6}{Control flow}{\texttt{if} and \texttt{switch} as objects that
+  \chapterpage{}{Control flow}{\texttt{if} and \texttt{switch} as objects that
     implement the interface they return.}
 \end{frame}
 \note{Budget: 5 minutes. You cannot compose a keyword, and a language without
@@ -858,7 +857,7 @@ public StringSwitch(
 \section{What it costs, and what it buys}
 
 \begin{frame}[plain]
-  \chapterpage{7}{What it costs, and what it buys}{Testing, the adapters at the
+  \chapterpage{}{What it costs, and what it buys}{Testing, the adapters at the
     border, and how the packages are shipped.}
 \end{frame}
 \note{Budget: 4 minutes.}
