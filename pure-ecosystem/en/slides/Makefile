@@ -1,4 +1,5 @@
 TEX  := pure-ecosystem-slides.tex
+THEME := beamerthemepure.sty
 PDF  := pure-ecosystem-slides.pdf
 NPDF := pure-ecosystem-slides-notes.pdf
 
@@ -6,7 +7,7 @@ NPDF := pure-ecosystem-slides-notes.pdf
 
 all: $(PDF)
 
-$(PDF): $(TEX)
+$(PDF): $(TEX) $(THEME)
 	latexmk -pdf -halt-on-error -interaction=nonstopmode $(TEX)
 
 # Deck plus speaker notes on a second screen (right half of each page).

@@ -14,15 +14,44 @@ make clean
 ```
 
 Engine: `pdflatex`; `lualatex` builds it too (both verified). No shell-escape,
-no external images, no downloads, no packages outside a standard TeX Live —
-everything is drawn with TikZ and typeset with `listings`.
+no external images, no downloads at build time — everything is drawn with TikZ
+and typeset with `listings`.
 
 ### Packages
 
-`beamer`, `listings`, `tikz`, `xcolor`, `amssymb`, `lmodern` — all in
-`texlive-latex-recommended` + `texlive-pictures`, and all present on Overleaf.
-Nothing else. If a build needs a package that has to be fetched from CTAN by
-hand, that is a reason to drop the effect, not to add the package.
+`beamer`, `listings`, `tikz`, `xcolor`, `amssymb`, `lmodern`, `microtype` — all
+in `texlive-latex-recommended` + `texlive-pictures`, and all present on
+Overleaf.
+
+Plus **Fira Sans / Fira Mono** (`fira`, which pulls `fontaxes` and `mweights`).
+It is a TeX Live package and Overleaf has it; Debian ships it in
+`texlive-fonts-extra`:
+
+```sh
+sudo apt install texlive-fonts-extra        # or: tlmgr install fira
+```
+
+Without root, install it into your own TeX tree instead — no system files are
+touched, and `rm -rf ~/texmf` undoes it:
+
+```sh
+curl -sfLO https://mirrors.ctan.org/install/fonts/fira.tds.zip
+unzip -q fira.tds.zip -d ~/texmf
+for p in fontaxes mweights; do            # fira's two dependencies
+  curl -sfLO https://mirrors.ctan.org/macros/latex/contrib/$p.zip
+  unzip -q $p.zip && ...                  # .ins for fontaxes, .sty for mweights
+done
+updmap-user --enable Map=fira.map
+```
+
+The theme guards the font the way it used to guard `handstroke`:
+
+```latex
+\IfFileExists{FiraSans.sty}{...}{...}   % else: Latin Modern, deck still builds
+```
+
+So a machine without Fira gets the deck in Latin Modern rather than an error —
+which is why **both paths are worth a look after an edit**.
 
 ## The register
 
@@ -49,6 +78,21 @@ The rules that replaced it:
   decide equality; the `int` is a bucket index" — never alone on a page.
 - Nothing is bigger than it has to be. The talk title is the largest text in
   the deck, then the chapter titles, and nothing else competes with them.
+
+Plain is not the same as bare. What the deck spends its detail on — and the
+test each of these had to pass is *would anyone notice it if they were not
+looking for it?*:
+
+- **Fira Sans and Fira Mono**, with `microtype` doing protrusion and expansion
+  behind them, and real letterspacing on the `\eyebrow` labels.
+- **A ground under every listing** (`codebg`, one step off the paper), and a
+  warmer band (`codehl`) under the two or three lines a code slide is actually
+  about — so nobody has to hunt for them while you talk.
+- **The mark**: the three-node composition tree, in hairlines, on the title,
+  every chapter divider and the closing slide. It is the talk's own picture —
+  a root that is nothing but the two things under it — not decoration.
+- **The slide number set against the total** (`16 / 53`, the total lighter),
+  and a 0.5pt hairline along the very bottom edge that fills as the talk runs.
 
 ## Structure
 
@@ -90,10 +134,19 @@ and the slide furniture, so a second-language deck can reuse it unchanged:
 | `\chapterpage{n}{title}{line}` | the chapter divider, on a `[plain]` frame |
 | `\hrulethin{0.4}` | a thin rule, as a fraction of `\linewidth` |
 | `\slidetop` `\slidegap` `\rulegap` | the deck's only three vertical gaps |
+| `\puremark[2.6]` | the composition-tree mark, at the given scale |
 
 The palette is low-chroma on purpose: ink `#1F2328` on paper `#FBFAF7`, one
 accent (`#7C3016`, a dark brick that sits next to the ink rather than jumping
-off the wall), and desaturated keyword/string colours in the code style.
+off the wall), desaturated keyword/string colours, and two near-paper tints for
+code — `codebg` `#F4F2ED` for the listing ground, `codehl` `#F1EAE5` for the
+highlighted lines.
+
+Highlighting inside a snippet is three listings, not one, cut at the highlight
+boundaries — `csharptop`, `csharphl`, `csharpbot`. Skips and inner margins are
+zero at every cut, so the pieces read as a single block. Keep a blank code line
+at the end of a piece if the original snippet had one there; the cut swallows
+it otherwise.
 
 Slides carry no overlays. One PDF page is one slide, so the footer's number
 matches what the audience sees and the deck stays reviewable in a file diff.
@@ -120,6 +173,9 @@ When editing:
 - A code frame that overflows gets its `basicstyle` dropped a size
   (`\scriptsize`, then `\tiny`) or its `\aside{}` shortened. Do not reflow the
   snippet: it is quoted.
+- `make` treats `beamerthemepure.sty` as a prerequisite, so a theme edit
+  rebuilds the PDF. If you add another input, add it to `$(THEME)` — a stale
+  PDF that silently ignores your change costs more time than it saves.
 - After editing, look at the pages, not just the log:
   `pdftoppm -r 45 -png … && montage p-*.png -tile 5x …` catches bad wraps and
   collisions that produce no warning. `Overfull \vbox` in the log means a slide

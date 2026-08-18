@@ -14,12 +14,27 @@
 %     competes with them.
 %
 \NeedsTeXFormat{LaTeX2e}
-\ProvidesPackage{beamerthemepure}[2026/08/18 v2.0 Pure talk theme]
+\ProvidesPackage{beamerthemepure}[2026/08/18 v2.1 Pure talk theme]
 
 \RequirePackage{xcolor}
 \RequirePackage{listings}
 \RequirePackage{tikz}
 \RequirePackage{amssymb}
+\RequirePackage{microtype}
+
+% ------------------------------------------------------------------ type --
+% Fira Sans for everything, Fira Mono for code: a humanist grotesque drawn for
+% screens, with a mono whose glyphs stay apart from the back row. It lives in
+% TeX Live (`fira`, needs `fontaxes` + `mweights`) and on Overleaf; when it is
+% not installed the deck falls back to Latin Modern rather than failing, so
+% both paths are worth a look after an edit.
+\newif\ifhavefira
+\IfFileExists{FiraSans.sty}{%
+  \IfFileExists{FiraMono.sty}{\havefiratrue}{\havefirafalse}}{\havefirafalse}
+\ifhavefira
+  \RequirePackage[sfdefault,lining]{FiraSans}
+  \RequirePackage[scaled=0.92]{FiraMono}
+\fi
 
 % ---------------------------------------------------------------- palette --
 % Low chroma on purpose. The accent is a dark brick that sits next to the ink
@@ -31,6 +46,8 @@
 \definecolor{paper}{HTML}{FBFAF7}
 \definecolor{kw}{HTML}{334E68}
 \definecolor{str}{HTML}{4E6E58}
+\definecolor{codebg}{HTML}{F4F2ED}   % listing ground, one step off the paper
+\definecolor{codehl}{HTML}{F1EAE5}   % the one line the slide is about
 
 % -------------------------------------------------------------- structure --
 \setbeamercolor{normal text}{fg=ink,bg=paper}
@@ -54,15 +71,30 @@
 
 % The footer carries the chapter, so the audience always knows where it is.
 % The speaker's handle belongs on the title and closing slides, nowhere else.
+% The number is set against the total, and a hairline along the very bottom
+% edge fills as the talk runs -- visible if you look for it, not otherwise.
+\newlength{\pureprogress}
 \setbeamertemplate{footline}{%
   \hbox to \paperwidth{%
     \hspace{1.6em}%
     {\usebeamerfont{footline}\color{muted}\insertsectionhead}%
     \hfill
-    {\usebeamerfont{footline}\color{muted}\insertframenumber}%
+    {\usebeamerfont{footline}\color{muted}\insertframenumber
+     \,{\color{hairline}/\,\inserttotalframenumber}}%
     \hspace{1.6em}%
   }%
-  \vspace{0.9em}%
+  \vspace{0.7em}%
+  % Beamer only learns the total from the .nav file written by the previous
+  % run, so on a first pass the frame number runs past it. Skip the bar then
+  % rather than multiply \paperwidth into an arithmetic overflow.
+  \ifnum\value{framenumber}>\inserttotalframenumber\else
+    \setlength{\pureprogress}{\paperwidth}%
+    \divide\pureprogress by \inserttotalframenumber
+    \multiply\pureprogress by \value{framenumber}%
+    \hbox to \paperwidth{%
+      \rlap{\color{hairline}\rule{\paperwidth}{0.5pt}}%
+      {\color{accent!35!paper}\rule{\pureprogress}{0.5pt}}\hfill}%
+  \fi
 }
 
 % --------------------------------------------------------- vertical rhythm --
@@ -91,13 +123,28 @@
 % Small uppercase label above a column or a block. Plain words only -- it
 % uppercases its argument. (Not called \tag: amsmath, which beamer loads,
 % owns that name.)
-\newcommand{\eyebrow}[1]{{\color{muted}\footnotesize\MakeUppercase{#1}}}
+\newcommand{\eyebrow}[1]{{\color{muted}\footnotesize\textls[90]{\MakeUppercase{#1}}}}
+
+% The deck's mark: the three-node composition tree from the chapter-4 diagram,
+% in hairlines. It is the talk's own picture, not decoration -- a root that is
+% nothing but the two things under it. \puremark[2] scales it.
+\newcommand{\puremark}[1][1]{%
+  \begin{tikzpicture}[scale=#1,baseline=0pt]
+    \draw[hairline] (0,0.5) -- (-0.42,0);
+    \draw[hairline] (0,0.5) -- (0.42,0);
+    \draw[hairline,fill=paper] (-0.42,0) circle (0.06);
+    \draw[hairline,fill=paper] (0.42,0) circle (0.06);
+    \fill[accent] (0,0.5) circle (0.06);
+  \end{tikzpicture}%
+}
 
 % Chapter divider: number, title, rule, and one factual line about what is
 % coming. Used on a [plain] frame -- the deck has no dark slides.
 \newcommand{\chapterpage}[3]{%
   \vfill
   \begin{minipage}{0.86\textwidth}
+    {\puremark[0.85]\par}
+    \vspace{0.9em}
     {\color{muted}\Large #1\par}
     \vspace{0.4em}
     {\LARGE\bfseries #2\par}
@@ -127,7 +174,29 @@
   aboveskip=0.4em,
   belowskip=0.2em,
   xleftmargin=0.5em,
+  % the listing sits on its own ground: no frame, no shadow, one step of tone.
+  % The padding is framex*margin, not framesep, so a listing can be cut into
+  % pieces that still join seamlessly (see csharphl below).
+  backgroundcolor=\color{codebg},
+  frame=single,
+  framerule=0pt,
+  rulecolor=\color{codebg},
+  framesep=0pt,
+  framexleftmargin=6pt,
+  framexrightmargin=6pt,
+  framextopmargin=5pt,
+  framexbottommargin=5pt,
 }
 \lstset{style=csharp}
+
+% One snippet, three listings: the middle one -- the lines the slide is about --
+% sits on a warmer ground. Skips and inner margins are zero at every cut, so
+% the three pieces read as one block. Order: csharptop, csharphl, csharpbot;
+% drop the first or the last when the highlight starts or ends the snippet.
+\lstdefinestyle{csharptop}{style=csharp,belowskip=0pt,framexbottommargin=0pt}
+\lstdefinestyle{csharphl}{style=csharp,aboveskip=0pt,belowskip=0pt,
+  framextopmargin=0pt,framexbottommargin=0pt,
+  backgroundcolor=\color{codehl},rulecolor=\color{codehl}}
+\lstdefinestyle{csharpbot}{style=csharp,aboveskip=0pt,framextopmargin=0pt}
 
 \endinput
