@@ -1,0 +1,980 @@
+% A Program Is Nothing But `new' -- the Pure ecosystem.
+% Slide deck for the spoken script in ../pure-ecosystem-talk.md
+%
+% Build:  latexmk -pdf pure-ecosystem-slides.tex   (or: make)
+% Engine: pdflatex (lualatex and xelatex work too)
+%
+% House style, enforced by beamerthemepure.sty: every content slide has a
+% title and states one claim, the evidence for the claim is on the same slide,
+% and the delivery lives in \note{}. No slogans, no rhetorical questions on
+% their own page.
+
+\documentclass[aspectratio=169,10pt,t]{beamer}
+
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
+\usepackage{lmodern}
+\usetheme{pure}
+\usetikzlibrary{arrows.meta}
+
+% Speaker notes carry the delivery beat from the script. They are hidden by
+% default; build with `make notes` (or -pdflatex='... \def\shownotes{} ...')
+% to get a second-screen version.
+\ifdefined\shownotes
+  \setbeameroption{show notes on second screen=right}
+\fi
+
+\title[The Pure ecosystem]{A Program Is Nothing But \texttt{new}}
+\subtitle{The Pure ecosystem: bringing Elegant Objects to .NET}
+\author{Dmitry Kurochkin}
+\date{}
+
+\begin{document}
+
+% ------------------------------------------------------------------ title --
+\begin{frame}[plain]
+  \vfill
+  \vspace{1.0em}
+  {\huge\bfseries A Program Is Nothing But \texttt{new}\par}
+  \vspace{0.9em}
+  {\color{hairline}\rule{0.34\textwidth}{0.8pt}\par}
+  \vspace{0.9em}
+  {\large The Pure ecosystem\par}
+  \vspace{1.8em}
+  {Dmitry Kurochkin\par}
+  \vspace{0.4em}
+  {\color{muted}\small\texttt{github.com/kudima03}\par}
+  \vfill
+\end{frame}
+\note{Good afternoon. Author and main contributor of the Pure ecosystem.}
+
+% =========================================================== 1. OPENING ====
+\section{Where this comes from}
+
+\begin{frame}[plain]
+  \chapterpage{}{Where this comes from}{Elegant Objects, its author, and the
+    places where Pure does not follow it.}
+\end{frame}
+\note{Budget: 1.5 minutes. Credit first, before anything else.}
+
+\begin{frame}{The ideas are not mine}
+  \slidetop
+  \claim{The concept and the inspiration were taken from \hi{Elegant Objects}
+    --- Yegor Bugaenko's.}
+  The thinking. The research. The books. And the criticism.
+
+  \slidegap
+  \hrulethin{0.4}
+  \rulegap
+
+  \aside{What follows is one implementation of those ideas, for .NET.}
+\end{frame}
+\note{Be precise about what is mine and what is not, before anything else.}
+
+\begin{frame}{What Pure is, and what it is not}
+  \slidetop
+  \claim{This is \hi{not} Elegant Objects ported to .NET.}
+  {\color{muted}Taken:} the concept, and the inspiration.\\[0.6em]
+  {\color{muted}Not taken:} the implementation --- in a lot of places it
+  differs from how the author sees it.
+
+  \slidegap
+  \aside{I will point at those places as we go.}
+\end{frame}
+\note{In a lot of places the implementation is genuinely different from the way
+  the author sees it.}
+
+\begin{frame}{How far down the ideas go}
+  \slidetop
+  \claim{Not the domain model. Not the service layer.\\
+    All the way down to the \hi{primitives}.}
+  \aside{That is the question for today: what a .NET program looks like if you
+  take those ideas seriously, all the way down.}
+\end{frame}
+\note{Pause before ``primitives''.}
+
+% =========================================================== 2. PREMISE ====
+\section{The premise}
+
+\begin{frame}[plain]
+  \chapterpage{}{What a program is}{Instructions that have to run, against
+    object states that already exist.}
+\end{frame}
+\note{Budget: 3.5 minutes.}
+
+\begin{frame}{What a program is for}
+  \slidetop
+  \claim{The purpose of a program is to \hi{transform data}. The result of a
+    program is also data.}
+  Web service, report generator, trading system, or a string concatenation
+  --- the same shape.
+
+  \slidegap
+  \aside{Everything else is machinery.}
+\end{frame}
+\note{Everything rests on this.}
+
+\begin{frame}{Two ways to write a transformation down}
+  \slidetop
+  \begin{columns}[t,onlytextwidth]
+    \begin{column}{0.46\textwidth}
+      {\eyebrow{what we write today}\par}
+      \vspace{0.7em}
+      {\large A sequential set of \textbf{instructions}\par}
+      \vspace{1.0em}
+      take $\cdot$ do $\cdot$ check $\cdot$ assign $\cdot$ return\\[0.9em]
+      \aside{The transformation exists only while the CPU runs. Before that, a
+      recipe. After that, gone.}
+    \end{column}
+    \begin{column}{0.46\textwidth}
+      {\eyebrow{the alternative}\par}
+      \vspace{0.7em}
+      {\large A sequential set of \textbf{object states}\par}
+      \vspace{1.0em}
+      not the steps $\cdot$ the \hi{result itself}\\[0.9em]
+      \aside{Already the answer, and simply not yet asked. A program becomes a
+      composition.}
+    \end{column}
+  \end{columns}
+\end{frame}
+\note{The contrast is the whole premise: instructions that must run, versus
+  object states that already exist.}
+
+\begin{frame}{Five rules}
+  \slidetop
+  {\large
+  \begin{enumerate}
+    \setlength{\itemsep}{0.7em}
+    \item Only \hi{fields}. No methods.
+    \item Logic through composition of objects.
+    \item Immutability --- iron, not by convention.
+    \item Lazy. Nothing runs except \texttt{new}.
+    \item Deterministic hash codes.
+  \end{enumerate}}
+\end{frame}
+\note{Rule five looks out of place next to the other four. It is the one
+  holding them up.}
+
+\begin{frame}{One divergence from Elegant Objects}
+  \slidetop
+  \claim{Elegant Objects argues against exposing \hi{fields}. Pure is almost
+    nothing but read-only fields.}
+  The field \emph{is} the state --- established in exactly one place, the
+  constructor.
+
+  \slidegap
+  \aside{A field here is not an accessor bolted onto stored state. That is the
+  whole design, and the rest of the talk is what falls out of it.}
+\end{frame}
+\note{State the divergence plainly; do not apologise for it.}
+
+% ================================================= 3. WHY .NET STOPS YOU ===
+\section{Why .NET stops you}
+
+\begin{frame}[plain]
+  \chapterpage{}{Why .NET stops you}{Sealed primitives, no seam in the base
+    class library, and the nine interfaces that replace them.}
+\end{frame}
+\note{Budget: 6 minutes.}
+
+\begin{frame}[fragile]{Try to compose two strings}
+  \vspace{0.6em}
+\begin{lstlisting}
+public sealed class String : IComparable, IEnumerable<char>, ...
+
+public readonly struct Int32 : IComparable, IEquatable<int>, ...
+
+public readonly struct Boolean : IComparable, IEquatable<bool>, ...
+\end{lstlisting}
+  \vspace{1.0em}
+  \texttt{sealed} --- and every numeric primitive is a \texttt{struct}.
+
+  \vspace{0.9em}
+  \aside{You cannot subtype them, decorate them, or write one that computes
+  itself when asked. That holds for every primitive in the framework, not just
+  these three.}
+\end{frame}
+\note{The door is welded shut, and not just on these three.}
+
+\begin{frame}[fragile]{The real damage is one layer up}
+  \vspace{0.6em}
+\begin{lstlisting}
+string.Concat(string, string)  ->  string
+Math.Abs(double)               ->  double
+\end{lstlisting}
+  \vspace{1.0em}
+  Every operation in the base class library is written against the concrete
+  types. There is \hi{no seam} to plug into.
+
+  \vspace{0.9em}
+  \aside{We reach for LINQ and lambdas because the alternative --- real
+  composition --- was structurally removed before we sat down.}
+\end{frame}
+\note{You get this even if you never install a package.}
+
+\begin{frame}{Why this is an ecosystem, not a library}
+  \slidetop
+  \claim{A library sits on top of the problem. The primitives themselves have
+    to be \hi{re-founded}.}
+  Which means starting at \texttt{IBool} and \texttt{INumber}, not at your
+  domain model.
+
+  \slidegap
+  \aside{It is an ecosystem, not an SDK, and that distinction is the reason for
+  everything on the next slide.}
+\end{frame}
+\note{This is why it is an ecosystem and not an SDK.}
+
+\begin{frame}[fragile]{The foundation: nine interfaces, not one method}
+  \vspace{0.4em}
+  Nine interfaces are the entire foundation, and not one of them declares a
+  \hi{method}.
+  \vspace{0.4em}
+\begin{lstlisting}[basicstyle=\ttfamily\scriptsize]
+public interface IBool
+{
+    public bool BoolValue { get; }
+}
+
+public interface INumber<out T>
+    where T : System.Numerics.INumber<T>
+{
+    public T NumberValue { get; }
+}
+
+public interface IString : IEnumerable<IChar>
+{
+    public string TextValue { get; }
+}
+\end{lstlisting}
+  \vspace{0.3em}
+  \aside{\texttt{INumber} is covariant --- one abstraction, not fifteen. And an
+  \texttt{IString} is a sequence of \texttt{IChar}: the characters are objects
+  too.}
+\end{frame}
+\note{That is the entire foundation. Only fields.}
+
+\begin{frame}{Native fields}
+  \slidetop
+  \claim{\texttt{BoolValue}, \texttt{NumberValue}, \texttt{TextValue} --- the
+    \hi{bridge point}, the one place the ecosystem touches .NET.}
+  Always computed. Never stored.
+
+  \slidegap
+  \aside{\texttt{TextValue} returns a real \texttt{System.String}. That field is
+  not there because I wanted it --- it is there because it has to be, and it is
+  where the composition finally runs.}
+\end{frame}
+\note{Vocabulary: native field, not ``the value property''.}
+
+\begin{frame}[fragile]{Which makes the date interesting}
+  \vspace{0.6em}
+\begin{lstlisting}
+public interface IDate
+{
+    public INumber<ushort> Day { get; }
+    public INumber<ushort> Month { get; }
+    public INumber<ushort> Year { get; }
+}
+\end{lstlisting}
+  \vspace{1.0em}
+  \texttt{IDate} has \hi{no value}. A date is not a thing that \emph{has} a
+  value --- a date \textbf{is} three numbers.
+
+  \vspace{0.9em}
+  \aside{Nothing to unwrap, no bridge back to \texttt{DateTime}. And each of
+  those numbers is itself an abstraction that may not have computed yet.}
+\end{frame}
+\note{There is no native field here at all, and nothing is missing.}
+
+\begin{frame}[fragile]{What you build on top of it}
+  \vspace{0.3em}
+\begin{lstlisting}[basicstyle=\ttfamily\scriptsize]
+public sealed record Millennium : IDate
+{
+    public Millennium()
+    {
+        Day = new UShort(1);
+        Month = new UShort(1);
+        Year = new UShort(2000);
+    }
+
+    public INumber<ushort> Day { get; }
+    public INumber<ushort> Month { get; }
+    public INumber<ushort> Year { get; }
+}
+\end{lstlisting}
+\begin{lstlisting}[basicstyle=\ttfamily\scriptsize]
+IDate birthday = new Millennium();
+\end{lstlisting}
+  \vspace{0.4em}
+  \aside{Named. Reusable. Testable. Fixed at construction, and never anything
+  else --- not a \texttt{DateTime} with a magic value in it, and not a constant
+  buried in a static helper.}
+\end{frame}
+\note{If your primitives are opaque, composition stops the moment you touch a
+  string. Here it never stops.}
+
+% ======================================================= 4. CONSTRUCTORS ===
+\section{Where the work goes}
+
+\begin{frame}[plain]
+  \chapterpage{}{Where the work goes}{No methods, so the transformation is
+    written as a chain of constructor delegation.}
+\end{frame}
+\note{Budget: 5.5 minutes. This is the centre of the talk.}
+
+\begin{frame}{The transformation lives in the constructors}
+  \slidetop
+  \claim{One constructor \hi{assigns} --- and it turns private the moment there
+    is a second. Every other one converts: compose objects, then delegate.}
+  {\ttfamily : this(new Something(...))}
+
+  \slidegap
+  \aside{That delegation chain \emph{is} the transformation. Assignment only:
+  no work, no validation, no evaluation of results.}
+\end{frame}
+\note{The naive answer is ``into the fields''. That is the half that misleads
+  people.}
+
+\begin{frame}[fragile]{The simplest component in the ecosystem}
+  \vspace{0.4em}
+\begin{lstlisting}[basicstyle=\ttfamily\scriptsize]
+public sealed record ConcatenatedString : IString
+{
+    private readonly IEnumerable<IString> _parameters;
+
+    public ConcatenatedString(params IEnumerable<IString> parameters)
+    {
+        _parameters = parameters;
+    }
+
+    public string TextValue => string.Concat(_parameters.Select(x => x.TextValue));
+}
+\end{lstlisting}
+  \vspace{0.9em}
+  Not a helper and not a builder. It \hi{is} an \texttt{IString}.
+
+  \vspace{0.6em}
+  \aside{It does not produce one. The component implements the interface and
+  expresses the transformation at the same time --- one responsibility, not
+  two.}
+\end{frame}
+\note{This is the shape everything else in the ecosystem repeats.}
+
+\begin{frame}{What that constructor actually did}
+  \slidetop
+  \claim{Ten thousand \texttt{ConcatenatedString}s are ten thousand small
+    objects and \hi{zero} string operations.}
+  The constructor assigned one field. Nothing was concatenated.
+
+  \slidegap
+  \hrulethin{0.4}
+  \rulegap
+
+  Rule four, in four words: nothing runs except \texttt{new}.
+\end{frame}
+\note{Say the number, then the reason. The concatenation is described, not
+  performed.}
+
+\begin{frame}[fragile]{Delegation, one layer up}
+  \vspace{0.2em}
+\begin{lstlisting}[basicstyle=\ttfamily\scriptsize]
+public sealed record WrappedString : IString
+{
+    private readonly IString _concatenated;
+
+    public WrappedString(IString encloser, IString wrappedValue)
+        : this(encloser, wrappedValue, encloser) { }
+
+    public WrappedString(IString prefix, IString wrappedValue, IString suffix)
+        : this(new ConcatenatedString(prefix, wrappedValue, suffix)) { }
+
+    private WrappedString(IString concatenated)
+    {
+        _concatenated = concatenated;
+    }
+
+    public string TextValue => _concatenated.TextValue;
+}
+\end{lstlisting}
+  \vspace{0.4em}
+  \aside{Three constructors, and the only one that touches a field is
+  \hi{private}. Nothing is wrapped: a wrapped string holds a concatenation.}
+\end{frame}
+\note{The missing suffix is filled with an object, not a value -- even a start
+  index of zero is new Zero of ushort, never plain 0.}
+
+\begin{frame}[fragile]{The shape does not change above the primitives}
+  \vspace{0.3em}
+\begin{lstlisting}[basicstyle=\ttfamily\scriptsize]
+public sealed record TotalWithVat : INumber<decimal>
+{
+    private readonly INumber<decimal> _total;
+
+    public TotalWithVat(INumber<decimal> net, INumber<decimal> rate)
+        : this(new Sum<decimal>(net, new Product<decimal>(net, rate))) { }
+
+    private TotalWithVat(INumber<decimal> total)
+    {
+        _total = total;
+    }
+
+    public decimal NumberValue => _total.NumberValue;
+}
+\end{lstlisting}
+  \vspace{0.6em}
+  \aside{The business rule is the entire implementation --- \hi{no arithmetic},
+  not one operator.}
+\end{frame}
+\note{Read the public constructor out loud: the total is the sum of the net
+  amount and the product of the net amount and the rate. Nowhere for a step to
+  hide, because there are no steps.}
+
+\begin{frame}[fragile]{So this is what a program looks like}
+  \vspace{0.6em}
+\begin{lstlisting}
+IString placeholder = new WrappedString(
+    new LeftCurlyBracketString(),
+    new RandomString(),
+    new RightCurlyBracketString()
+);
+
+INumber<int> result = new Sum<int>(
+    new Difference<int>(new Int(10), new Int(3)),
+    new Product<int>(new Int(2), new Int(4))
+);
+\end{lstlisting}
+  \vspace{0.9em}
+  \aside{Ordinary values --- pass them, store them, return them, nest them.
+  Two statements, and nothing has happened yet: there is nothing inside them
+  but references to other objects.}
+\end{frame}
+\note{Cheap values to move around. That is the practical consequence.}
+
+\begin{frame}{A composition is a tree}
+  \slidetop
+  \begin{center}
+    \begin{tikzpicture}[
+        font=\ttfamily\footnotesize,
+        nd/.style={draw=hairline,rounded corners=2pt,inner sep=4pt,fill=paper},
+        leaf/.style={nd,text=muted},
+        level distance=12mm,
+        level 1/.style={sibling distance=44mm},
+        level 2/.style={sibling distance=22mm},
+        edge from parent/.style={draw=hairline,thick}
+      ]
+      \node[nd,text=accent] {Sum<int>}
+        child { node[nd] {Difference<int>}
+          child { node[leaf] {Int(10)} }
+          child { node[leaf] {Int(3)} }
+        }
+        child { node[nd] {Product<int>}
+          child { node[leaf] {Int(2)} }
+          child { node[leaf] {Int(4)} }
+        };
+    \end{tikzpicture}
+  \end{center}
+  \slidegap
+  \begin{center}
+    \aside{Seven constructors ran. Zero additions, zero multiplications.}
+  \end{center}
+\end{frame}
+\note{The graph is the program, and it is standing still.}
+
+\begin{frame}{A component is named for what it is}
+  \slidetop
+  \begin{columns}[t,onlytextwidth]
+    \begin{column}{0.45\textwidth}
+      {\eyebrow{what it is}\par}
+      \vspace{0.8em}
+      {\large
+       \texttt{ConcatenatedString}\\[0.45em]
+       \texttt{Sum}\\[0.45em]
+       \texttt{Difference}\\[0.45em]
+       \texttt{CurrentTime}}
+    \end{column}
+    \begin{column}{0.45\textwidth}
+      {\eyebrow{what it does}\par}
+      \vspace{0.8em}
+      {\large\color{muted}
+       \texttt{StringConcatenator}\\[0.45em]
+       \texttt{Calculate}\\[0.45em]
+       \texttt{TimeProvider}}
+    \end{column}
+  \end{columns}
+
+  \slidegap
+  \aside{Not an agent that performs an action --- a value that stands for one.
+  Read a composition out loud and it is a noun phrase. It is a rule, not a
+  habit.}
+\end{frame}
+\note{Naming is enforced, because a composition has to be readable as one
+  expression.}
+
+\begin{frame}{Where evaluation happens}
+  \slidetop
+  \claim{It ends at the \hi{native field}.}
+  Read \texttt{.TextValue}: the graph is walked, every deferred operation runs
+  in order, and a concrete .NET value comes out.
+
+  \slidegap
+  \aside{Before that call, the entire program is inert.}
+\end{frame}
+\note{If nothing computes, when does anything happen? Here.}
+
+\begin{frame}[fragile]{Read it twice and it runs twice}
+  \vspace{0.1em}
+\begin{lstlisting}[basicstyle=\ttfamily\scriptsize,%
+                   framextopmargin=2pt,framexbottommargin=2pt]
+public sealed record CachedString : IString
+{
+    private readonly Lazy<string> _lazyValue;
+
+    public CachedString(IString value)
+        : this(
+            new Lazy<string>(
+                () => value.TextValue,
+                LazyThreadSafetyMode.ExecutionAndPublication
+            )
+        )
+    { }
+
+    private CachedString(Lazy<string> lazyValue)
+    {
+        _lazyValue = lazyValue;
+    }
+
+    public string TextValue => _lazyValue.Value;
+}
+\end{lstlisting}
+  \vspace{0.1em}
+  \aside{A composition keeps no result. Caching is \hi{one more object in the
+  graph}.}
+\end{frame}
+\note{And you decide where in the graph it sits. Wrapped, the graph is walked
+  exactly once, thread-safely, however many reads.}
+
+% ==================================================== 5. DETERMINED HASH ===
+\section{Identity}
+
+\begin{frame}[plain]
+  \chapterpage{}{Identity}{Why \texttt{GetHashCode} cannot be identity, what
+    replaces it, and what that costs.}
+\end{frame}
+\note{Budget: 5.5 minutes. Principle five -- the one that looked out of place
+  next to the other four.}
+
+\begin{frame}{\texttt{GetHashCode} is not identity}
+  \slidetop
+  \claim{It gives a \hi{different answer} the next time you run the same
+    program.}
+  Cannot go in a file. Cannot go over a network. Cannot be compared to
+  yesterday.
+
+  \slidegap
+  \aside{A deliberate security measure since .NET Core, not a bug --- but the
+  framework's notion of sameness has a lifetime shorter than the
+  application's. What we want is the hash of an object \emph{state snapshot}.}
+\end{frame}
+\note{Lead with the reason, not with a complaint about the framework.}
+
+\begin{frame}{And three types share one identity}
+  \slidetop
+  \begin{center}
+    \large
+    \texttt{0.GetHashCode()} \quad $=$ \quad \texttt{0}\\[0.6em]
+    \texttt{false.GetHashCode()} \quad $=$ \quad \texttt{0}\\[0.6em]
+    \texttt{default(char).GetHashCode()} \quad $=$ \quad \texttt{0}
+  \end{center}
+  \slidegap
+  \begin{center}
+    Three different values, from three different types,
+    \hi{one identity}.
+  \end{center}
+\end{frame}
+\note{This second problem is worse than the first. Pause on the three zeroes.}
+
+\begin{frame}[fragile]{What we use instead}
+  \vspace{0.6em}
+\begin{lstlisting}
+public interface IDeterminedHash : IEnumerable<byte>;
+\end{lstlisting}
+  \vspace{0.8em}
+  An identity is not an integer --- it is a \hi{sequence of bytes}.
+  \vspace{0.8em}
+\begin{lstlisting}
+public IEnumerator<byte> GetEnumerator()
+{
+    return SHA256.HashData([.. _bytes]).AsEnumerable().GetEnumerator();
+}
+\end{lstlisting}
+  \vspace{0.8em}
+  \aside{SHA-256, thirty-two bytes, deterministic across processes, machines
+  and runtimes. And lazy like everything else: enumerate it and it computes,
+  leave it alone and it costs nothing.}
+\end{frame}
+\note{The interface declaration is the entire file.}
+
+\begin{frame}[fragile]{A domain separator per type}
+  \vspace{0.7em}
+\begin{lstlisting}
+private static readonly byte[] TypePrefix =
+[
+    0, 69, 151, 1, 4, 52, 46, 126, 159, 32, 211, 174, 149, 230, 168, 150,
+];
+\end{lstlisting}
+  \vspace{1.2em}
+  Sixteen random bytes, unique per type, prepended before hashing.
+
+  \vspace{1.0em}
+  \aside{So zero, false and the empty string give three completely different
+  digests. The collision the framework hands you for free is \hi{structurally
+  impossible}.}
+\end{frame}
+\note{Every type gets one.}
+
+\begin{frame}{No \texttt{GetHashCode} means no framework collections}
+  \slidetop
+  \claim{A \texttt{Dictionary} asks its keys for a hash code. \hi{Ours do not
+    answer.}}
+  So the ecosystem ships its own collections, keyed on determined hashes.
+
+  \slidegap
+  \aside{Two keys are the same when their byte sequences are the same. Under
+  the surface: \texttt{FrozenDictionary}, \texttt{FrozenSet},
+  \texttt{Lazy<T>} and immutability.}
+\end{frame}
+\note{Collections follow from hashes -- state it in that order.}
+
+\begin{frame}{What equality is now}
+  \slidetop
+  \claim{All \hi{256 bits} decide equality. The \texttt{int} is a bucket index.}
+  It has not disappeared --- it is demoted from an identity to an address.
+  It answers ``roughly where should I look''.
+
+  \slidegap
+  \aside{Collisions there are harmless, because the real comparison is exact.}
+\end{frame}
+\note{Be honest here: the int hash is not eliminated, it is demoted.}
+
+\begin{frame}{One door this opens}
+  \slidetop
+  \claim{Has an object with this state \hi{already been allocated}?}
+  If yes, there is no need to allocate again --- return the existing reference.
+
+  \slidegap
+  \aside{Not built. But the door is open, and only because of immutability plus
+  determined state.}
+\end{frame}
+\note{Mark it as an opportunity, not a claim. Then move on.}
+
+% ======================================================= 6. CONTROL FLOW ===
+\section{Control flow}
+
+\begin{frame}[plain]
+  \chapterpage{}{Control flow}{\texttt{if} and \texttt{switch} as objects that
+    implement the interface they return.}
+\end{frame}
+\note{Budget: 5 minutes. You cannot compose a keyword, and a language without
+  branching is not a language.}
+
+\begin{frame}[fragile]{An \texttt{if} that produces a string \emph{is} a string}
+  \vspace{0.1em}
+\begin{lstlisting}[basicstyle=\ttfamily\scriptsize]
+public sealed record StringChoice : IString
+{
+    private readonly IBool _condition;
+    private readonly IString _valueOnTrue;
+    private readonly IString _valueOnFalse;
+
+    public StringChoice(IBool condition, IString valueOnTrue, IString valueOnFalse)
+    {
+        _condition = condition;
+        _valueOnTrue = valueOnTrue;
+        _valueOnFalse = valueOnFalse;
+    }
+
+    public string TextValue =>
+        _condition.BoolValue ? _valueOnTrue.TextValue : _valueOnFalse.TextValue;
+}
+\end{lstlisting}
+  \vspace{0.3em}
+  \aside{The condition is an object, both branches are objects, and the choice
+  \hi{implements the target interface}.}
+\end{frame}
+\note{It is not a control structure that yields a value. It is a value that
+  happens to have a decision inside it.}
+
+\begin{frame}[fragile]{Which means it composes}
+  \vspace{0.6em}
+\begin{lstlisting}
+INumber<int> count = new Int(3);
+
+IString label = new WrappedString(
+    new LeftCurlyBracketString(),
+    new StringChoice(
+        new GreaterThanCondition<int>(count, new Zero<int>()),
+        new String(count),
+        new EmptyString()
+    ),
+    new RightCurlyBracketString()
+);
+\end{lstlisting}
+  \vspace{0.9em}
+  \aside{The \texttt{WrappedString} has no idea there is a branch inside it ---
+  it was handed an \texttt{IString}. A choice inside a concatenation, inside
+  another choice, inside a cache: nothing downstream needs to know.}
+\end{frame}
+\note{This is the payoff of the choice implementing the interface.}
+
+\begin{frame}[fragile]{When the interface has more than one field}
+  \vspace{0.1em}
+\begin{lstlisting}[basicstyle=\ttfamily\tiny]
+public sealed record DateChoice : IDate
+{
+    public DateChoice(IBool condition, IDate valueOnTrue, IDate valueOnFalse)
+        : this(
+            new NumberChoice<ushort>(condition, valueOnTrue.Day, valueOnFalse.Day),
+            new NumberChoice<ushort>(condition, valueOnTrue.Month, valueOnFalse.Month),
+            new NumberChoice<ushort>(condition, valueOnTrue.Year, valueOnFalse.Year)
+        )
+    { }
+
+    private DateChoice(INumber<ushort> day, INumber<ushort> month, INumber<ushort> year)
+    {
+        Day = day;
+        Month = month;
+        Year = year;
+    }
+
+    public INumber<ushort> Day { get; }
+    public INumber<ushort> Month { get; }
+    public INumber<ushort> Year { get; }
+}
+\end{lstlisting}
+  \vspace{0.3em}
+  \aside{The public constructor performs no branching at all --- it composes
+  \hi{three smaller choices}, one per field, and delegates.}
+\end{frame}
+\note{The constructor pattern from the previous chapter, now applied to
+  branching. The private one assigns.}
+
+\begin{frame}{The \texttt{if} is distributed}
+  \slidetop
+  \claim{There is \hi{no single branch point}. Every field decides on its own,
+    at the moment it is read.}
+  Ask only for the year and the day is never chosen --- that branch never
+  happens at all.
+
+  \slidegap
+  \aside{A statement executes once, in one place, at one time. This is a
+  decision that exists in three places and may partially never occur.}
+\end{frame}
+\note{Contrast with the statement deliberately; it is the sharpest difference
+  in the chapter.}
+
+\begin{frame}[fragile]{\texttt{switch} has to answer one more question}
+  \vspace{0.8em}
+  Is this the \hi{same} as that? --- which the choice never had to ask.
+  \vspace{1.0em}
+\begin{lstlisting}
+public StringSwitch(
+    TSelector parameter,
+    IEnumerable<KeyValuePair<TSelector, IString>> branches,
+    Func<TSelector, IDeterminedHash> hashFactory
+)
+\end{lstlisting}
+  \vspace{1.0em}
+  \aside{And we already know how Pure answers that. A switch that returns a
+  string implements \texttt{IString}, like everything else here.}
+\end{frame}
+\note{Hold here -- the diagram is next.}
+
+\begin{frame}{The whole machine}
+  \slidetop
+  \begin{center}
+    \scalebox{1.12}{%
+    \begin{tikzpicture}[
+        font=\ttfamily\scriptsize,
+        box/.style={draw=hairline,rounded corners=2pt,inner sep=4pt,fill=paper},
+        hash/.style={box,text=muted},
+        gate/.style={circle,draw=muted,inner sep=0pt,minimum size=5mm,fill=paper,font=\scriptsize},
+        arr/.style={-{Stealth[length=4pt]},draw=muted},
+        lbl/.style={font=\sffamily\tiny,text=muted}
+      ]
+      % the parameter, hashed
+      \node[box,text=accent] (p) at (0,0) {today};
+      \node[hash] (ph) at (3.6,0) {3f a1 c7 ...};
+      \draw[arr] (p) -- node[lbl,above] {hashFactory} (ph);
+
+      \draw[hairline] (-1.0,-0.8) -- (8.6,-0.8);
+      \node[lbl,anchor=west] at (-1.0,-1.15) {BRANCHES};
+
+      % every key, hashed the same way
+      \node[box] (b1) at (0,-1.8) {Monday()};
+      \node[box] (b2) at (0,-2.7) {Saturday()};
+      \node[box] (b3) at (0,-3.6) {Sunday()};
+
+      \node[hash] (h1) at (3.6,-1.8) {9c 2e 44 ...};
+      \node[hash] (h2) at (3.6,-2.7) {3f a1 c7 ...};
+      \node[hash] (h3) at (3.6,-3.6) {71 0b 9d ...};
+
+      \draw[arr] (b1) -- (h1);
+      \draw[arr] (b2) -- (h2);
+      \draw[arr] (b3) -- (h3);
+
+      % a single reference line carries the parameter's hash down to every
+      % gate; each gate is where that reference is checked against the key
+      \draw[draw=muted,dashed] (ph.south) -- (3.6,-0.35) -- (5.2,-0.35) -- (5.2,-3.6);
+      \node[lbl,anchor=west] at (5.35,-0.35) {reference hash};
+
+      \node[gate] (g1) at (5.2,-1.8) {$\times$};
+      \node[gate,draw=accent,text=accent,line width=1pt] (g2) at (5.2,-2.7) {$\checkmark$};
+      \node[gate] (g3) at (5.2,-3.6) {$\times$};
+
+      \draw[arr] (h1) -- (g1);
+      \draw[arr] (h2) -- (g2);
+      \draw[arr] (h3) -- (g3);
+
+      \node[box,text=accent] (res) at (7.6,-2.7) {String("Weekend")};
+      \draw[arr,draw=accent] (g2) -- (res);
+      \node[lbl,anchor=north] at (7.6,-3.25) {the only branch read};
+    \end{tikzpicture}}
+  \end{center}
+\end{frame}
+\note{Hash the parameter. Hash each key. Keep the branch whose bytes match, and
+  read only that one. The two that lost are still sitting there, unevaluated,
+  and they will stay that way.}
+
+\begin{frame}{What is not in that picture}
+  \slidetop
+  \claim{No \texttt{==}. No \texttt{Equals}. No virtual dispatch to ask an
+    object about itself.}
+  The switch is \hi{told how to identify} its keys, via a determined state
+  hash.
+
+  \slidegap
+  \aside{It never asks the objects whether they are equal.}
+\end{frame}
+\note{Land this one slowly.}
+
+% ============================================== 7. WHAT IT COSTS AND BUYS ==
+\section{What it costs, and what it buys}
+
+\begin{frame}[plain]
+  \chapterpage{}{What it costs, and what it buys}{Testing, the adapters at the
+    border, and how the packages are shipped.}
+\end{frame}
+\note{Budget: 4 minutes.}
+
+\begin{frame}{Testing}
+  \slidetop
+  \claim{A test is: construct, read one field, \hi{compare}.}
+  \begin{tabular}{@{}p{0.22\textwidth}p{0.7\textwidth}@{}}
+    Bounded     & it holds exactly what it was given.\\[0.5em]
+    Immutable   & no order of operations, no setup to unwind.\\[0.5em]
+    Thread-safe & by construction, not by discipline.\\
+  \end{tabular}
+
+  \slidegap
+  \aside{There is nothing else in the way. This is a headline benefit, not an
+  afterthought.}
+\end{frame}
+\note{Say it as a benefit of the design, not as a consolation.}
+
+\begin{frame}{The cost is at the border}
+  \slidetop
+  \claim{Everything that meets classic .NET needs a \hi{wrapper}.}
+  Write the adapter --- or push the edge further out and evaluate through a
+  native field there.
+
+  \slidegap
+  \aside{An adapter unwraps an interface into a concrete type on the way out
+  and wraps it back on the way in. The further out that edge, the fewer of them
+  you write.}
+\end{frame}
+\note{I would rather tell you the price myself than have someone find it in the
+  Q and A.}
+
+\begin{frame}{What it takes to write, and to read}
+  \slidetop
+  \begin{columns}[t,onlytextwidth]
+    \begin{column}{0.45\textwidth}
+      {\eyebrow{to design}\par}
+      \vspace{0.8em}
+      {\large \hi{More} mental power.\par}
+      \vspace{0.8em}
+      \aside{That part is true.}
+    \end{column}
+    \begin{column}{0.45\textwidth}
+      {\eyebrow{to read}\par}
+      \vspace{0.8em}
+      {\large Simpler, better, more satisfying.\par}
+      \vspace{0.8em}
+      \aside{Than the classic alternative.}
+    \end{column}
+  \end{columns}
+
+  \slidegap
+  \aside{The difficulty is at the moment of writing --- and it buys clarity
+  every time anybody reads it afterwards.}
+\end{frame}
+\note{The objection is usually stated wrongly. Do not frame this as a cost the
+  audience must accept.}
+
+\begin{frame}{Seventy-five packages, one repository each}
+  \slidetop
+  \claim{You do not adopt the ecosystem. You take the \hi{packages you need}.}
+  One repository and one pipeline per package.
+
+  \slidegap
+  \aside{A monolithic SDK forces all of it or none of it, and with an idea this
+  opinionated ``all of it'' is not reasonable to ask of anyone. Lazy boolean
+  algebra and nothing else? One package.}
+\end{frame}
+\note{Not a monolithic SDK, and that is deliberate.}
+
+\begin{frame}{What the outside sees}
+  \slidetop
+  \claim{The wire sees a string. The database sees a column. The client sees a
+    primitive.}
+  None of them can tell.
+
+  \slidegap
+  \aside{All of this exists only inside the process, between the first
+  constructor and the moment a native field is read.}
+\end{frame}
+\note{Slow down -- the last statement is next.}
+
+\begin{frame}[plain]
+  \vfill
+  \begin{minipage}{0.86\textwidth}
+    {\Large A program should \emph{be} the transformation --- written down,
+     composed, standing there unperformed.\par}
+    \slidegap
+    {\color{muted}Everything that happens, happens once, at the end: when
+     somebody finally reads a field.\par}
+  \end{minipage}
+  \vfill
+\end{frame}
+\note{Finish where I started. Not the interfaces, not the hashes -- those are
+  consequences. Hold the pause before thanking them.}
+
+\begin{frame}[plain]
+  \vfill
+  {\huge\bfseries Thank you\par}
+  \vspace{1.2em}
+  {\color{hairline}\rule{0.28\textwidth}{0.8pt}\par}
+  \vspace{1.2em}
+  {\large \texttt{github.com/kudima03} \quad$\cdot$\quad NuGet:
+   \texttt{Pure.*}\par}
+  \vspace{1.8em}
+  {\color{muted}\small Elegant Objects is the work of Yegor Bugaenko.\\
+   Pure is an implementation of those ideas for .NET, with divergences of my
+   own.\par}
+  \vfill
+\end{frame}
+\note{I would be glad to discuss any of it with you.}
+
+\end{document}
