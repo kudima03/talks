@@ -799,6 +799,7 @@ public StringSwitch(
         font=\ttfamily\scriptsize,
         box/.style={draw=hairline,rounded corners=2pt,inner sep=4pt,fill=paper},
         hash/.style={box,text=muted},
+        gate/.style={circle,draw=muted,inner sep=0pt,minimum size=5mm,fill=paper,font=\scriptsize},
         arr/.style={-{Stealth[length=4pt]},draw=muted},
         lbl/.style={font=\sffamily\tiny,text=muted}
       ]
@@ -823,16 +824,21 @@ public StringSwitch(
       \draw[arr] (b2) -- (h2);
       \draw[arr] (b3) -- (h3);
 
-      % the comparison
-      \draw[draw=muted,dashed] (ph.south) -- (5.2,-0.35) -- (5.2,-3.6);
-      \node[lbl,rotate=90,fill=paper,inner sep=2pt] at (5.2,-2.25) {Comparison};
+      % a single reference line carries the parameter's hash down to every
+      % gate; each gate is where that reference is checked against the key
+      \draw[draw=muted,dashed] (ph.south) -- (3.6,-0.35) -- (5.2,-0.35) -- (5.2,-3.6);
+      \node[lbl,anchor=west] at (5.35,-0.35) {reference hash};
 
-      \node[text=muted] at (5.9,-1.8) {$\times$};
-      \node[text=accent] at (5.9,-2.7) {$\checkmark$};
-      \node[text=muted] at (5.9,-3.6) {$\times$};
+      \node[gate] (g1) at (5.2,-1.8) {$\times$};
+      \node[gate,draw=accent,text=accent,line width=1pt] (g2) at (5.2,-2.7) {$\checkmark$};
+      \node[gate] (g3) at (5.2,-3.6) {$\times$};
+
+      \draw[arr] (h1) -- (g1);
+      \draw[arr] (h2) -- (g2);
+      \draw[arr] (h3) -- (g3);
 
       \node[box,text=accent] (res) at (7.6,-2.7) {String("Weekend")};
-      \draw[arr,draw=accent] (6.2,-2.7) -- (res);
+      \draw[arr,draw=accent] (g2) -- (res);
       \node[lbl,anchor=north] at (7.6,-3.25) {the only branch read};
     \end{tikzpicture}}
   \end{center}
