@@ -1,0 +1,42 @@
+name: Deploy pure-ecosystem talk PDFs
+
+# On push to main, build the slide deck to PDF, tar it, and publish the
+# tarball on a rolling GitHub Release.
+#
+# Scoped to pure-ecosystem/ only. A second talk folder would need its own
+# copy of this job (new paths filter, tag name, file names) rather than
+# auto-discovery, since that discovery needs shell scripting to diff commits
+# and match folder conventions.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "pure-ecosystem/en/**"
+
+permissions:
+  contents: write
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build slide deck PDF
+        uses: xu-cheng/latex-action@v4
+        with:
+          root_file: pure-ecosystem-slides.tex
+          working_directory: pure-ecosystem/en/slides
+
+      - name: Package deployment tarball
+        run: |
+          tar -C pure-ecosystem -czf pure-ecosystem-deployment.tar.gz \
+            en/slides/pure-ecosystem-slides.pdf
+
+      - name: Publish release
+        uses: softprops/action-gh-release@v3
+        with:
+          tag_name: pure-ecosystem-latest
+          name: pure-ecosystem
+          files: pure-ecosystem-deployment.tar.gz
