@@ -47,7 +47,6 @@
 \definecolor{kw}{HTML}{334E68}
 \definecolor{str}{HTML}{4E6E58}
 \definecolor{codebg}{HTML}{F4F2ED}   % listing ground, one step off the paper
-\definecolor{codehl}{HTML}{F1EAE5}   % the one line the slide is about
 
 % -------------------------------------------------------------- structure --
 \setbeamercolor{normal text}{fg=ink,bg=paper}
@@ -125,26 +124,11 @@
 % owns that name.)
 \newcommand{\eyebrow}[1]{{\color{muted}\footnotesize\textls[90]{\MakeUppercase{#1}}}}
 
-% The deck's mark: the three-node composition tree from the chapter-4 diagram,
-% in hairlines. It is the talk's own picture, not decoration -- a root that is
-% nothing but the two things under it. \puremark[2] scales it.
-\newcommand{\puremark}[1][1]{%
-  \begin{tikzpicture}[scale=#1,baseline=0pt]
-    \draw[hairline] (0,0.5) -- (-0.42,0);
-    \draw[hairline] (0,0.5) -- (0.42,0);
-    \draw[hairline,fill=paper] (-0.42,0) circle (0.06);
-    \draw[hairline,fill=paper] (0.42,0) circle (0.06);
-    \fill[accent] (0,0.5) circle (0.06);
-  \end{tikzpicture}%
-}
-
 % Chapter divider: number, title, rule, and one factual line about what is
 % coming. Used on a [plain] frame -- the deck has no dark slides.
 \newcommand{\chapterpage}[3]{%
   \vfill
   \begin{minipage}{0.86\textwidth}
-    {\puremark[0.85]\par}
-    \vspace{0.9em}
     {\color{muted}\Large #1\par}
     \vspace{0.4em}
     {\LARGE\bfseries #2\par}
@@ -174,9 +158,7 @@
   aboveskip=0.4em,
   belowskip=0.2em,
   xleftmargin=0.5em,
-  % the listing sits on its own ground: no frame, no shadow, one step of tone.
-  % The padding is framex*margin, not framesep, so a listing can be cut into
-  % pieces that still join seamlessly (see csharphl below).
+  % the listing sits on its own ground: no frame, no shadow, one step of tone
   backgroundcolor=\color{codebg},
   frame=single,
   framerule=0pt,
@@ -189,14 +171,5 @@
 }
 \lstset{style=csharp}
 
-% One snippet, three listings: the middle one -- the lines the slide is about --
-% sits on a warmer ground. Skips and inner margins are zero at every cut, so
-% the three pieces read as one block. Order: csharptop, csharphl, csharpbot;
-% drop the first or the last when the highlight starts or ends the snippet.
-\lstdefinestyle{csharptop}{style=csharp,belowskip=0pt,framexbottommargin=0pt}
-\lstdefinestyle{csharphl}{style=csharp,aboveskip=0pt,belowskip=0pt,
-  framextopmargin=0pt,framexbottommargin=0pt,
-  backgroundcolor=\color{codehl},rulecolor=\color{codehl}}
-\lstdefinestyle{csharpbot}{style=csharp,aboveskip=0pt,framextopmargin=0pt}
 
 \endinput

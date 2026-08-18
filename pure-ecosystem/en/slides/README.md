@@ -85,12 +85,8 @@ looking for it?*:
 
 - **Fira Sans and Fira Mono**, with `microtype` doing protrusion and expansion
   behind them, and real letterspacing on the `\eyebrow` labels.
-- **A ground under every listing** (`codebg`, one step off the paper), and a
-  warmer band (`codehl`) under the two or three lines a code slide is actually
-  about — so nobody has to hunt for them while you talk.
-- **The mark**: the three-node composition tree, in hairlines, on the title,
-  every chapter divider and the closing slide. It is the talk's own picture —
-  a root that is nothing but the two things under it — not decoration.
+- **A ground under every listing** (`codebg`, one step off the paper), so a
+  snippet reads as one object rather than text scattered on the slide.
 - **The slide number set against the total** (`16 / 53`, the total lighter),
   and a 0.5pt hairline along the very bottom edge that fills as the talk runs.
 
@@ -134,19 +130,12 @@ and the slide furniture, so a second-language deck can reuse it unchanged:
 | `\chapterpage{n}{title}{line}` | the chapter divider, on a `[plain]` frame |
 | `\hrulethin{0.4}` | a thin rule, as a fraction of `\linewidth` |
 | `\slidetop` `\slidegap` `\rulegap` | the deck's only three vertical gaps |
-| `\puremark[2.6]` | the composition-tree mark, at the given scale |
 
 The palette is low-chroma on purpose: ink `#1F2328` on paper `#FBFAF7`, one
 accent (`#7C3016`, a dark brick that sits next to the ink rather than jumping
-off the wall), desaturated keyword/string colours, and two near-paper tints for
-code — `codebg` `#F4F2ED` for the listing ground, `codehl` `#F1EAE5` for the
-highlighted lines.
-
-Highlighting inside a snippet is three listings, not one, cut at the highlight
-boundaries — `csharptop`, `csharphl`, `csharpbot`. Skips and inner margins are
-zero at every cut, so the pieces read as a single block. Keep a blank code line
-at the end of a piece if the original snippet had one there; the cut swallows
-it otherwise.
+off the wall), desaturated keyword/string colours, and one near-paper tint,
+`codebg` `#F4F2ED`, for the listing ground. Nothing inside a snippet is
+singled out: the slide's own sentence says which line matters.
 
 Slides carry no overlays. One PDF page is one slide, so the footer's number
 matches what the audience sees and the deck stays reviewable in a file diff.

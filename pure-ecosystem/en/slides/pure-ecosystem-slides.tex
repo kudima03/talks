@@ -34,8 +34,6 @@
 % ------------------------------------------------------------------ title --
 \begin{frame}[plain]
   \vfill
-  \begin{columns}[c,onlytextwidth]
-  \begin{column}{0.72\textwidth}
   {\color{muted}\footnotesize\MakeUppercase{Elegant Objects in .NET}\par}
   \vspace{1.0em}
   {\huge\bfseries A Program Is Nothing But \texttt{new}\par}
@@ -47,11 +45,6 @@
   {Dmitry Kurochkin\par}
   \vspace{0.4em}
   {\color{muted}\small\texttt{github.com/kudima03}\par}
-  \end{column}
-  \begin{column}{0.24\textwidth}
-  \centering\puremark[2.6]
-  \end{column}
-  \end{columns}
   \vfill
 \end{frame}
 \note{Good afternoon. Author and main contributor of the Pure ecosystem.}
@@ -347,10 +340,8 @@ IDate birthday = new Millennium();
 
 \begin{frame}[fragile]{The simplest component in the ecosystem}
   \vspace{0.4em}
-\begin{lstlisting}[style=csharphl,basicstyle=\ttfamily\scriptsize]
+\begin{lstlisting}[basicstyle=\ttfamily\scriptsize]
 public sealed record ConcatenatedString : IString
-\end{lstlisting}
-\begin{lstlisting}[style=csharpbot,basicstyle=\ttfamily\scriptsize]
 {
     private readonly IEnumerable<IString> _parameters;
 
@@ -389,7 +380,7 @@ public sealed record ConcatenatedString : IString
 
 \begin{frame}[fragile]{Delegation, one layer up}
   \vspace{0.2em}
-\begin{lstlisting}[style=csharptop,basicstyle=\ttfamily\scriptsize]
+\begin{lstlisting}[basicstyle=\ttfamily\scriptsize]
 public sealed record WrappedString : IString
 {
     private readonly IString _concatenated;
@@ -400,14 +391,11 @@ public sealed record WrappedString : IString
     public WrappedString(IString prefix, IString wrappedValue, IString suffix)
         : this(new ConcatenatedString(prefix, wrappedValue, suffix)) { }
 
-\end{lstlisting}
-\begin{lstlisting}[style=csharphl,basicstyle=\ttfamily\scriptsize]
     private WrappedString(IString concatenated)
     {
         _concatenated = concatenated;
     }
-\end{lstlisting}
-\begin{lstlisting}[style=csharpbot,basicstyle=\ttfamily\scriptsize]
+
     public string TextValue => _concatenated.TextValue;
 }
 \end{lstlisting}
@@ -420,17 +408,14 @@ public sealed record WrappedString : IString
 
 \begin{frame}[fragile]{The shape does not change above the primitives}
   \vspace{0.3em}
-\begin{lstlisting}[style=csharptop,basicstyle=\ttfamily\scriptsize]
+\begin{lstlisting}[basicstyle=\ttfamily\scriptsize]
 public sealed record TotalWithVat : INumber<decimal>
 {
     private readonly INumber<decimal> _total;
 
-\end{lstlisting}
-\begin{lstlisting}[style=csharphl,basicstyle=\ttfamily\scriptsize]
     public TotalWithVat(INumber<decimal> net, INumber<decimal> rate)
         : this(new Sum<decimal>(net, new Product<decimal>(net, rate))) { }
-\end{lstlisting}
-\begin{lstlisting}[style=csharpbot,basicstyle=\ttfamily\scriptsize]
+
     private TotalWithVat(INumber<decimal> total)
     {
         _total = total;
@@ -697,7 +682,7 @@ private static readonly byte[] TypePrefix =
 
 \begin{frame}[fragile]{An \texttt{if} that produces a string \emph{is} a string}
   \vspace{0.1em}
-\begin{lstlisting}[style=csharptop,basicstyle=\ttfamily\scriptsize]
+\begin{lstlisting}[basicstyle=\ttfamily\scriptsize]
 public sealed record StringChoice : IString
 {
     private readonly IBool _condition;
@@ -711,12 +696,8 @@ public sealed record StringChoice : IString
         _valueOnFalse = valueOnFalse;
     }
 
-\end{lstlisting}
-\begin{lstlisting}[style=csharphl,basicstyle=\ttfamily\scriptsize]
     public string TextValue =>
         _condition.BoolValue ? _valueOnTrue.TextValue : _valueOnFalse.TextValue;
-\end{lstlisting}
-\begin{lstlisting}[style=csharpbot,basicstyle=\ttfamily\scriptsize]
 }
 \end{lstlisting}
   \vspace{0.3em}
@@ -750,18 +731,14 @@ IString label = new WrappedString(
 
 \begin{frame}[fragile]{When the interface has more than one field}
   \vspace{0.1em}
-\begin{lstlisting}[style=csharptop,basicstyle=\ttfamily\tiny]
+\begin{lstlisting}[basicstyle=\ttfamily\tiny]
 public sealed record DateChoice : IDate
 {
     public DateChoice(IBool condition, IDate valueOnTrue, IDate valueOnFalse)
         : this(
-\end{lstlisting}
-\begin{lstlisting}[style=csharphl,basicstyle=\ttfamily\tiny]
             new NumberChoice<ushort>(condition, valueOnTrue.Day, valueOnFalse.Day),
             new NumberChoice<ushort>(condition, valueOnTrue.Month, valueOnFalse.Month),
             new NumberChoice<ushort>(condition, valueOnTrue.Year, valueOnFalse.Year)
-\end{lstlisting}
-\begin{lstlisting}[style=csharpbot,basicstyle=\ttfamily\tiny]
         )
     { }
 
@@ -981,8 +958,6 @@ public StringSwitch(
 
 \begin{frame}[plain]
   \vfill
-  {\puremark[1.1]\par}
-  \vspace{1.3em}
   {\huge\bfseries Thank you\par}
   \vspace{1.2em}
   {\color{hairline}\rule{0.28\textwidth}{0.8pt}\par}
