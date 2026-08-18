@@ -1,7 +1,8 @@
 name: Deploy pure-ecosystem talk PDFs
 
-# On push to main, build the slide deck to PDF, tar it, and publish the
-# tarball on a rolling GitHub Release.
+# On push to main (or manually, via workflow_dispatch), build the slide
+# deck to PDF, tar it together with the spoken-delivery script, and publish
+# the tarball on a rolling GitHub Release.
 #
 # Scoped to pure-ecosystem/ only. A second talk folder would need its own
 # copy of this job (new paths filter, tag name, file names) rather than
@@ -13,6 +14,7 @@ on:
     branches: [main]
     paths:
       - "pure-ecosystem/en/**"
+  workflow_dispatch: {}
 
 permissions:
   contents: write
@@ -32,6 +34,7 @@ jobs:
       - name: Package deployment tarball
         run: |
           tar -C pure-ecosystem -czf pure-ecosystem-deployment.tar.gz \
+            en/pure-ecosystem-talk.md \
             en/slides/pure-ecosystem-slides.pdf
 
       - name: Publish release
