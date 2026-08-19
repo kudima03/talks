@@ -51,7 +51,7 @@ Five rules get you there: only fields, no methods · logic is only composition o
 
 **18. Testing is the headline benefit.** Bounded, immutable, thread-safe. Build the object, read the field, compare.
 
-**19. You do not adopt the ecosystem. You take the two packages you need.** ~75 NuGet packages, one repository each — deliberately not a monolithic SDK.
+**19. You do not adopt the whole ecosystem. You take the packages you need.** ~75 NuGet packages, one repository each — deliberately not a monolithic SDK.
 
 ## The close
 
