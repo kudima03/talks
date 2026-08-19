@@ -39,7 +39,7 @@ Five rules get you there: only fields, no methods · logic is only composition o
 
 **13. Identity is a snapshot of an object's state.** That is what a determined hash code is: SHA-256 over the snapshot, with a per-type prefix so `0`, `false` and `""` stop colliding — and it says the same thing tomorrow, on another machine, in another runtime. Built-in hashing goes unused, so framework collections go with it and the ecosystem ships its own.
 
-**14. `if` is an object.** A choice that produces a string *is* a string. In `DateChoice` the branch is distributed across every field: ask only for the year and the day is never chosen.
+**14. `if` is an object.** A choice that produces a string *is* a string, so it composes anywhere one is accepted — and nothing downstream needs to know a decision is in there.
 
 **15. `switch` is an object too — and it never asks whether two objects are equal, it is told how to identify them.** Determined hash codes decide which branch matches, and only the winning one is ever read.
 
