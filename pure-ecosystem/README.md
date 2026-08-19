@@ -13,19 +13,19 @@ Five rules get you there: only fields, no methods · logic is only composition o
 
 ## The theses
 
-**1. A program transforms data, and its result is data.** Everything else is machinery.
+**1. The purpose of a program is to transform data from one shape into another.** Web service, report generator, trading system, string concatenation — same shape. Everything else is machinery.
 
-**2. What we write down is not the transformation — it is a sequential set of instructions for producing one.** The transformation exists only while the CPU runs. Before that a recipe, after that gone.
+**2. Today we achieve that transformation with a sequential set of instructions. It should be a recipe.** Instructions have to be *run* before the transformation exists — it lives only while the CPU does, and then it is gone. A recipe already **is** the transformation, standing there unperformed.
 
-**3. Write down a sequential set of object states instead.** Not the steps that compute the result — the result itself, unevaluated. *A thing that already **is** the answer, and simply has not been asked yet.*
+**3. The recipe is a written-down sequential set of object states.** Not the steps that compute the result — the result itself, unevaluated. *A thing that already **is** the answer, and simply has not been asked yet.*
 
 **4. .NET removed that option before you sat down.** `String` sealed, every numeric a struct, the whole BCL written against concrete types. No seam anywhere.
 
 **5. That — not preference — is why .NET developers write functional code.** The SDK leaves nothing else to hold on to.
 
-**6. A library cannot fix it, because a library sits on top of the problem.** You re-found the primitives: nine interfaces, not one method among them.
+**6. A library cannot fix it, because a library sits on top of the problem — so we redefined the primitives themselves.** `IBool`, `INumber<T>`, `IString`: nine interfaces, not one method among them.
 
-**7. Native fields are the bridge — always computed, never stored.** `IDate` has none, because a date **is** three numbers.
+**7. Primitives are the bridge back to .NET, and their native field is always computed, never stored.** It is the single place the ecosystem hands the framework something it understands. `IDate` has none, because a date **is** three numbers.
 
 **8. The transformation lives in the constructors.** One assigns fields; every other composes its inputs into objects and delegates. That delegation chain *is* the program.
 
@@ -35,13 +35,13 @@ Five rules get you there: only fields, no methods · logic is only composition o
 
 **11. Name a component for what it *is*, not what it does.** `Sum`, `Difference`, `CurrentTime` — a composition read aloud is a noun phrase.
 
-**12. `GetHashCode` cannot be identity — it gives a different answer the next time you run the same program.** We use determined hash codes instead: SHA-256 over a snapshot of an object's state, with a per-type prefix so `0`, `false` and `""` stop colliding.
+**12. `GetHashCode` cannot be identity — it gives a different answer the next time you run the same program.** Its notion of sameness outlives nothing: not a file, not a network hop, not yesterday.
 
-**13. Identity is a sequence of bytes, not an integer.** `IDeterminedHash : IEnumerable<byte>` — that is the entire file. Framework collections go with it, so the ecosystem ships its own.
+**13. Identity is a snapshot of an object's state.** That is what a determined hash code is: SHA-256 over the snapshot, with a per-type prefix so `0`, `false` and `""` stop colliding — and it says the same thing tomorrow, on another machine, in another runtime. Built-in hashing goes unused, so framework collections go with it and the ecosystem ships its own.
 
-**14. `if` is an object.** A choice that produces a string *is* a string. In `DateChoice` the branch is distributed across every field: ask only for the year and the day is never chosen.
+**14. `if` is an object.** A choice that produces a string *is* a string, so it composes anywhere one is accepted — and nothing downstream needs to know a decision is in there.
 
-**15. The switch never asks objects whether they are equal — it is told how to identify them.** Only the winning branch is ever read.
+**15. `switch` is an object too — and it never asks whether two objects are equal, it is told how to identify them.** Determined hash codes decide which branch matches, and only the winning one is ever read.
 
 ## What it costs, what it buys
 
