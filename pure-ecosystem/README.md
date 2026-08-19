@@ -1,7 +1,7 @@
 # A Program Is Nothing But `new`
 
 **The Pure ecosystem — bringing Elegant Objects to .NET**
-Dmitry Kurochkin (`kudima03`) · 30 min · [script](en/pure-ecosystem-talk.md) · [slides](en/slides/)
+Dmitry Kurochkin (`kudima03`) · 30 min · [script](en/pure-ecosystem-talk.md) · [slides](en/slides/) · [the ecosystem](https://github.com/kudima03/Pure)
 
 > [Elegant Objects](https://www.elegantobjects.org) is **[Yegor Bugaenko's](https://www.yegor256.com/)** invention — his thinking, his research, his books. Pure is an implementation of those ideas for .NET, with divergences of my own.
 
@@ -58,3 +58,7 @@ Five rules get you there: only fields, no methods · logic is only composition o
 > **Your program is a graph of `new`. And everything that happens, happens once, at the end — when somebody finally reads a field.**
 
 At the edges Pure disappears: the wire sees a string, the database sees a column, the client sees a primitive.
+
+---
+
+The ecosystem lives at [github.com/kudima03/Pure](https://github.com/kudima03/Pure) — the home repository indexes every package.
