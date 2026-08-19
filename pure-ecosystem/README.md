@@ -3,7 +3,7 @@
 **The Pure ecosystem — bringing Elegant Objects to .NET**
 Dmitry Kurochkin (`kudima03`) · 30 min · [script](en/pure-ecosystem-talk.md) · [slides](en/slides/)
 
-> Elegant Objects is **Yegor Bugaenko's** invention — his thinking, his research, his books. Pure is an implementation of those ideas for .NET, with divergences of my own.
+> [Elegant Objects](https://www.elegantobjects.org) is **[Yegor Bugaenko's](https://www.yegor256.com/)** invention — his thinking, his research, his books. Pure is an implementation of those ideas for .NET, with divergences of my own.
 
 ## TL;DR
 
