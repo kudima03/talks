@@ -13,11 +13,11 @@ Five rules get you there: only fields, no methods · logic is only composition o
 
 ## The theses
 
-**1. A program transforms data, and its result is data.** Everything else is machinery.
+**1. The purpose of a program is to transform data from one shape into another.** Web service, report generator, trading system, string concatenation — same shape. Everything else is machinery.
 
-**2. What we write down is not the transformation — it is a sequential set of instructions for producing one.** The transformation exists only while the CPU runs. Before that a recipe, after that gone.
+**2. Today we achieve that transformation with a sequential set of instructions. It should be a recipe.** Instructions have to be *run* before the transformation exists — it lives only while the CPU does, and then it is gone. A recipe already **is** the transformation, standing there unperformed.
 
-**3. Write down a sequential set of object states instead.** Not the steps that compute the result — the result itself, unevaluated. *A thing that already **is** the answer, and simply has not been asked yet.*
+**3. The recipe is a written-down sequential set of object states.** Not the steps that compute the result — the result itself, unevaluated. *A thing that already **is** the answer, and simply has not been asked yet.*
 
 **4. .NET removed that option before you sat down.** `String` sealed, every numeric a struct, the whole BCL written against concrete types. No seam anywhere.
 
