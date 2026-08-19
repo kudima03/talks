@@ -3,7 +3,7 @@
 **The Pure ecosystem — bringing Elegant Objects to .NET**
 Dmitry Kurochkin (`kudima03`) · 30 min · [script](en/pure-ecosystem-talk.md) · [slides](en/slides/)
 
-> Elegant Objects is **Yegor Bugaenko's** invention — his thinking, his research, his books. Pure is an implementation of those ideas for .NET, with divergences of my own.
+> [Elegant Objects](https://www.elegantobjects.org) is **[Yegor Bugaenko's](https://www.yegor256.com/)** invention — his thinking, his research, his books. Pure is an implementation of those ideas for .NET, with divergences of my own.
 
 ## TL;DR
 
@@ -51,7 +51,7 @@ Five rules get you there: only fields, no methods · logic is only composition o
 
 **18. Testing is the headline benefit.** Bounded, immutable, thread-safe. Build the object, read the field, compare.
 
-**19. You do not adopt the ecosystem. You take the two packages you need.** ~75 NuGet packages, one repository each — deliberately not a monolithic SDK.
+**19. You do not adopt the whole ecosystem. You take the packages you need.** ~75 NuGet packages, one repository each — deliberately not a monolithic SDK.
 
 ## The close
 
