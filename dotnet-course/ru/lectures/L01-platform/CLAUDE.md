@@ -95,6 +95,8 @@ Inherited from `beamerthemepure` and deliberately identical in spirit:
   reflow a snippet that is quoted output.
 - After editing, look at the pages, not just the log: `make proof`.
   `Overfull \vbox` in the log means a slide is running into the footer.
+  **A listing that is too wide overflows its own grey ground silently** — no
+  warning, clean log, broken slide. The only way to catch it is to look.
 
 ## Facts this lecture commits to
 

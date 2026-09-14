@@ -28,10 +28,10 @@
 % Loaded by the theme, not by the deck, so no lecture can drift. Shorthands
 % are off on purpose: babel-russian makes " active, which breaks listings and
 % verbatim. Typographic quotes are typed directly as UTF-8 -- <<like this>>.
+\RequirePackage{cmap}            % before fontenc, or it cannot patch the fonts
 \RequirePackage[utf8]{inputenc}
 \RequirePackage[T1,T2A]{fontenc}
 \RequirePackage[shorthands=off,english,russian]{babel}
-\RequirePackage{cmap}            % searchable/copyable Cyrillic in the PDF
 
 \RequirePackage{xcolor}
 \RequirePackage{listings}
@@ -182,13 +182,18 @@
   \vfill
 }
 
+% Display phrases (a statement, a section's closing line, a question put to
+% the room) must not hyphenate: they are the lines the room photographs, and
+% <<ноль ма-гии>> across two lines is not the send-off anybody wants.
+\newcommand{\dncnohyph}{\hyphenpenalty=10000\exhyphenpenalty=10000\raggedright}
+
 % A phrase that is the point, alone on the slide, set large. Two per deck at
 % most: this is the thing the room should still be able to quote in March.
 % Not a slogan -- it only earns the page when the sentence *is* the content.
 \newcommand{\statement}[1]{%
   \vfill
   \begin{minipage}{0.88\textwidth}
-    {\LARGE #1\par}
+    {\LARGE\dncnohyph #1\par}
   \end{minipage}
   \vfill
 }
@@ -200,7 +205,7 @@
   \begin{minipage}{0.86\textwidth}
     {\color{hairline}\rule{0.16\linewidth}{0.8pt}\par}
     \vspace{0.9em}
-    {\Large #1\par}
+    {\Large\dncnohyph #1\par}
   \end{minipage}
   \vfill
 }
@@ -213,7 +218,7 @@
   \begin{minipage}{0.86\textwidth}
     \eyebrow{вопрос в зал}\par
     \vspace{0.7em}
-    {\LARGE #1\par}
+    {\LARGE\dncnohyph #1\par}
   \end{minipage}
   \vfill
 }

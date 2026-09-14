@@ -289,18 +289,17 @@ $ dotnet --info
 
 \begin{frame}[fragile]{Что на самом деле лежит в dll}
   \slidetop
-  \begin{minipage}[t]{0.46\textwidth}
+  \begin{minipage}[t]{0.36\textwidth}
     \eyebrow{исходник}\par\vspace{0.5em}
 \begin{lstlisting}[style=csharp]
 static int Add(int a, int b)
     => a + b;
 \end{lstlisting}
   \end{minipage}\hfill
-  \begin{minipage}[t]{0.50\textwidth}
+  \begin{minipage}[t]{0.60\textwidth}
     \eyebrow{то же самое в IL}\par\vspace{0.5em}
-\begin{lstlisting}[style=plain]
-.method static int32
-        Add(int32 a, int32 b) cil managed
+\begin{lstlisting}[style=term]
+.method static int32 Add(int32 a, int32 b) cil managed
 {
     .maxstack 8
     IL_0000: ldarg.0
@@ -610,7 +609,7 @@ $ dotnet new console -n Wassup && cd Wassup
 $ dotnet run
 Hello, World!
 
-$ dotnet run -c Release          # другая конфигурация -> другая папка в bin
+$ dotnet run -c Release
 Hello, World!
 
 $ dotnet publish -c Release -o ./out
@@ -618,8 +617,9 @@ $ ls out
 Wassup  Wassup.deps.json  Wassup.dll  Wassup.pdb  Wassup.runtimeconfig.json
 \end{lstlisting}
   \vspace{0.6em}
-  \aside{В \texttt{out} --- никаких исходников, никакого \texttt{obj}, только
-    результат. Это то, что \hi{поедет на сервер}.}
+  \aside{Вторая сборка прошла заново: другая конфигурация --- другая папка в \texttt{bin}.
+    А в \texttt{out} --- никаких исходников, никакого \texttt{obj}, только результат.
+    Это то, что \hi{поедет на сервер}.}
 \end{frame}
 \note{publish по умолчанию собирает в Release, в отличие от build и run.
   Ключ всё равно пишу явно, чтобы читающий скрипт не гадал.}
