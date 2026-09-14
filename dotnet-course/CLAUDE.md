@@ -80,7 +80,8 @@ pdfinfo slides/Lnn-*-slides.pdf | awk '/^Pages/{print $2}'
 
 Other markers: `[ВОПРОС В ЗАЛ]` is a show of hands (`\vote{}` on a slide, the
 question alone); `[ПАУЗА]` is a beat in delivery and **not** a slide;
-`[ЛАБА n — …]` is for whoever writes the lab and is neither.
+Labs are not markers in the script: each lecture keeps its lab in `lab/`, as
+a task for the student and a companion file for whoever accepts it.
 
 ## Building
 
