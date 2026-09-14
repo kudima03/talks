@@ -41,7 +41,6 @@ cd slides
 make          # L01-platform-slides.pdf
 make notes    # same deck + speaker notes on a second screen (right half)
 make watch    # rebuild on save
-make proof    # render pages to .proof/ and build a contact sheet
 make clean
 ```
 
@@ -96,10 +95,10 @@ Inherited from `beamerthemepure` and deliberately identical in spirit:
 - A code frame that overflows gets its style dropped a size
   (`style=term` is already `\scriptsize`) or its `\aside{}` shortened. Do not
   reflow a snippet that is quoted output.
-- After editing, look at the pages, not just the log: `make proof`.
-  `Overfull \vbox` in the log means a slide is running into the footer.
-  **A listing that is too wide overflows its own grey ground silently** — no
-  warning, clean log, broken slide. The only way to catch it is to look.
+- After editing, look at the pages, not just the log. `Overfull \vbox` in the
+  log means a slide is running into the footer, but **a listing that is too
+  wide overflows its own grey ground silently** — no warning, clean log,
+  broken slide. The only way to catch it is to look at the render.
 
 ## Facts this lecture commits to
 

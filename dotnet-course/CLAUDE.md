@@ -85,7 +85,7 @@ question alone); `[ПАУЗА]` is a beat in delivery and **not** a slide;
 ## Building
 
 ```sh
-cd Lnn-*/slides && make        # also: make notes / watch / proof / clean
+cd Lnn-*/slides && make        # also: make notes / watch / clean
 ```
 
 Engine is pdflatex. Needs `texlive-lang-cyrillic` (без него ничего русского не
@@ -99,6 +99,7 @@ shadows the system one.
   one. Russian belongs in the prose around the listing.
 - Vertical space comes from `\slidetop`, `\slidegap`, `\rulegap`; a raw
   `\vspace` is for tuning a code frame and nothing else.
-- **Look at the pages, not just the log** (`make proof`). A listing that is
-  too wide overflows its grey ground silently, and a slide can run into the
-  footer, with a clean log in both cases.
+- **Look at the pages, not just the log.** A listing that is too wide
+  overflows its grey ground silently, and a slide can run into the footer,
+  with a clean log in both cases. `pdftoppm -r 100 -f N -l N -png deck.pdf p`
+  renders one page to look at.

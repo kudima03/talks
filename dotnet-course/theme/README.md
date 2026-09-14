@@ -1,31 +1,28 @@
 # Slide theme — .NET course
 
-One beamer theme and one set of make rules, shared by all fifteen lectures.
-A lecture's `slides/` folder holds two files: its `.tex` and a three-line
-`Makefile`. Everything else lives here, so lecture 12 looks like lecture 1
-without anyone remembering to make it so.
+One beamer theme, shared by all fifteen lectures. A lecture's `slides/`
+folder holds its `.tex` and its own `Makefile`, so lecture 12 looks like
+lecture 1 without anyone remembering to make it so.
 
 ```
 dotnet-course/
   theme/
     beamerthemedotnet.sty     ← palette, furniture, code styles, language
-    dotnet-slides.mk          ← build rules (all / notes / watch / proof / clean)
   ru/lectures/L01-platform/
     slides/
       L01-platform-slides.tex
-      Makefile                ← DECK, THEME, include
+      Makefile
 ```
 
 ## Starting a new lecture
 
+Copy the previous lecture's `Makefile` and change `DECK`:
+
 ```sh
 mkdir -p ru/lectures/L02-runtime/slides
-cat > ru/lectures/L02-runtime/slides/Makefile <<'EOF'
-DECK  := L02-runtime-slides
-THEME := ../../../../theme
-
-include $(THEME)/dotnet-slides.mk
-EOF
+sed 's/L01-platform/L02-runtime/' \
+  ru/lectures/L01-platform/slides/Makefile \
+  > ru/lectures/L02-runtime/slides/Makefile
 ```
 
 Then in the `.tex`:
@@ -33,7 +30,7 @@ Then in the `.tex`:
 ```latex
 \documentclass[aspectratio=169,10pt,t]{beamer}
 \usetheme{dotnet}
-\usetikzlibrary{arrows.meta,positioning,fit}
+\usetikzlibrary{arrows.meta,positioning,calc}
 \dotnetlecture{Л2}          % the tag in the footer
 ```
 
@@ -47,7 +44,6 @@ itself; that is the whole point of the file.
 make          # the deck
 make notes    # deck + speaker notes on a second screen (right half)
 make watch    # rebuild on save
-make proof    # render pages to .proof/, plus a contact sheet if imagemagick is present
 make clean
 ```
 
@@ -110,7 +106,7 @@ pass *would anyone notice it if they were not looking for it?*:
   behind them, and real letterspacing on the `\eyebrow` labels.
 - **A ground under every listing** (`codebg`, one step off the paper), so a
   snippet reads as one object rather than text scattered on the slide.
-- **The slide number set against the total** (`16 / 42`, the total lighter),
+- **The slide number set against the total** (`16 / 37`, the total lighter),
   and a 0.5pt hairline along the bottom edge that fills as the lecture runs.
 - **The lecture tag in the footer** (`Л1`), so a photographed slide can still
   be placed in the course.
@@ -120,12 +116,15 @@ pass *would anyone notice it if they were not looking for it?*:
 | Command | For |
 |---|---|
 | `\claim{…}` | the claim the slide makes, directly under its title |
-| `\hi{…}` | inline accent on the **one word** the claim turns on |
+| `\hi{…}` `\lo{…}` | inline accent, primary (teal) and second (brick) |
 | `\aside{…}` | the quiet supporting line: evidence, caveat, consequence |
 | `\eyebrow{…}` | small uppercase label above a column or a block |
-| `\versus{h}{b}{h}{b}` | two-column comparison — SDK/Runtime, Debug/Release |
+| `\colhead{colour}{…}` | coloured, letterspaced column head |
+| `cbul` env | bullet list with coloured markers: `\begin{cbul}{accent}` |
+| `\versus{h}{b}{h}{b}` | two-column comparison, left teal / right brick |
 | `\vote{…}` | a question put to the room, alone on the slide (`[ВОПРОС В ЗАЛ]`) |
 | `\statement{…}` | a phrase that *is* the content, set large |
+| `\shout{…}` | one word, centred, 44pt — once per deck |
 | `\keyline{…}` | the one-line thought a section closes on |
 | `\sectionopener{n}{title}{line}` | section divider, on a `[plain]` frame |
 | `\titlepagednc{kicker}{title}{sub}{by}` | the lecture title slide |
@@ -144,12 +143,21 @@ $ dotnet --info
 
 ## Palette
 
-`ink` `#1F2328` on `paper` `#FBFAF7`, `muted` `#5F666E`, `hairline` `#D2CFC8`,
-`codebg` `#F4F2ED` — all identical to the Pure deck. One accent,
-`#1F4E5F`, a deep teal that sits next to the ink rather than jumping off the
-wall, and that nobody will mistake for the Pure brick halfway through a
-semester. One more, `warn` `#7C3016`, used for the single "never do this" line
-per deck (`bin` and `obj` in Л1) and nowhere else.
+Tuned for a projector in a lit hall, not for a laptop screen: every value is
+darker than its Pure counterpart, because Pure's `muted` in particular
+disappeared on a wall.
 
+`ink` `#14171A` on `paper` `#FBFAF7`, `muted` `#3F464D`, `hairline` `#B3AFA6`,
+`codebg` `#EFEDE6`.
+
+**Two colours carry meaning, and only two.** `accent` `#0E5A72`, a deep teal:
+the word a claim turns on, the first side of a comparison, the thing you
+should do. `alt` `#9C3D14`, a brick: the second side of a comparison, and the
+one caution line per deck (`bin` and `obj` in Л1). `warn` is an alias of
+`alt`. The pairing is held across the whole course, so the room learns it
+instead of decoding it on each slide.
+
+Use them often — a slide with no colour on it reads as flat from the back of
+the room. What is not allowed is a third colour, or colour as decoration.
 Nothing inside a snippet is singled out: the slide's own sentence says which
 line matters.
