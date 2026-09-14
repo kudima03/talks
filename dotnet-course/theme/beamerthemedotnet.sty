@@ -1,0 +1,282 @@
+% dotnet -- the shared beamer theme for the .NET course (L01..L15).
+%
+%   \usetheme{dotnet}
+%
+% One file, every lecture. A deck sets its own title and frames; everything
+% else -- language, fonts, palette, furniture, code styles -- comes from here,
+% so lecture 12 looks like lecture 1 without anyone remembering to make it so.
+%
+% Design rules this theme exists to enforce (inherited from beamerthemepure,
+% the Pure ecosystem talk, and kept deliberately identical in spirit):
+%   * Every content slide has a title. If it cannot be titled, it is not a
+%     slide -- it is a sentence from the script that escaped.
+%   * A slide states a claim and then shows the evidence for it. No slogans,
+%     no billboards, no rhetorical questions on their own page.
+%   * One accent colour, used inline on the word that carries the claim:
+%     \hi{...}. Roughly once per slide. It is not a highlighter.
+%   * Nothing on a slide is bigger than it has to be. The lecture title is the
+%     largest text in the deck; after that, a section title. Nothing else
+%     competes with them.
+%
+% Engine: pdflatex. The course is in Russian, so this is T2A + babel, not
+% fontspec -- see ../theme/README.md for why that decision went the way it did.
+%
+\NeedsTeXFormat{LaTeX2e}
+\ProvidesPackage{beamerthemedotnet}[2026/09/14 v1.0 .NET course theme]
+
+% -------------------------------------------------------------- language --
+% Loaded by the theme, not by the deck, so no lecture can drift. Shorthands
+% are off on purpose: babel-russian makes " active, which breaks listings and
+% verbatim. Typographic quotes are typed directly as UTF-8 -- <<like this>>.
+\RequirePackage[utf8]{inputenc}
+\RequirePackage[T1,T2A]{fontenc}
+\RequirePackage[shorthands=off,english,russian]{babel}
+\RequirePackage{cmap}            % searchable/copyable Cyrillic in the PDF
+
+\RequirePackage{xcolor}
+\RequirePackage{listings}
+\RequirePackage{tikz}
+\RequirePackage{amssymb}
+\RequirePackage{microtype}
+
+% ------------------------------------------------------------------ type --
+% PT Sans for everything, PT Mono for code: a humanist grotesque commissioned
+% for Russian public typography, with a mono whose glyphs stay apart from the
+% back row. It lives in TeX Live (`paratype`, Debian: texlive-fonts-extra) and
+% on Overleaf; when it is not installed the deck falls back to Latin Modern
+% rather than failing, so both paths are worth a look after an edit.
+\newif\ifhaveparatype
+\IfFileExists{paratype.sty}{\haveparatypetrue}{\haveparatypefalse}
+\ifhaveparatype
+  \RequirePackage{paratype}
+\else
+  \RequirePackage{lmodern}
+\fi
+\renewcommand{\familydefault}{\sfdefault}
+
+% ---------------------------------------------------------------- palette --
+% Low chroma on purpose, and the same ink/paper/muted/hairline as the Pure
+% deck so the two read as siblings. Only the accent differs: a deep teal that
+% sits next to the ink rather than jumping off the wall, and that nobody will
+% mistake for the Pure brick halfway through a semester.
+\definecolor{ink}{HTML}{1F2328}
+\definecolor{accent}{HTML}{1F4E5F}
+\definecolor{muted}{HTML}{5F666E}
+\definecolor{hairline}{HTML}{D2CFC8}
+\definecolor{paper}{HTML}{FBFAF7}
+\definecolor{kw}{HTML}{334E68}
+\definecolor{str}{HTML}{4E6E58}
+\definecolor{codebg}{HTML}{F4F2ED}   % listing ground, one step off the paper
+\definecolor{warn}{HTML}{7C3016}     % the one "do not do this" tone
+
+% -------------------------------------------------------------- structure --
+\setbeamercolor{normal text}{fg=ink,bg=paper}
+\setbeamercolor{background canvas}{bg=paper}
+\setbeamercolor{structure}{fg=accent}
+\setbeamercolor{frametitle}{fg=ink}
+\setbeamercolor{itemize item}{fg=muted}
+\setbeamercolor{itemize subitem}{fg=muted}
+\setbeamercolor{enumerate item}{fg=muted}
+\setbeamerfont{frametitle}{size=\large,series=\bfseries}
+\setbeamerfont{footline}{size=\scriptsize}
+\setbeamertemplate{navigation symbols}{}
+\setbeamertemplate{itemize items}[square]
+
+\setbeamertemplate{frametitle}{%
+  \vspace{1.1em}%
+  {\usebeamerfont{frametitle}\usebeamercolor[fg]{frametitle}\insertframetitle\par}%
+  \vspace{0.25em}%
+  {\color{hairline}\rule{\textwidth}{0.6pt}}%
+}
+
+% The footer carries the section, so the audience always knows where it is.
+% The lecture tag sits on the left of it; the speaker's contacts belong on the
+% title and closing slides, nowhere else. The number is set against the total,
+% and a hairline along the very bottom edge fills as the lecture runs --
+% visible if you look for it, not otherwise.
+\newcommand{\dotnetlecture}[1]{\def\@dnclecture{#1}}
+\def\@dnclecture{}
+\newlength{\dncprogress}
+\setbeamertemplate{footline}{%
+  \hbox to \paperwidth{%
+    \hspace{1.6em}%
+    {\usebeamerfont{footline}\color{hairline}\@dnclecture}%
+    \hspace{0.9em}%
+    {\usebeamerfont{footline}\color{muted}\insertsectionhead}%
+    \hfill
+    {\usebeamerfont{footline}\color{muted}\insertframenumber
+     \,{\color{hairline}/\,\inserttotalframenumber}}%
+    \hspace{1.6em}%
+  }%
+  \vspace{0.7em}%
+  % Beamer only learns the total from the .nav file written by the previous
+  % run, so on a first pass the frame number runs past it. Skip the bar then
+  % rather than multiply \paperwidth into an arithmetic overflow.
+  \ifnum\value{framenumber}>\inserttotalframenumber\else
+    \setlength{\dncprogress}{\paperwidth}%
+    \divide\dncprogress by \inserttotalframenumber
+    \multiply\dncprogress by \value{framenumber}%
+    \hbox to \paperwidth{%
+      \rlap{\color{hairline}\rule{\paperwidth}{0.5pt}}%
+      {\color{accent!35!paper}\rule{\dncprogress}{0.5pt}}\hfill}%
+  \fi
+}
+
+% --------------------------------------------------------- vertical rhythm --
+% Three gaps, and a text slide uses no others -- a literal \vspace on one is a
+% bug. Code frames are the exception: the gaps around a listing are tuned per
+% frame to make the snippet fit, and that is the only place a raw \vspace
+% belongs.
+\newcommand{\slidetop}{\vspace{0.8em}}   % title rule -> the body
+\newcommand{\slidegap}{\vspace{1.4em}}   % between blocks of the body
+\newcommand{\rulegap}{\vspace{1.0em}}    % after a thin rule, before what it
+                                         % introduces
+
+% --------------------------------------------------------------- elements --
+% Inline accent. One per slide, on the word the claim turns on.
+\newcommand{\hi}[1]{\textcolor{accent}{#1}}
+
+% The claim a slide makes, directly under its title: one size up from the body,
+% never centred, never more than two lines. Carries its own trailing gap.
+\newcommand{\claim}[1]{{\large #1\par}\vspace{1.1em}}
+
+% Quiet supporting line: the evidence, the caveat, the aside.
+\newcommand{\aside}[1]{{\color{muted}\small #1}}
+
+\newcommand{\hrulethin}[1]{{\color{hairline}\rule{#1\linewidth}{0.6pt}}}
+
+% Small uppercase label above a column or a block. Plain words only -- it
+% uppercases its argument. (Not called \tag: amsmath, which beamer loads,
+% owns that name.)
+\newcommand{\eyebrow}[1]{{\color{muted}\footnotesize\textls[90]{\MakeUppercase{#1}}}}
+
+% Section divider: number, title, rule, and one factual line about what is
+% coming. Used on a [plain] frame -- the deck has no dark slides.
+\newcommand{\sectionopener}[3]{%
+  \vfill
+  \begin{minipage}{0.86\textwidth}
+    {\color{muted}\Large #1\par}
+    \vspace{0.4em}
+    {\LARGE\bfseries #2\par}
+    \vspace{0.8em}
+    {\color{hairline}\rule{0.30\linewidth}{0.8pt}\par}
+    \vspace{0.8em}
+    {\color{muted} #3\par}
+  \end{minipage}
+  \vfill
+}
+
+% The lecture title slide. Same shape as a section divider, one size up.
+\newcommand{\titlepagednc}[4]{%
+  \vfill
+  \vspace{1.0em}
+  {\color{muted}\large #1\par}
+  \vspace{0.5em}
+  {\huge\bfseries #2\par}
+  \vspace{0.9em}
+  {\color{hairline}\rule{0.34\textwidth}{0.8pt}\par}
+  \vspace{0.9em}
+  {\large #3\par}
+  \vspace{1.8em}
+  {#4\par}
+  \vfill
+}
+
+% A phrase that is the point, alone on the slide, set large. Two per deck at
+% most: this is the thing the room should still be able to quote in March.
+% Not a slogan -- it only earns the page when the sentence *is* the content.
+\newcommand{\statement}[1]{%
+  \vfill
+  \begin{minipage}{0.88\textwidth}
+    {\LARGE #1\par}
+  \end{minipage}
+  \vfill
+}
+
+% The one-line thought a section closes on. Quieter than \statement: it is a
+% summary, not a headline.
+\newcommand{\keyline}[1]{%
+  \vfill
+  \begin{minipage}{0.86\textwidth}
+    {\color{hairline}\rule{0.16\linewidth}{0.8pt}\par}
+    \vspace{0.9em}
+    {\Large #1\par}
+  \end{minipage}
+  \vfill
+}
+
+% A question put to the room for a show of hands. The script marks these
+% [ВОПРОС В ЗАЛ]; they recur in every lecture, so they get a shape of their
+% own -- the question, and nothing else, so nobody reads ahead to the answer.
+\newcommand{\vote}[1]{%
+  \vfill
+  \begin{minipage}{0.86\textwidth}
+    \eyebrow{вопрос в зал}\par
+    \vspace{0.7em}
+    {\LARGE #1\par}
+  \end{minipage}
+  \vfill
+}
+
+% Two-column comparison, the deck's most common furniture: SDK against
+% Runtime, Debug against Release, PackageReference against ProjectReference.
+% \versus{left head}{left body}{right head}{right body}
+\newcommand{\versus}[4]{%
+  \begin{minipage}[t]{0.46\textwidth}
+    \eyebrow{#1}\par\vspace{0.6em}#2
+  \end{minipage}\hfill
+  \begin{minipage}[t]{0.46\textwidth}
+    \eyebrow{#3}\par\vspace{0.6em}#4
+  \end{minipage}%
+}
+
+% ------------------------------------------------------------------- code --
+% Listings are ASCII only. pdflatex + T2A will not set Cyrillic inside a
+% listing without a literate table nobody wants to maintain, and every snippet
+% in this course is a command, a csproj, a json file or C# -- all ASCII
+% already. Russian belongs in the prose around the listing, not inside it.
+\lstdefinestyle{dncbase}{%
+  basicstyle=\ttfamily\footnotesize,
+  keywordstyle=\color{kw},
+  commentstyle=\color{muted}\itshape,
+  stringstyle=\color{str},
+  showstringspaces=false,
+  columns=fullflexible,
+  keepspaces=true,
+  tabsize=4,
+  breaklines=false,
+  aboveskip=0.4em,
+  belowskip=0.2em,
+  xleftmargin=0.5em,
+  % the listing sits on its own ground: no frame, no shadow, one step of tone
+  backgroundcolor=\color{codebg},
+  frame=single,
+  framerule=0pt,
+  rulecolor=\color{codebg},
+  framesep=0pt,
+  framexleftmargin=6pt,
+  framexrightmargin=6pt,
+  framextopmargin=5pt,
+  framexbottommargin=5pt,
+}
+
+\lstdefinestyle{csharp}{style=dncbase,language=[Sharp]C,
+  morekeywords={record,var,init,with,nint,file,required}}
+\lstdefinestyle{xml}{style=dncbase,language=XML,
+  keywordstyle=\color{kw},identifierstyle=\color{ink},
+  markfirstintag=true,tagstyle=\color{kw}}
+\lstdefinestyle{json}{style=dncbase,language=,string=[b]",
+  stringstyle=\color{str}}
+\lstdefinestyle{bash}{style=dncbase,language=bash,
+  keywordstyle=\color{ink},
+  morekeywords={dotnet},
+  emph={build,run,publish,restore,test,new,add,tool,install,pack,clean},
+  emphstyle=\color{kw}}
+% IL and terminal output are quoted verbatim: no language, no highlighting,
+% nothing singled out. The slide's own sentence says which line matters.
+\lstdefinestyle{plain}{style=dncbase,language=}
+\lstdefinestyle{term}{style=dncbase,language=,basicstyle=\ttfamily\scriptsize}
+
+\lstset{style=dncbase}
+
+\endinput
