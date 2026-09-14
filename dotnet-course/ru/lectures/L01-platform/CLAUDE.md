@@ -12,11 +12,15 @@ carries only what is specific to Л1.
 | `L01-platform.md` | The spoken script. **Source of truth.** |
 | `README.md` | Theses — a compressed index of the script, section by section. |
 | `slides/L01-platform-slides.tex` | The deck. One frame per `[СЛАЙД n — …]` cue. |
+| `lab/LAB01-task.md` | The lab, as handed to the student. |
+| `lab/LAB01-review.md` | The same lab for whoever accepts it: checklist, questions, typical failures. |
 
-The three move together. A change to the script that alters a claim, a number
-or a section's shape must be reflected in the other two in the same commit —
-a README that describes a paragraph no longer in the script is worse than no
-README.
+The script, the README and the deck move together. A change to the script that
+alters a claim, a number or a section's shape must be reflected in the other
+two in the same commit — a README that describes a paragraph no longer in the
+script is worse than no README. The two `lab/` files follow the script as
+well: the lab asks for nothing the lecture did not cover, and they are a pair
+— a step added to the task needs its row in the review checklist.
 
 ## The script is the source of truth
 
@@ -31,8 +35,9 @@ Markers in the script and what they mean:
 - `[ВОПРОС В ЗАЛ]` — a show of hands. On a slide it is `\vote{}`: the
   question alone, so nobody reads ahead to the answer.
 - `[ПАУЗА]` — a beat in delivery. **Not** a slide.
-- `[ЛАБА 1 — …]` — instructions for whoever writes the lab. Not spoken, not
-  a slide.
+- The lab is no longer a marker in the script: it lives in `lab/`, in two
+  files. Acceptance is live at the terminal — there is no written report, so
+  a step is only in the task if a student can be asked to show it on screen.
 
 ## Building the deck
 
