@@ -30,7 +30,7 @@
 │   │   ├── вопрос залу: .NET компилируется или интерпретируется?
 │   │   ├── компилятор → IL, JIT → нативный код
 │   │   ├── tiered compilation: почему второй запуск быстрее первого
-│   │   └── Debug vs Release: что реально меняется (и почему бенчмарк в Debug — мусор)
+│   │   └── Debug vs Release: что реально меняется и почему на сервер едет только Release
 │   ├── 3. Проект и решение (детали)                                        (15)
 │   │   ├── csproj — это MSBuild-файл: TargetFramework, свойства, Nullable
 │   │   ├── PackageReference vs ProjectReference
