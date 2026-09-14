@@ -32,9 +32,16 @@
 
 % QR codes go in img/ next to this file. While a file is missing the slide
 % shows a placeholder frame, so the deck still builds.
+% A QR is fitted into a fixed 2.6cm box rather than scaled by width alone:
+% the supplied codes are not all square, and scaling by width lets a taller
+% one push its caption out of line with the others.
+% Fit inside a 2.6cm square rather than scaling by width alone: the supplied
+% codes are not all square, and width-only scaling makes a taller one overrun
+% the row. An image sits on the baseline, so constraining both dimensions
+% keeps all three bottoms -- and therefore all three captions -- in line.
 \newcommand{\qrbox}[1]{%
   \IfFileExists{img/#1.png}%
-    {\includegraphics[width=2.6cm]{img/#1.png}}%
+    {\includegraphics[width=2.6cm,height=2.6cm,keepaspectratio]{img/#1.png}}%
     {\fcolorbox{hairline}{paper}{\parbox[c][2.5cm][c]{2.5cm}%
        {\centering\color{muted}\scriptsize QR}}}}
 

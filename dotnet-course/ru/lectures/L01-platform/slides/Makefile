@@ -7,6 +7,9 @@ THEME := ../../../../theme
 PDF  := $(DECK).pdf
 NPDF := $(DECK)-notes.pdf
 STY  := $(THEME)/beamerthemedotnet.sty
+# Images are prerequisites too: replacing a QR must trigger a rebuild, and
+# latexmk never gets the chance to notice if make decides it is up to date.
+IMG  := $(wildcard img/*)
 
 # The theme is not in this directory, so tell kpathsea where to look. The
 # trailing colon keeps the normal TeX tree on the path.
@@ -18,11 +21,11 @@ LATEXMK := latexmk -pdf -halt-on-error -interaction=nonstopmode
 
 all: $(PDF)
 
-$(PDF): $(DECK).tex $(STY)
+$(PDF): $(DECK).tex $(STY) $(IMG)
 	$(LATEXMK) $(DECK).tex
 
 # Deck plus speaker notes on a second screen (right half of each page).
-notes: $(DECK).tex $(STY)
+notes: $(DECK).tex $(STY) $(IMG)
 	$(LATEXMK) -jobname=$(NPDF:.pdf=) \
 	  -pdflatex='pdflatex %O "\def\shownotes{}\input{%S}"' $(DECK).tex
 
