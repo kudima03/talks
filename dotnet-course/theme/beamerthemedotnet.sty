@@ -55,19 +55,26 @@
 \renewcommand{\familydefault}{\sfdefault}
 
 % ---------------------------------------------------------------- palette --
-% Low chroma on purpose, and the same ink/paper/muted/hairline as the Pure
-% deck so the two read as siblings. Only the accent differs: a deep teal that
-% sits next to the ink rather than jumping off the wall, and that nobody will
-% mistake for the Pure brick halfway through a semester.
-\definecolor{ink}{HTML}{1F2328}
-\definecolor{accent}{HTML}{1F4E5F}
-\definecolor{muted}{HTML}{5F666E}
-\definecolor{hairline}{HTML}{D2CFC8}
+% Tuned for a projector in a lit lecture hall, not for a laptop screen. The
+% Pure deck's values were a step too light once they hit a wall: `muted` in
+% particular disappeared. Everything here is darker than its Pure counterpart.
+%
+% TWO colours carry meaning, and only two:
+%   accent (teal)  -- the primary: the word a claim turns on, the first side
+%                     of a comparison, the thing you should do.
+%   alt (brick)    -- the second side of a comparison, and the one caution
+%                     line per deck. Never decorative.
+% Held consistently, so the room learns the pairing instead of decoding it.
+\definecolor{ink}{HTML}{14171A}
+\definecolor{accent}{HTML}{0E5A72}
+\definecolor{alt}{HTML}{9C3D14}
+\definecolor{muted}{HTML}{3F464D}
+\definecolor{hairline}{HTML}{B3AFA6}
 \definecolor{paper}{HTML}{FBFAF7}
-\definecolor{kw}{HTML}{334E68}
-\definecolor{str}{HTML}{4E6E58}
-\definecolor{codebg}{HTML}{F4F2ED}   % listing ground, one step off the paper
-\definecolor{warn}{HTML}{7C3016}     % the one "do not do this" tone
+\definecolor{kw}{HTML}{1F3D57}
+\definecolor{str}{HTML}{3A5B44}
+\definecolor{codebg}{HTML}{EFEDE6}   % listing ground, one step off the paper
+\colorlet{warn}{alt}                 % the caution tone is the second accent
 
 % -------------------------------------------------------------- structure --
 \setbeamercolor{normal text}{fg=ink,bg=paper}
@@ -133,8 +140,23 @@
                                          % introduces
 
 % --------------------------------------------------------------- elements --
-% Inline accent. One per slide, on the word the claim turns on.
+% Inline accents. \hi is the primary (teal), \lo the second (brick). Use them
+% freely -- a slide with no colour on it reads as flat from the back of the
+% hall -- but never more than these two, and never decoratively.
 \newcommand{\hi}[1]{\textcolor{accent}{#1}}
+\newcommand{\lo}[1]{\textcolor{alt}{#1}}
+
+% A coloured, letterspaced column head. The colour is the column's identity and
+% is repeated on that column's bullets.
+\newcommand{\colhead}[2]{%
+  {\color{#1}\footnotesize\bfseries\textls[90]{\MakeUppercase{#2}}}}
+
+% Bullet list whose markers take a colour: \begin{cbul}{accent} ... \end{cbul}
+% Items sit on one baseline grid so two lists side by side line up.
+\newenvironment{cbul}[1]{%
+  \setbeamercolor{itemize item}{fg=#1}%
+  \begin{itemize}\setlength{\itemsep}{0.5em}\setlength{\parskip}{0pt}%
+}{\end{itemize}}
 
 % The claim a slide makes, directly under its title: one size up from the body,
 % never centred, never more than two lines. Carries its own trailing gap.
@@ -143,7 +165,10 @@
 % Quiet supporting line: the evidence, the caveat, the aside.
 \newcommand{\aside}[1]{{\color{muted}\small #1}}
 
-\newcommand{\hrulethin}[1]{{\color{hairline}\rule{#1\linewidth}{0.6pt}}}
+% Ends the paragraph on both sides. Without that the block after it sets on
+% the same line as the rule -- silently, with no warning.
+\newcommand{\hrulethin}[1]{\par\noindent{\color{hairline}%
+  \rule{#1\linewidth}{0.7pt}}\par}
 
 % Small uppercase label above a column or a block. Plain words only -- it
 % uppercases its argument. (Not called \tag: amsmath, which beamer loads,
@@ -187,6 +212,14 @@
 % <<ноль ма-гии>> across two lines is not the send-off anybody wants.
 \newcommand{\dncnohyph}{\hyphenpenalty=10000\exhyphenpenalty=10000\raggedright}
 
+% One word, centred, as large as the deck ever goes. Exactly one slide per
+% deck may use it, and only when the word is the entire content.
+\newcommand{\shout}[1]{%
+  \vfill
+  \begin{center}{\fontsize{44}{52}\selectfont\bfseries\color{accent}#1\par}\end{center}
+  \vfill
+}
+
 % A phrase that is the point, alone on the slide, set large. Two per deck at
 % most: this is the thing the room should still be able to quote in March.
 % Not a slogan -- it only earns the page when the sentence *is* the content.
@@ -227,11 +260,11 @@
 % Runtime, Debug against Release, PackageReference against ProjectReference.
 % \versus{left head}{left body}{right head}{right body}
 \newcommand{\versus}[4]{%
-  \begin{minipage}[t]{0.46\textwidth}
-    \eyebrow{#1}\par\vspace{0.6em}#2
+  \begin{minipage}[t]{0.455\textwidth}
+    \colhead{accent}{#1}\par\vspace{0.8em}#2
   \end{minipage}\hfill
-  \begin{minipage}[t]{0.46\textwidth}
-    \eyebrow{#3}\par\vspace{0.6em}#4
+  \begin{minipage}[t]{0.455\textwidth}
+    \colhead{alt}{#3}\par\vspace{0.8em}#4
   \end{minipage}%
 }
 

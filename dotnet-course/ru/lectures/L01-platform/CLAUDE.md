@@ -1,6 +1,9 @@
 # Л1. Платформа .NET и dotnet CLI — house rules
 
-Working notes for this lecture's directory. Read before editing anything here.
+Working notes for this lecture's directory. Course-wide rules — the palette,
+the two-colour system, slide structure, what may go on a slide, the build —
+live in [`../../../CLAUDE.md`](../../../CLAUDE.md). Read that first; this file
+carries only what is specific to Л1.
 
 ## What is in here
 
@@ -70,8 +73,8 @@ Inherited from `beamerthemepure` and deliberately identical in spirit:
 - **The accent lands once per slide**, inline, on the word the claim turns
   on. `\hi{}` is not a highlighter.
 - **No slogans.** `\statement{}` is for a phrase that *is* the content —
-  «Бенчмарк, снятый в Debug, не значит ничего», «КРИТИКУЙ!». Two or three per
-  deck, never as an invitation to be impressed.
+  «Пять файлов, два этапа компиляции, ноль магии». Two or three per deck,
+  never as an invitation to be impressed.
 - Nothing is bigger than it has to be. The lecture title is the largest text
   in the deck, then the section titles, and nothing else competes.
 - Slides carry no overlays. One PDF page is one slide, so the footer's number
@@ -100,24 +103,25 @@ Inherited from `beamerthemepure` and deliberately identical in spirit:
 
 ## Facts this lecture commits to
 
-Keep these consistent across script, README and slides:
-
-- Sample project is **`Wassup`** (was `HelloBsuir`).
-- Target is **.NET 10 (LTS)**; "now" in the script is **September 2026**, so
-  .NET 11 (STS) is "выйдет в ноябре этого года".
 - Section timings: **9 / 13 / 20 / 15 / 18 / 5** = 80 minutes.
-- Terminology settled in review: «манифест сборки» (not «программа сборки»),
-  «реестр пакетов» (not «репозиторий»), «патчи» (not «заплатки»).
+- 37 slides, one per `[СЛАЙД n — …]` cue in the script, numbered 1–37 in order.
+- Cut in review and **not to be restored without asking**: the benchmark
+  thesis and its slide (§2), the dedicated `runtimeconfig.json` walkthrough
+  and JSON listing (§5), the §1 and §3 closing keylines, the «три строки»
+  opener, `add package` on the lifecycle slide.
+- `runtimeconfig.json` survives as one row of the bin table and one sentence
+  in §5 — it is the fifth file, and the count is what «пять файлов, два этапа
+  компиляции, ноль магии» rests on.
 
 ## Open items
 
 Raised in review, not yet resolved in the script — do not quietly "fix" these
 without asking, they are the author's call:
 
-1. **Timing.** 8189 spoken words ≈ 66 min at 125 wpm, before 7 shows of hands
-   and the interruptions the lecture explicitly invites. Realistically over
-   80. Candidates for the next cut: CLS (the script itself says it almost
-   never comes up in practice) and the three-participants recap in §2.
+1. **Timing.** Still long: roughly 63 min of pure talking at 125 wpm, before
+   7 shows of hands and the interruptions the lecture explicitly invites.
+   Candidates for the next cut: CLS (the script itself says it almost never
+   comes up in practice) and the three-participants recap in §2.
 2. **Three claims flagged as overstated**, which .NET developers in the room
    are most likely to challenge — the deck marks the first one with a
    "здесь я упрощаю" note:
