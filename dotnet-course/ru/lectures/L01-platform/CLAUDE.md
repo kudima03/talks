@@ -118,7 +118,7 @@ Raised in review, not yet resolved in the script — do not quietly "fix" these
 without asking, they are the author's call:
 
 1. **Timing.** Still long: roughly 63 min of pure talking at 125 wpm, before
-   7 shows of hands and the interruptions the lecture explicitly invites.
+   6 shows of hands and the interruptions the lecture explicitly invites.
    Candidates for the next cut: CLS (the script itself says it almost never
    comes up in practice) and the three-participants recap in §2.
 2. **Three claims flagged as overstated**, which .NET developers in the room
