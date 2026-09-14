@@ -1,16 +1,19 @@
-% Л1. Платформа .NET и dotnet CLI -- слайды.
-% Спутник текста лекции в ../L01-platform.md. Текст -- источник истины:
-% слайды несут код, схемы и короткие утверждения, а подача живёт в \note{}.
+% Л1 -- the .NET platform and the dotnet CLI. Slides.
 %
-% Сборка:  make          (latexmk -pdf; движок -- pdflatex)
-%          make notes    (то же плюс заметки докладчика на втором экране)
+% Companion to the spoken script in ../L01-platform.md, which is the source of
+% truth: the slides carry code, diagrams and short claims, and the delivery
+% lives in \note{}. Slide text and speaker notes are in Russian because that is
+% the content; everything else in this file is English.
 %
-% Весь вывод терминала в этой колоде -- настоящий, снят на машине докладчика
-% (dotnet 10.0.110). Единственное исключение помечено ниже: строки .NET 8
-% в выводе dotnet --info -- версия взята из apt (8.0.31), но сам рантайм
-% на машине ещё не стоял в момент съёмки. Поставить и переснять.
+% Build:  make          (latexmk -pdf; engine: pdflatex)
+%         make notes    (same deck plus speaker notes on a second screen)
 %
-% Дом. правила -- в ../CLAUDE.md, тема -- в ../../../../theme/.
+% Every terminal listing here is real output captured on the speaker's machine
+% (dotnet 10.0.110). One exception, marked below: the .NET 8 lines in the
+% dotnet --info output take their version from apt (8.0.31), but that runtime
+% was not installed when the output was captured. Install it and recapture.
+%
+% House rules: ../CLAUDE.md and ../../../CLAUDE.md. Theme: ../../../../theme/.
 
 \documentclass[aspectratio=169,10pt,t]{beamer}
 
@@ -27,8 +30,8 @@
 \author{Дмитрий Курочкин}
 \date{}
 
-% QR-коды кладутся в img/ рядом с этим файлом. Пока файла нет, на слайде
-% стоит рамка-заглушка, и колода всё равно собирается.
+% QR codes go in img/ next to this file. While a file is missing the slide
+% shows a placeholder frame, so the deck still builds.
 \newcommand{\qrbox}[1]{%
   \IfFileExists{img/#1.png}%
     {\includegraphics[width=2.6cm]{img/#1.png}}%
@@ -37,13 +40,13 @@
 
 \begin{document}
 
-% ------------------------------------------------------------------ титул --
+% ------------------------------------------------------------------ title --
 \begin{frame}[plain]
   \titlepagednc{Лекция 1}{Платформа .NET и dotnet CLI}{}{Дмитрий Курочкин}
 \end{frame}
 \note{80 минут. Сразу знакомство, потом вопрос в зал.}
 
-% ==================================================== 0. ЗНАКОМСТВО ========
+% ================================================= 0. INTRODUCTION =========
 \section{0. Знакомство и структура}
 
 \begin{frame}{Контакты}
@@ -129,7 +132,7 @@
 \note{Мы в первой строке. Обещание: не рассказывать то, что вы и так знаете.
   Просьба: спрашивайте, особенно неправильное.}
 
-% ================================================= 1. ЧТО ТАКОЕ .NET =======
+% ================================================= 1. WHAT .NET IS =========
 \section{1. Что такое .NET}
 
 \begin{frame}[plain]
@@ -256,7 +259,7 @@ $ dotnet --info
   делает runtimeconfig.json. Если у кого-то команда не выводит ничего
   похожего -- SDK нет, до лабы поставить.}
 
-% ================================================== 2. ПУТЬ КОДА ==========
+% ================================================== 2. PATH OF THE CODE ====
 \section{2. Путь кода}
 
 \begin{frame}[plain]
@@ -397,7 +400,7 @@ static int Add(int a, int b)
 \end{frame}
 \note{Всё остальное, от прогрева до Release, следует из этого.}
 
-% ============================================ 3. ПРОЕКТ И РЕШЕНИЕ =========
+% ============================================ 3. PROJECT AND SOLUTION ======
 \section{3. Проект и решение}
 
 \begin{frame}[plain]
@@ -635,7 +638,7 @@ HelloWorld.deps.json  HelloWorld.pdb
 \end{frame}
 \note{Сначала команды, потом кнопки. К концу курса кнопки разрешу.}
 
-% ============================================ 5. ПЕРВОЕ ПРИЛОЖЕНИЕ ========
+% ============================================ 5. FIRST APPLICATION =========
 \section{5. Первое приложение}
 
 \begin{frame}[plain]

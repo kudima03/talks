@@ -11,7 +11,7 @@ carries only what is specific to Л1.
 |---|---|
 | `L01-platform.md` | The spoken script. **Source of truth.** |
 | `README.md` | Theses — a compressed index of the script, section by section. |
-| `slides/L01-platform-slides.tex` | The deck. One frame per `[СЛАЙД: …]` cue. |
+| `slides/L01-platform-slides.tex` | The deck. One frame per `[СЛАЙД n — …]` cue. |
 
 The three move together. A change to the script that alters a claim, a number
 or a section's shape must be reflected in the other two in the same commit —
@@ -27,7 +27,7 @@ first.
 
 Markers in the script and what they mean:
 
-- `[СЛАЙД: …]` — one frame in the deck. The cue is the spec for that frame.
+- `[СЛАЙД n — …]` — one frame in the deck. The cue is the spec for that frame.
 - `[ВОПРОС В ЗАЛ]` — a show of hands. On a slide it is `\vote{}`: the
   question alone, so nobody reads ahead to the answer.
 - `[ПАУЗА]` — a beat in delivery. **Not** a slide.

@@ -88,11 +88,11 @@ question alone); `[ПАУЗА]` is a beat in delivery and **not** a slide;
 cd Lnn-*/slides && make        # also: make notes / watch / clean
 ```
 
-Engine is pdflatex. Needs `texlive-lang-cyrillic` (без него ничего русского не
-собирается) and `texlive-fonts-extra` (PT Sans; без него колода собирается, но
-падает на Latin Modern — проверять оба пути). A newly installed font also
-needs `updmap-user`: pdfTeX reads the user map in `~/.texlive*/`, which
-shadows the system one.
+Engine is pdflatex. `texlive-lang-cyrillic` is required — without it nothing
+Russian compiles at all. `texlive-fonts-extra` (PT Sans) is not: without it
+the deck still builds but falls back to Latin Modern, so both paths are worth
+a look after an edit. A newly installed font also needs `updmap-user`: pdfTeX
+reads the user map in `~/.texlive*/`, which shadows the system one.
 
 - Any frame with `lstlisting` must be `[fragile]`.
 - **Listings are ASCII only** — pdflatex + T2A will not set Cyrillic inside
