@@ -1,0 +1,844 @@
+% Л2 -- assemblies, delivery models and memory. Slides.
+%
+% Companion to the spoken script in ../L02-assemblies-and-memory.md, which is
+% the source of truth: the slides carry code, diagrams and short claims, and
+% the delivery lives in \note{}. Slide text and speaker notes are in Russian
+% because that is the content; everything else in this file is English.
+%
+% Build:  make          (latexmk -pdf; engine: pdflatex)
+%         make notes    (same deck plus speaker notes on a second screen)
+%
+% Every terminal listing here is real output captured on the speaker's machine
+% (dotnet SDK 10.0.401, ilspycmd 11.0.0). Paths are anonymised to /home/user
+% and nothing else in them is touched.
+%
+% House rules: ../CLAUDE.md and ../../../CLAUDE.md. Theme: ../../../../theme/.
+
+\documentclass[aspectratio=169,10pt,t]{beamer}
+
+\usetheme{dotnet}
+\usetikzlibrary{arrows.meta,positioning,calc,decorations.pathreplacing}
+
+\dotnetlecture{Л2}
+
+\ifdefined\shownotes
+  \setbeameroption{show notes on second screen=right}
+\fi
+
+\title[Л2. Сборки и память]{Сборки, модели поставки и память}
+\author{Дмитрий Курочкин}
+\date{}
+
+\begin{document}
+
+% ------------------------------------------------------------------ title --
+\begin{frame}[plain]
+  \titlepagednc{Лекция 2}{Сборки, модели поставки и память}{}{Дмитрий Курочкин}
+\end{frame}
+\note{80 минут. Прошлую лекцию закончили на пяти файлах в bin -- сегодня
+  вскрываем главный из них.}
+
+% ============================================= 1. INSIDE AN ASSEMBLY =======
+\section{1. Сборка изнутри}
+
+\begin{frame}[plain]
+  \sectionopener{1}{Сборка изнутри}{Что лежит внутри dll? К концу раздела вы
+    сможете вскрыть любую библиотеку и прочитать её, как исходник.}
+\end{frame}
+\note{Бюджет: 20 минут. Сначала вопрос на повторение: что внутри dll. Кто
+  скажет <<IL>> -- прав, но неполно.}
+
+\begin{frame}{Сборка в разрезе}
+  \slidetop
+  \claim{В сборке \hi{три} вещи, и IL из них самая скучная.}
+
+  \begin{center}
+    \begin{tikzpicture}[font=\small,
+      box/.style={draw=hairline,line width=0.8pt,fill=codebg,
+                  minimum height=0.9cm,minimum width=3.3cm,align=center,
+                  inner sep=0.35em},
+      ar/.style={-{Straight Barb[length=1.8mm]},ink,line width=0.7pt}]
+      \node[box] (man) {манифест};
+      \node[box,below=0.45cm of man] (meta) {метаданные};
+      \node[box,below=0.45cm of meta] (il) {IL};
+      \node[anchor=west,muted] at ([xshift=0.6cm]man.east)
+        {паспорт и список зависимостей};
+      \node[anchor=west,muted] at ([xshift=0.6cm]meta.east)
+        {таблицы всех типов и членов};
+      \node[anchor=west,muted] at ([xshift=0.6cm]il.east)
+        {тела методов};
+      \draw[ar] (il.west) -- ++(-0.9,0) |- node[pos=0.25,left,
+        font=\scriptsize\bfseries,text=accent,align=right]
+        {ссылается\\на} (meta.west);
+    \end{tikzpicture}
+  \end{center}
+
+  \slidegap
+  \aside{IL нужен \lo{только рантайму} и только в момент выполнения.
+    Метаданные нужны \hi{всем}.}
+\end{frame}
+\note{Метаданные читают компилятор, отладчик, рантайм, инструменты и ваш
+  собственный код. Манифест -- как у корабля: что везём и что понадобится на
+  другой стороне. Расширение dll -- наследство от Windows; на Linux файл открывает
+  сам рантайм, и ему всё равно, как файл назван.}
+
+\begin{frame}[fragile]{Программа знает о себе всё}
+  \slidetop
+\begin{lstlisting}[style=csharp,basicstyle=\ttfamily\scriptsize]
+using System.Reflection;
+
+Assembly assembly = typeof(Console).Assembly;
+Console.WriteLine(assembly.FullName);
+
+foreach (Type type in assembly.GetExportedTypes().Take(5))
+{
+    Console.WriteLine(type.FullName);
+}
+\end{lstlisting}
+  \vspace{0.45em}
+\begin{lstlisting}[style=term]
+System.Console, Version=10.0.0.0, Culture=neutral, PublicKeyToken=b03f5f7f11d50a3a
+System.Console
+System.ConsoleCancelEventHandler
+System.ConsoleCancelEventArgs
+System.ConsoleColor
+System.ConsoleSpecialKey
+\end{lstlisting}
+  \vspace{0.45em}
+  \aside{Ни одного файла я не открывал и ни одного пути не указывал ---
+    \hi{метаданные в действии}.}
+\end{frame}
+\note{Я просто спросил у работающей программы, из чего она состоит, и она
+  ответила. Обратить внимание на первую строку вывода: там не просто имя, там
+  четыре части через запятую. Про них -- следующий слайд.}
+
+\begin{frame}{Идентичность сборки --- четыре части}
+  \slidetop
+  \claim{Она будет попадаться вам \hi{в сообщениях об ошибках}. Читать с
+    листа.}
+
+  \begin{center}
+    {\ttfamily\small
+     \hi{System.Console}, \hi{Version=10.0.0.0},
+     {\color{muted}Culture=neutral, PublicKeyToken=b03f5f7f11d50a3a}}
+  \end{center}
+
+  \slidegap
+  \begin{tabular}{@{}p{3.3cm}p{8.0cm}@{}}
+    \textbf{\hi{имя}}        & обычно совпадает с именем файла, но не обязано \\[0.6em]
+    \textbf{\hi{версия}}     & четыре числа; \lo{не} версия пакета NuGet \\[0.6em]
+    \textbf{культура}        & для кода нейтральная; своя только у сборок с переводами \\[0.6em]
+    \textbf{токен ключа}     & остаток строгих имён; рантайм подпись не проверяет \\
+  \end{tabular}
+
+  \slidegap
+  \aside{В csproj одно свойство \texttt{Version}, а версий из него выводится
+    \hi{три}: сборки, файла и информационная. В больших библиотеках их задают
+    по отдельности.}
+\end{frame}
+\note{Strong name -- если встретите слова, теперь знаете, что это. Версия
+  сборки -- то, на что смотрит рантайм.}
+
+\begin{frame}{Две версии одной библиотеки}
+  \slidetop
+  \claim{В \texttt{bin} ляжет \hi{один} \texttt{Foo.dll}. Два файла с одним
+    именем в одну папку не положишь.}
+
+  \begin{center}
+    \begin{tikzpicture}[font=\small,
+      box/.style={draw=hairline,line width=0.8pt,fill=codebg,
+                  minimum height=0.85cm,minimum width=2.6cm,align=center,
+                  inner sep=0.35em},
+      ar/.style={-{Straight Barb[length=1.8mm]},ink,line width=0.7pt}]
+      \node[box] (a) {пакет А};
+      \node[box,below=0.9cm of a] (b) {пакет Б};
+      \node[box,right=4.2cm of a,yshift=-0.75cm,fill=paper,draw=accent]
+        (foo) {\texttt{Foo.dll} 2.0};
+      \draw[ar] (a.east) -- node[above,font=\scriptsize,text=muted,sloped]
+        {Foo не ниже 1.2} (foo.west);
+      \draw[ar] (b.east) -- node[below,font=\scriptsize,text=muted,sloped]
+        {Foo не ниже 2.0} (foo.west);
+      \node[muted,font=\scriptsize,below=0.35em] at (foo.south) {в bin};
+    \end{tikzpicture}
+  \end{center}
+
+  \slidegap
+  \hrulethin{0.42}
+  \rulegap
+  {\color{alt}\large\bfseries Метод не найден --- при первом вызове, уже
+   в проде.}
+\end{frame}
+\note{Голосование в три руки: 2.0, 1.2 или ошибка сборки. NuGet выберет одну
+  версию на всё приложение -- 2.0, она удовлетворяет обоих. Ломается, только
+  если из 2.0 убрали метод, который зовёт пакет А. Сборка при этом проходит:
+  компилятор проверял ваш код, а не код пакета А. Запуск тоже: сборки
+  загружаются лениво.}
+
+\begin{frame}{Как рантайм находит сборки}
+  \slidetop
+  \claim{Два места: \hi{папка приложения} и папка фреймворка. Больше нигде.}
+
+  \begin{center}
+    \begin{tikzpicture}[font=\small,
+      box/.style={draw=hairline,line width=0.8pt,fill=codebg,
+                  minimum height=1.15cm,minimum width=2.2cm,align=center,
+                  inner sep=0.28em,font=\scriptsize},
+      ar/.style={-{Straight Barb[length=1.8mm]},ink,line width=0.7pt}]
+      \node[box] (l) {лаунчер};
+      \node[box,right=0.45cm of l] (rc) {\texttt{runtimeconfig}\\\texttt{.json}};
+      \node[box,right=0.45cm of rc] (rt) {рантайм\\нужной версии};
+      \node[box,right=0.45cm of rt] (dj) {\texttt{deps.json}};
+      \node[box,right=0.45cm of dj] (list) {перечень сборок:\\своя папка\\и папка фреймворка};
+      \draw[ar] (l) -- (rc);
+      \draw[ar] (rc) -- (rt);
+      \draw[ar] (rt) -- (dj);
+      \draw[ar] (dj) -- (list);
+      \node[accent,font=\scriptsize\bfseries,below=0.5em] at (list.south)
+        {и только потом -- загрузка};
+    \end{tikzpicture}
+  \end{center}
+
+  \slidegap
+  \aside{Загрузка \hi{ленивая}: сборка читается при первом обращении к типу.
+    Старт от этого быстрее, но пропавшая сборка обнаружится
+    \lo{не при старте, а посреди работы}.}
+\end{frame}
+\note{Никаких системных папок и общего хранилища на машину, как было в
+  .NET Framework. Точка расширения называется контекст загрузки сборок --
+  через неё делают плагины; слово запомнить.}
+
+\begin{frame}[fragile]{Вскрыть сборку --- это одна команда}
+  \slidetop
+\begin{lstlisting}[style=term]
+$ ilspycmd bin/Release/net10.0/HelloWorld.dll
+using System;
+...
+[assembly: TargetFramework(".NETCoreApp,Version=v10.0", FrameworkDisplayName = ".NET 10.0")]
+[assembly: AssemblyFileVersion("1.0.0.0")]
+[assembly: AssemblyInformationalVersion("1.0.0")]
+[assembly: AssemblyVersion("1.0.0.0")]
+[CompilerGenerated]
+internal class Program
+{
+    private static void Main(string[] args)
+    {
+        Console.WriteLine("Hello, World!");
+    }
+}
+\end{lstlisting}
+  \vspace{0.7em}
+  \aside{Одна строка в \texttt{Program.cs} --- а в файле \hi{класс и Main},
+    которых вы не писали, и \hi{три версии} из одного свойства. Класс
+    \lo{internal}, метод \lo{private} --- модификаторы доступа это правила
+    для компилятора, а не защита.}
+\end{frame}
+\note{То же самое работает на любой чужой dll прямо из кэша пакетов: приватные
+  поля, internal-типы, строковые литералы. Два вывода: секрет в коде не
+  спрячешь, и заглядывать внутрь пакета -- это не хакерство, это чтение.
+  В шестой лекции так же посмотрим на асинхронный метод.}
+
+\begin{frame}[plain]
+  \keyline{Сборка --- не чёрный ящик, а читаемая структура:\\ паспорт,
+    оглавление и код. Кто угодно может её открыть, и вы тоже.}
+\end{frame}
+\note{И запомните на потом: через полчаса увидим модели поставки, которые эту
+  самоописанность разрушают.}
+
+% ==================================================== 2. NUGET =============
+\section{2. NuGet}
+
+\begin{frame}[plain]
+  \sectionopener{2}{NuGet}{Проект $\neq$ сборка $\neq$ пакет. Три разные
+    вещи, три разные единицы.}
+\end{frame}
+\note{Бюджет: 15 минут. История с двумя версиями Foo на этом не
+  заканчивается.}
+
+\begin{frame}{NuGet --- это три вещи}
+  \slidetop
+  \claim{Одним словом называют \hi{три} разные вещи, и путаница стоит
+    времени.}
+
+  \begin{tabular}{@{}p{5.4cm}p{6.0cm}@{}}
+    \textbf{\hi{формат}} \texttt{.nupkg}  & во что упаковано \\[0.8em]
+    \textbf{\hi{клиент}} в \texttt{dotnet} CLI & кто качает и подставляет
+                                                 в сборку \\[0.8em]
+    \textbf{\hi{хранилище}} \texttt{nuget.org} или свой сервер
+                                          & откуда \\
+  \end{tabular}
+
+  \slidegap
+  \hrulethin{0.42}
+  \rulegap
+  \aside{<<Возьми из NuGet>> --- это \hi{третье}. <<NuGet ругается на
+    версии>> --- \lo{второе}.}
+\end{frame}
+\note{Дальше разберём все три. Сначала формат.}
+
+\begin{frame}[fragile]{Пакет --- это архив}
+  \slidetop
+  \begin{minipage}[t]{0.55\textwidth}
+\begin{lstlisting}[style=term]
+$ unzip -l Pure.Primitives.3.6.5.nupkg
+  Length      Name
+---------  ---------------------------------
+     1558  Pure.Primitives.nuspec
+    74752  lib/net10.0/Pure.Primitives.dll
+    75264  lib/net7.0/Pure.Primitives.dll
+    74752  lib/net8.0/Pure.Primitives.dll
+    74752  lib/net9.0/Pure.Primitives.dll
+\end{lstlisting}
+  \end{minipage}\hfill
+  \begin{minipage}[t]{0.41\textwidth}
+    \colhead{accent}{внутри всегда три вещи}\par\vspace{0.8em}
+    \begin{cbul}{accent}
+      \item сборки --- по одной на каждую целевую платформу
+      \item метаданные: имя, версия, автор, лицензия
+      \item список зависимостей, свой для каждой платформы
+    \end{cbul}
+    \vspace{0.8em}
+    \colhead{alt}{бывает и четвёртое}\par\vspace{0.5em}
+    \aside{анализаторы, встраиваемые файлы, правила для MSBuild}
+  \end{minipage}
+
+  \vspace{0.6em}
+  \aside{Обычный zip с другим расширением. Пакет версии \hi{3.6.5}, сборка
+    внутри --- \lo{1.0.0.0}.}
+\end{frame}
+\note{Версия пакета и версия сборки внутри него -- разные числа, и это не
+  ошибка. restore смотрит на ваш TargetFramework и берёт подходящую папку.
+  Проект -- единица сборки. Сборка -- единица загрузки и идентичности.
+  Пакет -- единица распространения: внутри может быть пять сборок, а может
+  не быть ни одной. Авторы держат версию сборки стабильной в пределах
+  мажорной, чтобы не ломать ссылки.}
+
+\begin{frame}{Версия в PackageReference --- не <<ровно эта>>}
+  \slidetop
+  \claim{Голая версия --- это \hi{нижняя граница} диапазона.}
+
+  \begin{tabular}{@{}p{4.2cm}p{7.2cm}@{}}
+    \texttt{\hi{13.0.3}}       & не ниже 13.0.3 --- \hi{так пишут обычно} \\[0.8em]
+    \texttt{\lo{[13.0.3]}}     & ровно 13.0.3, и никакая другая \\[0.8em]
+    \texttt{\lo{[13.0,14.0)}}  & диапазон: 13.0 включая, 14.0 исключая \\
+  \end{tabular}
+
+  \slidegap
+  \hrulethin{0.42}
+  \rulegap
+  \aside{\texttt{restore} берёт \hi{минимальную подходящую}. Квадратная
+    скобка включает границу, круглая исключает --- синтаксис из математики,
+    читается так же. Побеждает \hi{ближайший}: прямая ссылка из вашего
+    csproj важнее того, что просит транзитивная зависимость.}
+\end{frame}
+\note{Отсюда стандартный приём: уязвимость в транзитивном пакете лечится
+  прямой ссылкой с нужной версией, не дожидаясь автора. Понижение версии
+  restore предупредит -- предупреждение стоит читать.}
+
+\begin{frame}[fragile]{Свой пакет: четыре свойства и две команды}
+  \slidetop
+\begin{lstlisting}[style=xml]
+<PropertyGroup>
+  <PackageId>Bsuir.Course.Shared</PackageId>
+  <Version>1.0.0</Version>
+  <Authors>Your Name</Authors>
+  <Description>Shared domain types for the course service.</Description>
+</PropertyGroup>
+\end{lstlisting}
+  \vspace{0.8em}
+\begin{lstlisting}[style=bash,basicstyle=\ttfamily\scriptsize]
+dotnet pack -c Release
+dotnet nuget push bin/Release/Bsuir.Course.Shared.1.0.0.nupkg --source <feed> --api-key <key>
+\end{lstlisting}
+  \vspace{0.8em}
+  \aside{Пакет с одной и той же версией нельзя опубликовать дважды, и это
+    правильно: версия --- это обещание, что содержимое под этим номером
+    \hi{не меняется никогда}. Нашли ошибку --- выпускаете патч, а не
+    перезаливаете старый.}
+\end{frame}
+\note{В компании хранилище почти всегда свой сервер: разница только в адресе
+  источника. Ломаете совместимость -- поднимайте мажорную. Ещё в пакет
+  кладут лицензию, ссылку на репозиторий, описание и символы отдельным
+  пакетом.}
+
+\begin{frame}{Четыре вопроса перед \texttt{add package}}
+  \slidetop
+  \claim{Зависимость --- обязательство \hi{на годы}, а не на вечер.}
+
+  \begin{enumerate}\itemsep0.6em
+    \item \textbf{Проект живой?} Когда последний коммит, отвечают ли на
+          вопросы, сколько людей поддерживают. Не трогали три года --- это
+          не \lo{<<стабильная>>}.
+    \item \textbf{Сколько тянет за собой?} Посмотрите транзитивные. Иногда
+          функцию проще написать за час, чем годами обслуживать дерево,
+          которое пришло за ней.
+    \item \textbf{Какая лицензия?} Есть те, что требуют открыть и ваш код.
+          Есть коммерческие. Юристы спросят --- лучше раньше.
+    \item \textbf{Выкинете за вечер?} За своим интерфейсом --- да. Если типы
+          расползлись по всему коду --- \hi{вы с ней навсегда}.
+  \end{enumerate}
+
+  \slidegap
+  \aside{\texttt{restore} сам предупредит об известной уязвимости ---
+    не отключайте. И смотрите на имя: пакеты, отличающиеся одной буквой,
+    существуют.}
+\end{frame}
+\note{Чужой код будет выполняться в вашем процессе, с вашими правами, с
+  доступом к вашим данным. Одна строка -- и это уже так.}
+
+\begin{frame}[plain]
+  \keyline{Пакет --- это единица распространения, а не сборка.\\ Каждая
+    строка \texttt{PackageReference} --- обязательство.}
+\end{frame}
+\note{Понимать его стоит до того, как взять, а не после.}
+
+% =========================================== 3. DELIVERY MODELS ============
+\section{3. Модели поставки}
+
+\begin{frame}[plain]
+  \sectionopener{3}{Модели поставки}{%
+    \normalcolor
+    \begin{tikzpicture}[font=\scriptsize,
+      rung/.style={draw=hairline,line width=0.8pt,fill=codebg,
+                   minimum height=0.62cm,minimum width=2.45cm,align=center,
+                   inner sep=0.2em}]
+      \foreach \i/\n in {0/framework-dependent, 1/self-contained,
+                         2/ReadyToRun, 3/trimming, 4/NativeAOT} {
+        \node[rung] at (\i*2.15,\i*0.52) {\texttt{\n}};
+      }
+      \node[muted,anchor=west] at (-1.15,2.08) {};
+    \end{tikzpicture}\par
+    \vspace{0.9em}
+    Пять ступеней. На каждой вы что-то получаете и за что-то платите ---
+    лучшего варианта нет, есть подходящий под задачу.}
+\end{frame}
+\note{Бюджет: 20 минут. Вопрос в зал: что нужно на машине пользователя, чтобы
+  запустить HelloWorld из прошлой лекции? Правы те, кто скажет <<нужен
+  .NET>>, -- но правы не всегда.}
+
+\begin{frame}{Обрезка: что видно статически}
+  \slidetop
+  \claim{Анализатор идёт от точки входа по вызовам. Что не достижимо ---
+    \lo{мусор}.}
+
+  \begin{center}
+    \begin{tikzpicture}[font=\scriptsize,
+      n/.style={draw=hairline,line width=0.8pt,fill=codebg,
+                minimum height=0.7cm,minimum width=2.1cm,align=center,
+                inner sep=0.25em},
+      ar/.style={-{Straight Barb[length=1.8mm]},ink,line width=0.7pt}]
+      \node[n,draw=accent] (e) {точка входа};
+      \node[n,above right=0.35cm and 1.5cm of e] (a) {тип A};
+      \node[n,below right=0.35cm and 1.5cm of e] (r)
+        {найти тип\\по строке};
+      \node[n,right=1.5cm of a] (b) {тип B};
+      \node[n,right=1.5cm of r,draw=alt,dashed,text=alt] (x) {тип C};
+      \draw[ar] (e) -- (a);
+      \draw[ar] (e) -- (r);
+      \draw[ar] (a) -- (b);
+      \draw[-{Straight Barb[length=1.8mm]},alt,line width=0.7pt,dashed]
+        (r) -- node[above,font=\scriptsize\bfseries,text=alt]{?} (x);
+      \node[alt,font=\scriptsize\bfseries,below=0.3em] at (x.south)
+        {выкинут};
+    \end{tikzpicture}
+  \end{center}
+
+  \slidegap
+  \aside{Какое имя будет в строке, известно только во время выполнения.
+    Поэтому ошибка \lo{не при сборке, а при выполнении} --- и только
+    в обрезанной версии: в обычной сборке всё работало.}
+\end{frame}
+\note{Рефлексией пользуется гораздо больше кода, чем вы думаете: поиск
+  контроллеров по соглашению (Л9), сериализатор (Л9), ORM (Л14), внедрение
+  зависимостей (Л10). Если соберётесь применить её сами -- сначала
+  посчитайте, что отдаёте: обрезку, AOT, проверки компилятора и
+  предсказуемость.}
+
+\begin{frame}[fragile]{Пять ступеней --- пять команд}
+  \slidetop
+\begin{lstlisting}[style=bash,basicstyle=\ttfamily\scriptsize]
+dotnet publish -c Release
+dotnet publish -c Release -r linux-x64 --self-contained
+dotnet publish -c Release -r linux-x64 -p:PublishReadyToRun=true
+dotnet publish -c Release -r linux-x64 --self-contained -p:PublishTrimmed=true
+dotnet publish -c Release -r linux-x64 -p:PublishAot=true
+\end{lstlisting}
+  \vspace{1.0em}
+  \aside{Первая \hi{без RID}, потому что IL универсален. Остальные с RID,
+    потому что везде появляется нативный код. Обрезка требует
+    самодостаточности, иначе нечего обрезать; AOT подразумевает её сам.}
+
+  \slidegap
+  \aside{На практике эти свойства пишут \hi{не в командной строке, а в
+    csproj} --- тогда анализаторы включаются уже на обычной сборке и
+    предупреждают заранее, а не в момент публикации.}
+\end{frame}
+\note{Ровно это вы сделаете в лабораторной: опубликуете одно и то же
+  приложение тремя способами и увидите разницу своими глазами.}
+
+\begin{frame}{Пять моделей в одной таблице}
+  \slidetop
+  {\scriptsize
+  \begin{tabular}{@{}p{3.3cm}p{1.9cm}p{1.9cm}p{1.9cm}p{3.1cm}@{}}
+    & \colhead{accent}{нужен .NET} & \colhead{accent}{размер}
+    & \colhead{accent}{старт} & \colhead{alt}{перестаёт работать} \\[0.9em]
+    \texttt{framework-dependent} & да  & минимальный & прогрев JIT
+      & ничего \\[0.7em]
+    \texttt{self-contained}      & нет & большой     & прогрев JIT
+      & ничего \\[0.7em]
+    \texttt{ReadyToRun}          & по выбору & ещё больше & \hi{быстрый}
+      & ничего \\[0.7em]
+    \texttt{trimming}            & нет & средний     & прогрев JIT
+      & \lo{рефлексия на невидимое статически} \\[0.7em]
+    \texttt{NativeAOT}           & нет & \hi{малый}, один файл
+      & \hi{мгновенный}
+      & \lo{динамическая загрузка, генерация кода, часть рефлексии} \\
+  \end{tabular}}
+
+  \slidegap
+  \aside{Платите вы \lo{динамикой} --- которой в нормальном прикладном коде
+    быть и не должно. Тогда цена пятой ступени для вас почти нулевая.}
+\end{frame}
+\note{Патч безопасности: на первой ступени его ставят один раз на машину и
+  все приложения исправлены; на остальных это ваша пересборка. Сто
+  микросервисов со своим рантаймом внутри -- сто пересборок на каждый патч.}
+
+\begin{frame}{Какой рантайм возьмёт приложение}
+  \slidetop
+  \claim{Версия в \texttt{runtimeconfig} --- это \hi{минимум}, с которого
+    начинается поиск.}
+
+  \begin{center}
+    \begin{tikzpicture}[font=\small,
+      box/.style={draw=hairline,line width=0.8pt,fill=codebg,
+                  minimum height=0.85cm,minimum width=3.1cm,align=center,
+                  inner sep=0.35em},
+      ar/.style={-{Straight Barb[length=1.8mm]},line width=0.8pt}]
+      \node[box] (rc) {\texttt{runtimeconfig}\\просит \texttt{10.0.0}};
+      \node[box,right=3.6cm of rc,yshift=0.85cm,draw=accent] (a)
+        {\texttt{10.0.5}};
+      \node[box,right=3.6cm of rc,yshift=-0.85cm,draw=hairline] (b)
+        {\texttt{11.0.1}};
+      \node[muted,font=\scriptsize,above=0.3em] at (a.north)
+        {установлено на машине};
+      \draw[ar,accent] (rc.east) -- node[above,font=\scriptsize\bfseries,
+        text=accent,sloped]{патч посвежее} (a.west);
+      \draw[ar,alt,dashed] (rc.east) -- node[pos=0.5,fill=paper,text=alt,
+        font=\Large\bfseries,inner sep=1.5pt]{$\times$} (b.west);
+      \node[alt,font=\scriptsize\bfseries,below=0.3em] at (b.south)
+        {через мажорную границу --- по умолчанию нет};
+    \end{tikzpicture}
+  \end{center}
+
+  \slidegap
+  \aside{Именно поэтому патчи безопасности \hi{доезжают до приложений сами}.
+    Мажорная версия может ломать совместимость --- рантайм не решает за вас.
+    Политика меняется \lo{снаружи, без пересборки}.}
+\end{frame}
+\note{Когда это ваша проблема: на сервере обновили рантайм, и что-то
+  изменилось, хотя вы ничего не выкладывали. Выводите версию рантайма в лог
+  при старте -- через полгода на разборе инцидента эта строка сэкономит час.}
+
+\begin{frame}{Контейнер как единица поставки}
+  \slidetop
+  \claim{Заканчивается разговор \lo{<<у меня работает>>}.}
+
+  \begin{center}
+    \begin{tikzpicture}[font=\small,
+      box/.style={draw=hairline,line width=0.8pt,fill=codebg,
+                  minimum height=1.0cm,minimum width=2.6cm,align=center,
+                  inner sep=0.3em,font=\scriptsize},
+      ar/.style={-{Straight Barb[length=1.8mm]},ink,line width=0.7pt}]
+      \node[box] (p) {проект};
+      \node[box,right=1.3cm of p] (pub) {\texttt{publish}\\с целью
+        \texttt{PublishContainer}};
+      \node[box,right=1.3cm of pub,draw=accent,minimum height=1.3cm] (img)
+        {образ:\\базовый слой с рантаймом\\+ ваше приложение};
+      \draw[ar] (p) -- (pub);
+      \draw[ar] (pub) -- (img);
+      \foreach \i/\t in {0/ноутбук, 1/стенд, 2/прод} {
+        \node[muted,font=\scriptsize,anchor=west]
+          at ([xshift=0.9cm,yshift=0.62cm-\i*0.58cm]img.east) {\t};
+        \draw[-{Straight Barb[length=1.4mm]},hairline,line width=0.6pt]
+          ([yshift=0.62cm-\i*0.58cm]img.east) -- ++(0.75,0);
+      }
+      \node[accent,font=\scriptsize\bfseries,below=0.4em] at (img.south)
+        {один и тот же};
+    \end{tikzpicture}
+  \end{center}
+
+  \slidegap
+  \aside{Файл с инструкциями не обязателен: SDK сам выберет базовый образ под
+    вашу модель поставки, положит туда результат публикации и выставит точку
+    входа. Имя, тег и базовый образ --- \hi{свойства в csproj}.}
+\end{frame}
+\note{Все модели поставки применимы внутри образа: базовый образ с рантаймом
+  -- внутри framework-dependent, без рантайма -- самодостаточное. В Л12
+  поднимем сервис с базой и кэшем одной командой, в Л10 обсудим, почему
+  настройки в контейнере читают из переменных окружения.}
+
+% ================================================= 4. MEMORY AND GC ========
+\section{4. Память и GC}
+
+\begin{frame}[plain]
+  \sectionopener{4}{Память и GC}{За двадцать минут я не научу вас управлять
+    памятью. Я дам словарь, чтобы читать серьёзные книги.}
+\end{frame}
+\note{Бюджет: 20 минут. Вопрос в зал: число в локальной переменной и список
+  через new -- где что живёт? Простая модель верна, и мы её сломаем.}
+
+\begin{frame}{Стек и куча}
+  \slidetop
+  \claim{Значение живёт \hi{там, где объявлено}, а не <<на стеке>>.}
+
+  \begin{center}
+    \begin{tikzpicture}[font=\scriptsize,
+      fr/.style={draw=hairline,line width=0.8pt,fill=codebg,
+                 minimum height=0.62cm,minimum width=3.0cm,align=center},
+      ob/.style={draw=hairline,line width=0.8pt,fill=codebg,
+                 minimum size=0.62cm,align=center},
+      ar/.style={-{Straight Barb[length=1.8mm]},line width=0.7pt}]
+      \node[muted] at (0,2.25) {СТЕК ПОТОКА};
+      \node[fr] (f3) at (0,1.55) {кадр \texttt{Parse}};
+      \node[fr] (f2) at (0,0.88) {кадр \texttt{Read}};
+      \node[fr] (f1) at (0,0.21) {кадр \texttt{Main}};
+      \draw[ar,accent] (-2.25,1.55) -- node[left,text=accent,
+        font=\scriptsize\bfseries,align=right]{указатель\\сдвинулся} ++(0.6,0);
+      \node[muted] at (6.3,2.25) {УПРАВЛЯЕМАЯ КУЧА};
+      \draw[hairline,line width=0.8pt] (4.0,-0.25) rectangle (8.6,1.9);
+      \node[ob] (o1) at (4.75,1.35) {};
+      \node[ob] (o2) at (5.9,0.85) {};
+      \node[ob] (o3) at (7.3,1.4) {};
+      \node[ob] (o4) at (7.9,0.4) {};
+      \draw[ar,ink] (f3.east) -- node[above,font=\scriptsize,text=muted]
+        {ссылка} (o1.west);
+      \draw[ar,ink] (o1) -- (o3);
+      \draw[ar,ink] (o2) -- (o4);
+    \end{tikzpicture}
+  \end{center}
+
+  \slidegap
+  \aside{Выделить на стеке --- \hi{сдвинуть один указатель}; освободить ---
+    сдвинуть обратно. Но память живёт ровно столько, сколько живёт вызов.
+    Стек невелик и фиксирован: его переполнение --- \lo{единственная ошибка
+    в .NET, которую нельзя поймать}, процесс завершается без исключения.}
+\end{frame}
+\note{Поле int внутри класса? Внутри объекта, в куче. Структура локально? В
+  кадре. Массив из тысячи int? Сам массив в куче, все значения внутри него
+  подряд. Число, захваченное лямбдой? Компилятор перенесёт его в объект в
+  куче. И упаковка, boxing: каждая -- аллокация, каждая распаковка --
+  проверка и копирование.}
+
+\begin{frame}{Сборщик мусора --- это четыре роли}
+  \slidetop
+  \begin{tabular}{@{}p{3.4cm}p{8.0cm}@{}}
+    \textbf{\hi{аллокатор}}   & выдать место под новый объект \\[0.7em]
+    \textbf{\hi{модификатор}} & ваш собственный код: он меняет граф объектов,
+                                и за ним надо успевать \\[0.7em]
+    \textbf{\hi{коллектор}}   & найти мусор по достижимости \hi{от корней} \\[0.7em]
+    \textbf{компактор}        & уплотнить, чтобы дальше было куда класть \\
+  \end{tabular}
+
+  \slidegap
+  \hrulethin{0.42}
+  \rulegap
+  \eyebrow{вопрос в зал}\par
+  \vspace{0.5em}
+  {\Large Является ли \texttt{new} частью сборщика мусора?}
+\end{frame}
+\note{Правы те, кто скажет <<да>>. new -- это сдвиг указателя внутри куска,
+  который рантайм уже забрал у системы; часто быстрее, чем malloc. Но у
+  сборщика есть бюджет, и когда он исчерпан, очередной new запускает сборку.
+  Вы платите за аллокацию не в момент new, а позже, оптом. Отсюда термин:
+  давление на сборщик. Циклические ссылки не проблема: считается
+  достижимость от корней, а не ссылки.}
+
+\begin{frame}{Компактация: автобус}
+  \slidetop
+  \claim{Свободно двести мегабайт, массив на сто \lo{не помещается} ---
+    это фрагментация.}
+
+  \begin{center}
+    \begin{tikzpicture}[font=\scriptsize,x=0.52cm,
+      seat/.style={draw=hairline,line width=0.6pt,minimum size=0.42cm,
+                   inner sep=0pt},
+      full/.style={seat,fill=accent!25!paper},
+      free/.style={seat,fill=paper}]
+      \node[muted,anchor=east] at (-0.6,0) {ДО};
+      \foreach \i/\s in {0/full,1/free,2/full,3/free,4/free,5/full,6/free,
+                         7/full,8/free,9/free,10/full,11/free,12/free,
+                         13/full,14/free,15/free} {
+        \node[\s] at (\i,0) {};
+      }
+      \node[muted,anchor=east] at (-0.6,-1.15) {ПОСЛЕ};
+      \foreach \i in {0,...,5} { \node[full] at (\i,-1.15) {}; }
+      \foreach \i in {6,...,15} { \node[free] at (\i,-1.15) {}; }
+      \draw[decorate,decoration={brace,amplitude=4pt,mirror},hairline]
+        (5.7,-1.45) -- (15.3,-1.45);
+      \node[accent,font=\scriptsize\bfseries] at (10.5,-2.0)
+        {свободно одним куском};
+    \end{tikzpicture}
+  \end{center}
+
+  \slidegap
+  \aside{Объекты двигаются, значит адрес меняется. Поэтому вам и не дают
+    сырой указатель: ссылка --- это не адрес, а то, что \hi{рантайм умеет
+    обновить}. И поэтому же на часть сборки потоки \lo{останавливаются}.}
+\end{frame}
+\note{Безопасность памяти и уплотнение -- одна история с двух сторон.
+  Водитель просит всех пересесть вперёд. Все сдвинулись, дыры исчезли,
+  сзади сплошной ряд. В C вы получаете указатель, которым можно
+  промахнуться, и память, которую надо освобождать руками. Здесь эти ошибки
+  невозможны by design -- пока вы не написали unsafe.}
+
+\begin{frame}{Фоновая сборка}
+  \slidetop
+  \claim{Полная сборка кучи в гигабайты \hi{не} означает, что сервис молчит
+    секунду.}
+
+  \begin{center}
+    \begin{tikzpicture}[font=\scriptsize,x=0.86cm,y=0.18cm]
+      \fill[alt!22!paper] (2.6,-0.6) rectangle (2.95,11.6);
+      \fill[alt!22!paper] (8.3,-0.6) rectangle (8.65,11.6);
+      \foreach \i in {0,...,9} {
+        \draw[accent,line width=1.4pt] (0,\i) -- (11,\i);
+      }
+      \foreach \i in {10,11} {
+        \draw[alt,line width=1.4pt] (0,\i) -- (11,\i);
+      }
+      \node[accent,anchor=west,font=\scriptsize\bfseries] at (11.3,4.5)
+        {10 потоков: ваш код};
+      \node[alt,anchor=west,font=\scriptsize\bfseries] at (11.3,10.5)
+        {2: сборка gen 2};
+      \node[alt,anchor=south,font=\scriptsize\bfseries] at (2.78,12.2)
+        {общая остановка};
+      \draw[-{Straight Barb[length=1.8mm]},muted,line width=0.6pt]
+        (0,-2.6) -- node[below,font=\scriptsize,text=muted]{время} (11,-2.6);
+    \end{tikzpicture}
+  \end{center}
+
+  \slidegap
+  \aside{Останавливаются все --- но это \hi{две узкие полоски}, а не весь
+    прямоугольник. Цена видна там же: \lo{два ядра из двенадцати} заняты не
+    вашей работой.}
+\end{frame}
+\note{Самую дорогую часть -- сборку второго поколения -- сборщик делает в
+  основном параллельно с вашими потоками. Эти два ядра и есть то
+  процессорное время, которое вы увидите в счётчике <<процент времени в
+  сборке мусора>>.}
+
+\begin{frame}{Словарь}
+  \slidetop
+  \begin{tabular}{@{}p{4.0cm}p{7.4cm}@{}}
+    \textbf{\hi{поколения 0/1/2}} & большинство объектов умирает молодыми:
+      молодых проверяют часто и быстро, старых --- редко \\[0.65em]
+    \textbf{куча больших объектов} & от \textasciitilde 85 КБ, в основном
+      массивы; по умолчанию \lo{не уплотняется} \\[0.65em]
+    \textbf{Workstation и Server} & бережёт отзывчивость \emph{против}
+      по куче и потоку на ядро; для веба SDK включает второй сам \\[0.65em]
+    \textbf{background GC} & дорогая часть сборки идёт параллельно вашему
+      коду \\[0.65em]
+    \textbf{\hi{escape analysis}} & JIT доказал, что ссылка не убегает из
+      метода, --- объект ляжет на стек \\[0.65em]
+    \textbf{\hi{Span}} & окно в чужую память: начало и длина, \hi{без
+      копирования}; живёт только на стеке \\
+  \end{tabular}
+\end{frame}
+\note{Самый дорогой объект -- не старый и не молодой, а тот, что прожил ровно
+  столько, чтобы его дважды повысили. В сервисе так себя ведут объекты на
+  один долгий запрос. И: .NET резервирует память с запасом и отдавать не
+  спешит -- <<сервис съел четыре гигабайта>> само по себе не диагноз.
+  Смотреть надо на размер управляемой кучи и растёт ли он от сборки к
+  сборке.}
+
+\begin{frame}[fragile]{Три функции, один результат}
+  \slidetop
+\begin{lstlisting}[style=csharp,basicstyle=\ttfamily\scriptsize]
+static int YearOld(string line)
+{
+    string date = line.Substring(0, line.IndexOf(';'));
+    return int.Parse(date.Substring(0, 4));
+}
+static int YearNew(string line)
+{
+    ReadOnlySpan<char> date = line.AsSpan(0, line.IndexOf(';'));
+    return int.Parse(date.Slice(0, 4));
+}
+static int YearNewer(string line)
+{
+    ReadOnlySpan<char> date = line.AsSpan(0, line.IndexOf(';'));
+    return int.Parse(date[..4]);
+}
+\end{lstlisting}
+  \vspace{0.7em}
+  \aside{Первая: \lo{две промежуточные строки в куче}, каждая под бюджет
+    сборщика. Вторая: \hi{два окна, ноль аллокаций}. Третья --- та же
+    вторая, синтаксисом диапазонов: \texttt{date[..4]} и
+    \texttt{date.Slice(0, 4)} буквально одно и то же. Читаемость почти не
+    пострадала.}
+\end{frame}
+\note{Span окупается там, где это делается на каждый запрос миллион раз в
+  день: разбор текста, буферы. В коде, который выполняется раз в секунду,
+  разница не стоит ни минуты вашего времени. Не боритесь с аллокациями
+  вслепую: сначала измерить, потом оптимизировать, и измерять в Release --
+  escape analysis это оптимизация JIT.}
+
+\begin{frame}{Куда копать}
+  \slidetop
+  \claim{Этой теме посвящены \hi{целые книги}. Вот две двери.}
+
+  \begin{tabular}{@{}p{5.6cm}p{5.8cm}@{}}
+    \textbf{\hi{Pro .NET Memory Management}} & Конрад Кокоса. Толстая,
+      подробная, лучшее, что есть по теме \\[0.9em]
+    \textbf{\hi{Book of the Runtime}} & раздел документации в репозитории
+      \texttt{dotnet/runtime}, написанный теми, кто сборщик и пишет \\
+  \end{tabular}
+
+  \slidegap
+  \hrulethin{0.42}
+  \rulegap
+  \aside{Мы не трогали \texttt{write barriers}, \texttt{card tables},
+    \texttt{pinning} и настройки бюджета аллокаций. Слова названы, чтобы вы
+    узнали их при встрече. \lo{Глубина за вами.}}
+\end{frame}
+\note{Memory -- старший брат Span, который можно сохранить; про него в Л5
+  вместе с коллекциями.}
+
+\begin{frame}[plain]
+  \keyline{Память в .NET безопасна ровно потому,\\ что вы ею не управляете.
+    Цена --- сборщик: знать его нужно настолько, чтобы ему не мешать.}
+\end{frame}
+\note{Всё остальное в разделе -- следствия.}
+
+% =========================================== 5. WHEN THINGS GO BAD =========
+\section{5. Чем смотреть}
+
+\begin{frame}{Чем смотреть, когда стало плохо}
+  \slidetop
+  \claim{Посмотреть на \hi{работающий процесс}, не трогая его.}
+
+  \begin{tabular}{@{}p{3.6cm}p{7.8cm}@{}}
+    \textbf{\hi{dotnet-counters}} & что именно плохо: живые числа раз в
+      секунду --- куча, поколения, процент времени в сборке, исключения,
+      потоки \\[0.8em]
+    \textbf{\hi{dotnet-trace}} & где горит процессор: запись за отрезок
+      времени, какие методы выполнялись и сколько \\[0.8em]
+    \textbf{\hi{dotnet-dump}} & кто держит память: слепок кучи, какие типы
+      её занимают и почему сборщик их не собрал \\
+  \end{tabular}
+
+  \slidegap
+  \hrulethin{0.42}
+  \rulegap
+  \aside{Все три подключаются к работающему процессу по идентификатору:
+    \hi{пересобирать и перезапускать не нужно}. Счётчики почти бесплатны,
+    трасса стоит заметно, \lo{дамп --- это остановка}.}
+\end{frame}
+\note{Ставятся все три через dotnet tool install -g -- тем самым
+  механизмом из прошлой лекции. Честный ответ <<добавлю логов и
+  перевыложу>> стоит часов, и после
+  перевыкладки проблема может не повториться. Все три работают в контейнере
+  и на сервере: это не учебные игрушки, это то, чем чинят прод. В Л12 те же
+  счётчики будем экспортировать в мониторинг, чтобы они рисовались всегда,
+  а не когда вы вспомнили подключиться.}
+
+\end{document}
