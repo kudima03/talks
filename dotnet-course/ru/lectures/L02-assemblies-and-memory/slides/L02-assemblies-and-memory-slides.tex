@@ -538,44 +538,6 @@ dotnet publish -c Release -r linux-x64 -p:PublishAot=true
   изменилось, хотя вы ничего не выкладывали. Выводите версию рантайма в лог
   при старте -- через полгода на разборе инцидента эта строка сэкономит час.}
 
-\begin{frame}{Контейнер как единица поставки}
-  \slidetop
-  \claim{Заканчивается разговор \lo{<<у меня работает>>}.}
-
-  \begin{center}
-    \begin{tikzpicture}[font=\small,
-      box/.style={draw=hairline,line width=0.8pt,fill=codebg,
-                  minimum height=1.0cm,minimum width=2.6cm,align=center,
-                  inner sep=0.3em,font=\scriptsize},
-      ar/.style={-{Straight Barb[length=1.8mm]},ink,line width=0.7pt}]
-      \node[box] (p) {проект};
-      \node[box,right=1.3cm of p] (pub) {\texttt{publish}\\с целью
-        \texttt{PublishContainer}};
-      \node[box,right=1.3cm of pub,draw=accent,minimum height=1.3cm] (img)
-        {образ:\\базовый слой с рантаймом\\+ ваше приложение};
-      \draw[ar] (p) -- (pub);
-      \draw[ar] (pub) -- (img);
-      \foreach \i/\t in {0/ноутбук, 1/стенд, 2/прод} {
-        \node[muted,font=\scriptsize,anchor=west]
-          at ([xshift=0.9cm,yshift=0.62cm-\i*0.58cm]img.east) {\t};
-        \draw[-{Straight Barb[length=1.4mm]},hairline,line width=0.6pt]
-          ([yshift=0.62cm-\i*0.58cm]img.east) -- ++(0.75,0);
-      }
-      \node[accent,font=\scriptsize\bfseries,below=0.4em] at (img.south)
-        {один и тот же};
-    \end{tikzpicture}
-  \end{center}
-
-  \slidegap
-  \aside{Файл с инструкциями не обязателен: SDK сам выберет базовый образ под
-    вашу модель поставки, положит туда результат публикации и выставит точку
-    входа. Имя, тег и базовый образ --- \hi{свойства в csproj}.}
-\end{frame}
-\note{Все модели поставки применимы внутри образа: базовый образ с рантаймом
-  -- внутри framework-dependent, без рантайма -- самодостаточное. В Л12
-  поднимем сервис с базой и кэшем одной командой, в Л10 обсудим, почему
-  настройки в контейнере читают из переменных окружения.}
-
 % ================================================= 4. MEMORY AND GC ========
 \section{4. Память и GC}
 
