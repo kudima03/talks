@@ -1,0 +1,1034 @@
+% Л3 -- C#: the philosophy of the language and its type system. Slides.
+%
+% Companion to the spoken script in ../L03-csharp-philosophy.md, which is
+% the source of truth: the slides carry code, diagrams and short claims, and
+% the delivery lives in \note{}. Slide text and speaker notes are in Russian
+% because that is the content; everything else in this file is English.
+%
+% Build:  make          (latexmk -pdf; engine: pdflatex)
+%         make notes    (same deck plus speaker notes on a second screen)
+%
+% Every BenchmarkDotNet table here is real output of ../benchmarks, captured on
+% the speaker's machine (BenchmarkDotNet 0.15.8, .NET SDK 10.0.401, runtime
+% 10.0.12, Apple M4 Pro) with `dotnet run -c Release -- --filter '*'`. Only
+% the table is quoted; the environment header above it is dropped.
+% Terminal output is real as well, with paths anonymised to /home/user.
+%
+% House rules: ../CLAUDE.md and ../../../CLAUDE.md. Theme: ../../../../theme/.
+
+\documentclass[aspectratio=169,10pt,t]{beamer}
+
+\usetheme{dotnet}
+\usetikzlibrary{arrows.meta,positioning,calc,decorations.pathreplacing}
+
+\dotnetlecture{Л3}
+
+\ifdefined\shownotes
+  \setbeameroption{show notes on second screen=right}
+\fi
+
+\title[Л3. Философия C\#]{C\#: философия языка и система типов}
+\author{Дмитрий Курочкин}
+\date{}
+
+% Listings cannot go through a macro argument, so the §2 opener sets its two
+% snippets into boxes first and hands \sectionopener the boxes.
+\newsavebox{\mainclassic}
+\newsavebox{\maintoplevel}
+
+\begin{document}
+
+% ------------------------------------------------------------------ title --
+\begin{frame}[plain]
+  \titlepagednc{Лекция 3}{C\#: философия языка и система типов}{}{Дмитрий
+    Курочкин}
+\end{frame}
+\note{80 минут. Две лекции про платформу -- сегодня про язык. Но первые
+  полчаса не про синтаксис: синтаксис читается за вечер.}
+
+% ============================================== 1. PHILOSOPHY ==============
+\section{1. Философия}
+
+\begin{frame}[plain]
+  \sectionopener{1}{Философия}{Сколько стоит \hi{секунда процессора} в
+    облаке?\\[0.3em] Сколько стоит \lo{минута разработчика}?}
+\end{frame}
+\note{Бюджет: 35 минут. Вопрос в зал, порядок, не точные числа: рубль,
+  копейка, меньше копейки? Правы последние. Минута разработчика -- на
+  несколько порядков дороже. Соотношение не всегда было таким, и вся
+  история языков -- история того, как оно менялось.}
+
+\begin{frame}{Две кривые на одной оси}
+  \slidetop
+  \claim{Экономика разработки \hi{перевернулась}. Это не вкус, это
+    арифметика.}
+
+  \begin{center}
+    \begin{tikzpicture}[font=\scriptsize,x=1.0cm,y=0.78cm]
+      \draw[-{Straight Barb[length=1.8mm]},muted,line width=0.6pt]
+        (0,0) -- (10.4,0);
+      \foreach \x/\y in {0/1970,2.68/1985,5.36/2000,10/2026} {
+        \draw[hairline,line width=0.6pt] (\x,0) -- (\x,-0.12);
+        \node[muted,below=0.1em] at (\x,-0.12) {\y};
+      }
+      \draw[accent,line width=1.4pt,domain=0:10,samples=60,smooth]
+        plot (\x,{0.25+3.0*exp(-0.35*\x)});
+      \draw[alt,line width=1.4pt,domain=0:10,samples=60,smooth]
+        plot (\x,{0.2*exp(0.24*\x)});
+      \node[accent,anchor=west,font=\scriptsize\bfseries] at (0.35,3.0)
+        {стоимость вычислений};
+      \node[alt,anchor=east,font=\scriptsize\bfseries] at (9.6,2.35)
+        {стоимость разработчика};
+      \fill[ink] (5.36,0.72) circle (1.6pt);
+      \draw[hairline,dashed,line width=0.6pt] (5.36,0) -- (5.36,0.72);
+      \node[ink,anchor=south,font=\scriptsize\bfseries] at (5.36,1.0)
+        {экономика перевернулась};
+    \end{tikzpicture}
+  \end{center}
+
+  \slidegap
+  \aside{День ради секунды процессора в сутки: секунда в облаке ---
+    \hi{копейки в год}, ваш день --- \lo{десятки тысяч}. Окупаемость
+    измеряется веками, а сопровождение усложнённого кода ещё впереди.}
+\end{frame}
+\note{Шестидесятые-семидесятые: машина одна на институт, программист --
+  дешёвый ресурс. Отсюда ассемблер, C, сдвиг вместо умножения. C++: за то,
+  чем не пользуешься, не платишь. Закон Мура, потом облака и посекундная
+  аренда. Оговорка на Л6: с середины двухтысячных растёт не частота, а число
+  ядер -- дёшевы много ядер, а не одно быстрое. Большая часть стоимости
+  программы -- сопровождение: чтение, изменение, поиск ошибок.}
+
+\begin{frame}{Три поколения языков}
+  \slidetop
+  \claim{Центр тяжести индустрии сдвигается \hi{вправо} --- вслед за
+    экономикой.}
+
+  \begin{center}
+    \begin{tikzpicture}[font=\small,
+      gen/.style={draw=hairline,line width=0.8pt,fill=codebg,
+                  minimum height=0.95cm,text width=3.5cm,align=center,
+                  inner sep=0.35em}]
+      \node[gen] (g1) at (0,0) {C, C++};
+      \node[gen,draw=accent,line width=1.0pt] (g2) at (4.4,0)
+        {\textbf{\hi{Java, C\#}}};
+      \node[gen] (g3) at (8.8,0) {Python, JavaScript, Go};
+      \foreach \g/\t in {g1/выжать из машины всё, g2/безопасно и быстро,
+                         g3/написать сегодня} {
+        \node[muted,font=\scriptsize,anchor=north] at ([yshift=-0.1cm]\g.south)
+          {<<\t>>};
+      }
+      \draw[-{Straight Barb[length=1.8mm]},muted,line width=0.6pt]
+        ([yshift=-0.85cm]g1.south west) -- ([yshift=-0.85cm]g3.south east);
+      \node[muted,font=\scriptsize,anchor=north west]
+        at ([yshift=-0.95cm]g1.south west) {контроль над машиной};
+      \node[muted,font=\scriptsize,anchor=north east]
+        at ([yshift=-0.95cm]g3.south east) {скорость написания};
+    \end{tikzpicture}
+  \end{center}
+
+  \slidegap
+  \aside{Ни одно поколение не отменяет предыдущее: на C пишут ядра ОС, на
+    C++ --- движки и браузеры. Скрипт на один раз --- третье поколение.
+    Сервис на десять лет, тысячи запросов в секунду и команда, где люди
+    меняются, --- \hi{второе}.}
+\end{frame}
+\note{Второе поколение -- осознанная сделка: немного тактов в обмен на
+  часы, которые вы не потратите на поиск ошибки в памяти. Управляемая
+  память из прошлой лекции, строгие типы, виртуальная машина. Корпоративная
+  разработка сидит на Java и C\# не по инерции: для длинных проектов это
+  правильная точка на шкале.}
+
+\begin{frame}[plain]
+  \statement{Забудьте про \hi{микрооптимизации}\\ {\color{muted}(в разумных
+    пределах)}}
+\end{frame}
+\note{Не думайте, что быстрее, цикл или LINQ. Не меняйте классы на
+  структуры, потому что <<структуры быстрее>>. Пишите для человека, который
+  прочитает это через год -- скорее всего, это будете вы. Оговорки: выбор
+  алгоритма -- не микрооптимизация; перебор списка из миллиона вместо
+  словаря -- это ошибка, и она стоит секунд. Границы -- в конце раздела.}
+
+\begin{frame}{Рантайм оптимизирует за вас}
+  \slidetop
+  \claim{И делает это \hi{лучше, чем вы}. Хитрый код ему \lo{мешает}.}
+
+  \begin{tabular}{@{}p{4.3cm}p{8.9cm}@{}}
+    \textbf{\hi{аллокация на стеке}} & объект не убегает из метода ---
+      \texttt{new} есть, кучи нет \\[0.5em]
+    \textbf{\hi{инлайн}} & маленький метод вставлен в место вызова: имя в
+      исходнике, прямой код в машине \\[0.5em]
+    \textbf{\hi{проверки границ}} & цикл от нуля до \texttt{Length}: JIT
+      доказал, что индекс в пределах, --- проверки нет \\[0.5em]
+    \textbf{\hi{оптимизация по профилю}} & уровень 0 собирает статистику,
+      уровень 1 компилирует под реальные данные \\
+  \end{tabular}
+
+  \slidegap
+  {\color{accent}\large\bfseries Дайте ему это сделать.}
+\end{frame}
+\note{Аллокацию на стеке видели в прошлой лекции. Проверки границ:
+  безопасность осталась, цена исчезла -- но <<оптимизированный>> хитрый цикл
+  мешает JIT доказать, и проверки вернутся. История из жизни: foreach по
+  массиву переписали на while с ручным индексом, потому что <<foreach
+  медленнее>>. Машинный код тот же, а индекс в одном месте ушёл за границу.
+  Полдня ради оптимизации, которой не было.}
+
+\begin{frame}{Игра: что быстрее?}
+  \slidetop
+  \claim{Интуицию проверяем \hi{измерением}, а не спором.}
+
+  \begin{center}
+    \begin{tikzpicture}[font=\small,
+      box/.style={draw=hairline,line width=0.8pt,fill=codebg,
+                  minimum height=1.05cm,minimum width=3.0cm,align=center,
+                  inner sep=0.35em},
+      ar/.style={-{Straight Barb[length=1.8mm]},ink,line width=0.7pt}]
+      \node[box] (code) {код\\{\color{muted}\scriptsize без чисел}};
+      \node[box,right=1.0cm of code] (vote) {голосование};
+      \node[box,right=1.0cm of vote,draw=accent] (table)
+        {таблица\\{\color{muted}\scriptsize BenchmarkDotNet, Release}};
+      \draw[ar] (code) -- (vote);
+      \draw[ar] (vote) -- (table);
+    \end{tikzpicture}
+  \end{center}
+
+  \slidegap
+  \eyebrow{три раунда}\par
+  \vspace{0.5em}
+  цикл или LINQ \quad$\cdot$\quad склейка строк \quad$\cdot$\quad
+  структура или класс
+
+  \slidegap
+  \aside{Отдельный процесс в Release, прогрев, много запусков, среднее и
+    разброс. Цифры сняты заранее на моей машине, на вашей будут другие ---
+    код всех бенчмарков лежит в репозитории курса.}
+\end{frame}
+\note{Подробно про BenchmarkDotNet -- в Л15; сегодня достаточно знать, что
+  он работает только в Release, помня про Debug из первой лекции. Смысл игры
+  не в цифрах. Методы помечены [Benchmark], один из них -- базовый,
+  [MemoryDiagnoser] добавляет колонку выделенной памяти.}
+
+\begin{frame}[fragile]{Раунд 1: цикл или LINQ?}
+  \slidetop
+\begin{lstlisting}[style=csharp,basicstyle=\ttfamily\scriptsize]
+using BenchmarkDotNet.Attributes;
+
+[MemoryDiagnoser]
+public class SumBench
+{
+    private readonly int[] _data = Enumerable.Range(0, 1_000).ToArray();
+
+    [Benchmark(Baseline = true)]
+    public int Loop()
+    {
+        var sum = 0;
+        foreach (var x in _data)
+            if (x % 2 == 0)
+                sum += x;
+        return sum;
+    }
+
+    [Benchmark]
+    public int Linq() => _data.Where(x => x % 2 == 0).Sum();
+}
+\end{lstlisting}
+\end{frame}
+\note{Вопрос в зал -- заголовок слайда. Baseline -- относительно него
+  считается отношение; [MemoryDiagnoser] -- колонка выделенной памяти. Массив из тысячи чисел, сложить чётные. LINQ разберём в Л5, пока
+  просто прочитать: отфильтровать чётные, сложить. Кто за цикл, кто за LINQ,
+  кто за <<одинаково>>?}
+
+\begin{frame}[fragile]{Раунд 1: результат}
+  \slidetop
+  \claim{Цикл быстрее --- зал угадал. Интереснее \hi{единицы измерения}.}
+\begin{lstlisting}[style=term]
+| Method | Mean       | Error    | StdDev   | Ratio | Gen0   | Allocated |
+|------- |-----------:|---------:|---------:|------:|-------:|----------:|
+| Loop   |   247.0 ns |  0.83 ns |  0.77 ns |  1.00 |      - |         - |
+| Linq   | 1,153.3 ns | 22.75 ns | 52.74 ns |  4.67 | 0.0057 |      48 B |
+\end{lstlisting}
+  \slidegap
+  \aside{У LINQ \lo{48 байт на вызов} --- объект, который перебирает массив:
+    то самое давление на сборщик. Но обе версии --- \hi{наносекунды} на
+    тысячу элементов, а один запрос к базе стоит в тысячи раз дороже.
+    Разница реальна и почти никогда не важна.}
+\end{frame}
+\note{Это и есть <<в разумных пределах>>. Делегат для условия без захвата
+  компилятор создаёт один раз и кэширует -- поэтому аллокация одна. В Л5
+  покажу, что для многих операций над массивами LINQ в новых версиях
+  догоняет цикл: библиотека проверяет, не массив ли это, и идёт коротким
+  путём.}
+
+\begin{frame}[fragile]{Раунд 2: склеить три строки}
+  \slidetop
+\begin{lstlisting}[style=csharp,basicstyle=\ttfamily\scriptsize]
+string Concat()  => _a + _b + _c;
+
+string Builder() => new StringBuilder().Append(_a).Append(_b).Append(_c).ToString();
+
+string Join()    => string.Join("", _a, _b, _c);
+\end{lstlisting}
+  \slidegap
+  \eyebrow{вопрос в зал}\par
+  \vspace{0.6em}
+  {\Large\dncnohyph Какой из трёх быстрее?\par}
+\end{frame}
+\note{Плюс, StringBuilder с тремя Append, Join с пустым разделителем. Вас
+  учили, что плюс -- это плохо. Голосуем.}
+
+\begin{frame}[fragile]{Раунд 2: результат}
+  \slidetop
+  \claim{Большинство не угадало: для трёх строк \lo{StringBuilder}
+    проигрывает.}
+\begin{lstlisting}[style=term]
+| Method  | Mean      | Error     | StdDev    | Ratio | Gen0   | Allocated |
+|-------- |----------:|----------:|----------:|------:|-------:|----------:|
+| Concat  |  5.605 ns | 0.0059 ns | 0.0056 ns |  1.00 | 0.0057 |      48 B |
+| Builder | 14.439 ns | 0.0230 ns | 0.0216 ns |  2.58 | 0.0181 |     152 B |
+| Join    |  7.810 ns | 0.0137 ns | 0.0114 ns |  1.39 | 0.0057 |      48 B |
+\end{lstlisting}
+  \slidegap
+  \aside{Три плюса компилятор превращает в один вызов \texttt{string.Concat}:
+    посчитать общую длину и собрать \hi{одну строку одним движением} ---
+    48 байт. StringBuilder --- отдельный объект с буфером, который потом
+    ещё превращают в строку: \lo{152 байта}.}
+\end{frame}
+\note{Интуиция <<StringBuilder быстрее>> -- не ошибка, она из другого
+  контекста. Вот он, на следующем слайде.}
+
+\begin{frame}[fragile]{Тысяча строк в цикле}
+  \slidetop
+\begin{lstlisting}[style=csharp,basicstyle=\ttfamily\scriptsize]
+for (var i = 0; i < 1_000; i++) s += "item;";          // PlusEquals
+for (var i = 0; i < 1_000; i++) sb.Append("item;");    // Builder
+\end{lstlisting}
+  \vspace{0.5em}
+\begin{lstlisting}[style=term]
+| Method     | Mean       | Error     | StdDev    | Ratio | Gen0     | Gen1    | Allocated  |
+|----------- |-----------:|----------:|----------:|------:|---------:|--------:|-----------:|
+| Builder    |   1.796 us | 0.0033 us | 0.0031 us |  1.00 |   3.2406 |  0.2022 |   26.49 KB |
+| PlusEquals | 166.925 us | 0.5507 us | 0.5151 us | 92.94 | 601.0742 | 14.6484 | 4912.08 KB |
+\end{lstlisting}
+  \slidegap
+  \aside{Теперь плюс проигрывает \lo{в 93 раза} и выделяет \lo{почти пять
+    мегабайт}: строка неизменяема, и каждая итерация копирует всё
+    накопленное. StringBuilder дописывает в один буфер. Правило верно для
+    цикла и неверно для трёх строк --- \hi{контекст даёт измерение}.}
+\end{frame}
+\note{Длинные копии -- это и куча больших объектов из прошлой лекции. И
+  чтобы не бояться самого читаемого варианта: интерполяция со знаком
+  доллара в современном компиляторе разворачивается в код, который считает
+  длину и пишет в буфер, без промежуточных строк и без упаковки чисел.
+  Читаемость и производительность не обязаны спорить.}
+
+\begin{frame}[fragile]{Раунд 3: структура или класс?}
+  \slidetop
+  \begin{minipage}[t]{0.58\textwidth}
+\begin{lstlisting}[style=csharp,basicstyle=\ttfamily\scriptsize]
+public struct PointS { public int X; public int Y; }
+
+public class PointC { public int X; public int Y; }
+
+var points = new PointS[1_000_000];   // or PointC[]
+for (var i = 0; i < points.Length; i++)
+    points[i] = new PointS { X = i, Y = i };
+
+long sum = 0;
+foreach (var p in points)
+    sum += p.X + p.Y;
+\end{lstlisting}
+  \end{minipage}\hfill
+  \begin{minipage}[t]{0.36\textwidth}
+    \vspace{0.6em}
+    \eyebrow{вопрос в зал}\par
+    \vspace{0.6em}
+    {\Large\dncnohyph Миллион точек в массив и сумма координат.\par}
+    \vspace{1.4em}
+    \aside{Код одинаковый, отличается одно слово в объявлении.}
+  \end{minipage}
+\end{frame}
+\note{Кто за структуру? Много: <<структуры на стеке, они быстрые>>. Кто за
+  класс?}
+
+\begin{frame}[fragile]{Раунд 3: результат}
+  \slidetop
+  \claim{Структура выигрывает \hi{в 35 раз} --- здесь зал прав.}
+\begin{lstlisting}[style=term]
+| Method | Mean        | Error     | StdDev    | Ratio | Gen0      | Allocated |
+|------- |------------:|----------:|----------:|------:|----------:|----------:|
+| Struct |    749.6 us |   7.63 us |   7.13 us |  1.00 |  500.0000 |   7.63 MB |
+| Class  | 26,658.0 us | 523.91 us | 751.37 us | 35.57 | 3500.0000 |  30.52 MB |
+\end{lstlisting}
+  \slidegap
+  \aside{Массив структур --- \hi{один объект}, точки лежат в нём подряд.
+    Массив классов --- ещё \lo{миллион объектов}, каждый со своим
+    заголовком: вчетверо больше памяти, и сборщику нужно обойти их все.}
+\end{frame}
+\note{Помните автобус? Здесь миллион пассажиров вместо одного. Колонки
+  Gen1 и Gen2 на слайде опущены, чтобы таблица помещалась: у классов сборки
+  доходят до второго поколения. А теперь ломаем.}
+
+\begin{frame}[fragile]{Большая структура по цепочке вызовов}
+  \slidetop
+  \claim{Десять полей копируются \lo{при каждой передаче}.}
+\begin{lstlisting}[style=csharp,basicstyle=\ttfamily\scriptsize]
+public struct BigS { public long A, B, C, D, E, F, G, H, I, J; }   // 80 bytes
+
+static long S1(BigS s) => S2(s) + s.B;   // three levels, not inlined
+\end{lstlisting}
+  \vspace{0.5em}
+\begin{lstlisting}[style=term]
+| Method | Mean     | Error     | StdDev    | Ratio | Gen0   | Allocated |
+|------- |---------:|----------:|----------:|------:|-------:|----------:|
+| Class  | 1.944 ns | 0.0084 ns | 0.0074 ns |  1.00 |      - |         - |
+| Struct | 4.410 ns | 0.0024 ns | 0.0023 ns |  2.27 |      - |         - |
+| Boxed  | 5.818 ns | 0.0066 ns | 0.0062 ns |  2.99 | 0.0115 |      96 B |
+\end{lstlisting}
+  \slidegap
+  \aside{Класс передаётся ссылкой, восемь байт. \texttt{Boxed} --- та же
+    структура, положенная в \texttt{object}: \lo{худшее из двух миров},
+    и копирование, и 96 байт в куче. Ответ на <<структура или класс>> ---
+    \hi{<<зависит>>}.}
+\end{frame}
+\note{Упаковка -- boxing, вернёмся к ней через двадцать минут. Честная
+  деталь: если значение после передачи больше не нужно, JIT в .NET 10
+  копию не делает, и та же структура обгоняет класс -- ещё один довод
+  мерить, а не угадывать. Здесь каждый уровень читает поле после вызова,
+  как бывает в настоящем коде.}
+
+\begin{frame}[fragile]{Как читать таблицу}
+  \slidetop
+\begin{lstlisting}[style=term]
+| Method | Mean       | Error    | StdDev   | Ratio | Gen0   | Allocated |
+|------- |-----------:|---------:|---------:|------:|-------:|----------:|
+| Loop   |   247.0 ns |  0.83 ns |  0.77 ns |  1.00 |      - |         - |
+| Linq   | 1,153.3 ns | 22.75 ns | 52.74 ns |  4.67 | 0.0057 |      48 B |
+\end{lstlisting}
+  \slidegap
+  \begin{tabular}{@{}p{2.6cm}p{10.4cm}@{}}
+    \textbf{\hi{Mean}}         & среднее время одного вызова --- главная
+                                 колонка \\[0.35em]
+    \textbf{Error, StdDev}     & погрешность и разброс: разница меньше
+                                 ошибки --- \lo{разницы нет} \\[0.35em]
+    \textbf{\hi{Ratio}}        & во сколько раз от \texttt{Baseline}; от
+                                 машины не зависит \\[0.35em]
+    \textbf{\hi{Allocated}}    & байт на вызов: ноль --- сборщик в этом коде
+                                 не участвует \\[0.35em]
+    \textbf{Gen0}              & сборок нулевого поколения на тысячу
+                                 вызовов \\
+  \end{tabular}
+
+  \slidegap
+  \aside{Инструмент не думает за вас, но он \hi{честный}.}
+\end{frame}
+\note{Итог игры: зал угадал полтора раза из трёх. Интуиция про
+  производительность врёт у всех, включая меня: я перепроверял результаты
+  на новой версии рантайма. Либо есть таблица из BenchmarkDotNet, снятая в
+  Release, либо разговора о производительности нет. В Л15 вы сами напишете
+  такой бенчмарк.}
+
+\begin{frame}{C\# в трёх словах}
+  \slidetop
+  \begin{tabular}{@{}p{3.4cm}p{9.6cm}@{}}
+    \textbf{\hi{лаконичность}} & свойства, запросы к данным в языке,
+      \texttt{async} двумя словами, типы для данных в одну строку \\[0.65em]
+    \textbf{\hi{строгие типы}} & компилятор ловит ошибки до запуска;
+      обобщения не стираются во время выполнения \\[0.65em]
+    \textbf{\hi{широкая поддержка}} & стандартная библиотека на всё,
+      инструменты из коробки, все ОС, открытый код \\
+  \end{tabular}
+
+  \begin{center}
+    \begin{tikzpicture}[font=\scriptsize,x=1.0cm]
+      \draw[hairline,line width=0.8pt] (0,0) -- (10,0);
+      \foreach \x/\v/\f/\y in {1.2/C\# 3/LINQ/2007, 4.4/C\# 5/async/2012,
+                               8.2/C\# 9/records/2020} {
+        \fill[accent] (\x,0) circle (2pt);
+        \node[above=0.25em,font=\scriptsize\bfseries,text=accent] at (\x,0)
+          {\v\ --- \f};
+        \node[below=0.25em,muted] at (\x,0) {\y};
+      }
+    \end{tikzpicture}
+  \end{center}
+
+  \slidegap
+  \aside{И честно: \lo{многое взято из Java} --- управляемая память,
+    виртуальная машина, одиночное наследование с интерфейсами. Свойства
+    --- из Delphi.}
+\end{frame}
+\note{Второе поколение, та же сделка, что у Java. Многое из списка Java
+  потом добавила у себя -- языки учатся друг у друга. C\# -- это Java,
+  которой дали двадцать лет учиться на своих и чужих ошибках: то самое
+  <<постельное после стирки>> из первой лекции. Язык обновляется каждый год
+  вместе с платформой, поэтому код десятилетней давности заметно тяжелее
+  сегодняшнего -- помнить, читая старые примеры.}
+
+\begin{frame}{Где производительность --- ваша забота}
+  \slidetop
+  \claim{Правило одно: \hi{сначала измерить}, потом оптимизировать.}
+
+  \begin{tabular}{@{}p{4.6cm}p{8.4cm}@{}}
+    \textbf{горячий путь} & код на каждый запрос, тысячи раз в секунду:
+      разбор, сериализация, маршрутизация \\[0.6em]
+    \textbf{большие объёмы} & файл на гигабайт, отчёт по миллионам строк:
+      алгоритм важнее всего \\[0.6em]
+    \textbf{аллокации в цикле на запрос} & запросы $\times$ итерации ---
+      сборщик ответит паузами \\
+  \end{tabular}
+
+  \slidegap
+  \hrulethin{0.42}
+  \rulegap
+  {\large Чаще всего тормозит \hi{ожидание} --- база, сеть, диск, --- а
+   не C\#.}
+\end{frame}
+\note{Запрос к базе -- миллисекунды, оптимизация цикла -- наносекунды.
+  Как правильно ждать -- Л6; как не делать лишних запросов -- Л13 и Л14.
+  Где проблема, скажут счётчики и трасса из прошлой лекции; помогло ли
+  решение -- BenchmarkDotNet. Без измерения оптимизация -- гадание, и
+  гадаете вы, самый дорогой ресурс.}
+
+\begin{frame}[plain]
+  \keyline{Читаемость дороже тактов, потому что дороже вы.\\ Мерьте,
+    прежде чем оптимизировать, и дайте рантайму делать его работу.}
+\end{frame}
+\note{Дальше пять минут о том, с чего программа начинается.}
+
+% ================================================ 2. PROGRAM START =========
+\section{2. Как начинается программа}
+
+\begin{frame}[plain,fragile]
+\begin{lrbox}{\mainclassic}
+\begin{minipage}{6.9cm}
+\begin{lstlisting}[style=csharp,basicstyle=\ttfamily\scriptsize]
+class Program
+{
+    static int Main(string[] args)
+    {
+        Console.WriteLine("Hello, World!");
+        return 0;
+    }
+}
+\end{lstlisting}
+\end{minipage}
+\end{lrbox}
+\begin{lrbox}{\maintoplevel}
+\begin{minipage}{5.3cm}
+\begin{lstlisting}[style=csharp,basicstyle=\ttfamily\scriptsize]
+Console.WriteLine("Hello, World!");
+return 0;
+\end{lstlisting}
+\end{minipage}
+\end{lrbox}
+  \sectionopener{2}{Как начинается программа}{%
+    \normalcolor
+    \begin{minipage}[t]{7.1cm}
+      \colhead{accent}{классический Main}\par\vspace{0.5em}
+      \usebox{\mainclassic}
+    \end{minipage}\hfill
+    \begin{minipage}[t]{5.5cm}
+      \colhead{alt}{инструкции верхнего уровня}\par\vspace{0.5em}
+      \usebox{\maintoplevel}
+    \end{minipage}\par
+    \vspace{0.9em}
+    {\color{muted}Справа --- тот же Main, только написанный компилятором за
+      вас.}}
+\end{frame}
+\note{Бюджет: 5 минут. Долг из Л1: куда делся класс с Main. Декомпилятор в
+  прошлой лекции его показал. Правила: такой файл в проекте один, инструкции
+  раньше объявлений типов; await в файле -- и сгенерированный Main станет
+  асинхронным сам. Шаблону консольного приложения можно попросить
+  классический вид ключом.}
+
+\begin{frame}[fragile]{Аргументы и код завершения}
+  \slidetop
+  \begin{minipage}[t]{0.5\textwidth}
+\begin{lstlisting}[style=csharp,basicstyle=\ttfamily\scriptsize]
+if (args.Length == 0)
+{
+    Console.Error.WriteLine("usage: hello <name>");
+    return 2;
+}
+
+Console.WriteLine($"Hello, {args[0]}!");
+return 0;
+\end{lstlisting}
+  \vspace{0.6em}
+\begin{lstlisting}[style=term]
+$ dotnet run -- Ann
+Hello, Ann!
+$ dotnet run; echo $?
+usage: hello <name>
+2
+\end{lstlisting}
+  \end{minipage}\hfill
+  \begin{minipage}[t]{0.44\textwidth}
+    \vspace{0.3em}
+    \begin{cbul}{accent}
+      \item \texttt{\hi{args}} приходит из командной строки после
+            \texttt{-{}-}
+      \item \texttt{\hi{return}} --- код завершения: ноль успех, остальное
+            ошибка
+      \item \texttt{\hi{Console.Error}} --- поток ошибок, для человека
+    \end{cbul}
+    \vspace{1.0em}
+    \aside{Код завершения читает не пользователь, а тот, кто запустил:
+      скрипт, планировщик, оболочка. Утилита, которая падает и
+      \lo{возвращает ноль}, ломает любой скрипт вокруг себя.}
+  \end{minipage}
+\end{frame}
+\note{Ночные задачи, которые месяцами не работали при зелёном мониторинге,
+  -- ровно отсюда. Непойманное исключение само завершит процесс с
+  трассировкой и ненулевым кодом -- правильное поведение по умолчанию; не
+  оборачивайте всё в try с <<что-то пошло не так>>. Где ловить исключения
+  -- Л4. Обычный вывод -- результат для конвейера; в сервисе будут логи,
+  Л12. Сервис в Л8 начинается так же: файл верхнего уровня, только до
+  первого return строк тридцать.}
+
+% ================================================== 3. TYPE SYSTEM =========
+\section{3. Система типов}
+
+\begin{frame}[plain]
+  \sectionopener{3}{Система типов}{Тип --- это то, что \hi{компилятор знает}
+    о ваших данных. Чем больше он знает, тем больше ошибок поймает до
+    запуска.}
+\end{frame}
+\note{Бюджет: 25 минут. Перепутали два строковых параметра -- компилятор
+  молчит. Два разных типа -- ругается. Копейки вместо рублей -- два числа,
+  молчит; тип для денег -- ругается. Рассказывайте компилятору больше. По
+  дороге закрываем два долга из игры: структуры и boxing.}
+
+\begin{frame}[fragile]{Три ловушки структур}
+  \slidetop
+  \begin{minipage}[t]{0.62\textwidth}
+\begin{lstlisting}[style=csharp,basicstyle=\ttfamily\scriptsize]
+var points = new List<Point> { new() { X = 1, Y = 1 } };
+// points[0].X = 5;        // (1)
+
+var array = new Point[] { new() { X = 1, Y = 1 } };
+array[0].X = 5;            // (2)
+
+var p = array[0];
+Move(p);                   // (3)
+Console.WriteLine(p.X);
+
+static void Move(Point point) => point.X += 10;
+
+struct Point
+{
+    public int X;
+    public int Y;
+}
+\end{lstlisting}
+  \end{minipage}\hfill
+  \begin{minipage}[t]{0.35\textwidth}
+    \raggedright
+    \vspace{0.3em}
+    \textbf{(1)} \lo{ошибка компиляции} \texttt{CS1612}: индексатор списка
+    --- метод, он вернул копию\par
+    \vspace{0.7em}
+    \textbf{(2)} \hi{работает}: элемент массива --- настоящая переменная\par
+    \vspace{0.7em}
+    \textbf{(3)} \lo{тихий баг}: метод двигал копию, печатается
+    \texttt{5}\par
+    \vspace{1.0em}
+    \aside{Одна строка, два результата: список --- класс с методами,
+      массив --- память.}
+  \end{minipage}
+\end{frame}
+\note{Первая -- хорошая новость: ошибка компиляции, а не тихий баг. Третья
+  -- компилируется, работает, результат не тот. Передать без копии можно:
+  ref, in -- только для чтения; readonly struct -- компилятор не делает
+  защитных копий. Но правильнее спросить: зачем структура вообще
+  изменяемая? Примитивы: деньги -- только decimal, я видел бухгалтерию на
+  double. Переполнение по умолчанию молчит; идентификаторы в базе -- long.
+  Строка -- ссылочный тип, который ведёт себя как значение: неизменяема,
+  == сравнивает содержимое, литералы интернированы. Сравнение строк --
+  явно: Ordinal для техники, культура для человека.}
+
+\begin{frame}{Boxing: невидимая аллокация}
+  \slidetop
+  \claim{Значение в \texttt{object} --- это \lo{аллокация без слова
+    \texttt{new}}.}
+
+  \begin{center}
+    \begin{tikzpicture}[font=\small,
+      box/.style={draw=hairline,line width=0.8pt,fill=codebg,
+                  minimum height=0.75cm,align=center,inner sep=0.3em},
+      ar/.style={-{Straight Barb[length=1.8mm]},line width=0.7pt}]
+      \node[muted,font=\scriptsize] at (0,1.05) {КАДР СТЕКА};
+      \node[box,minimum width=2.8cm] (n) at (0,0.45) {\texttt{int n = 42}};
+      \node[box,minimum width=2.8cm] (o) at (0,-0.4) {\texttt{object o}};
+      \node[muted,font=\scriptsize] at (7.2,1.05) {КУЧА};
+      \node[box,minimum width=3.4cm,draw=alt] (b) at (7.2,0.02)
+        {заголовок $\mid$ \texttt{42}};
+      \draw[ar,alt] (n.east) -- node[above,font=\scriptsize\bfseries,
+        text=alt,sloped]{box: копия} (b.west);
+      \draw[ar,ink] (o.east) -- node[below,font=\scriptsize,text=muted,
+        sloped]{ссылка} (b.west);
+    \end{tikzpicture}
+  \end{center}
+
+  \slidegap
+  \begin{tabular}{@{}p{3.6cm}p{9.4cm}@{}}
+    \texttt{object o = n;}   & \lo{упаковка}: коробка в куче, копия числа,
+                               ссылка на коробку \\[0.3em]
+    \texttt{int m = (int)o;} & \hi{распаковка}: проверить тип, скопировать
+                               обратно \\
+  \end{tabular}
+
+  \vspace{1.0em}
+  \aside{Прячется в API на \texttt{object}, в старых коллекциях, в вызове
+    через интерфейс у структуры. Видно только в \texttt{Allocated}.}
+\end{frame}
+\note{Вызов метода прямо на числе, например ToString, не упаковывает.
+  Упаковка -- в момент, когда значение кладут в переменную типа object или
+  интерфейса: смотреть на присваивания и параметры, а не на вызовы. int? --
+  это не упаковка, а маленькая структура из значения и флага; про
+  отсутствие значения -- следующая лекция. Лекарство -- обобщения, в конце
+  лекции.}
+
+\begin{frame}{Шесть ступеней}
+  \slidetop
+  \claim{На каждой ступени один вопрос: это \hi{данные} или \lo{поведение}?}
+
+  \begin{center}
+    \begin{tikzpicture}[font=\small,
+      rung/.style={draw=hairline,line width=0.8pt,fill=codebg,
+                   minimum height=0.55cm,minimum width=2.15cm,align=center,
+                   inner sep=0.2em,font=\footnotesize}]
+      \foreach \i/\n in {0/class, 1/struct, 2/record, 3/record struct,
+                         4/interface, 5/enum} {
+        \node[rung] (r\i) at (\i*2.35,\i*0.14) {\texttt{\n}};
+      }
+      \foreach \i in {0,4} {
+        \node[alt,font=\scriptsize\bfseries,below=0.2em] at (r\i.south)
+          {поведение};
+      }
+      \foreach \i in {1,2,3,5} {
+        \node[accent,font=\scriptsize\bfseries,below=0.2em] at (r\i.south)
+          {данные};
+      }
+    \end{tikzpicture}
+  \end{center}
+
+  \slidegap
+  {\small
+  \begin{tabular}{@{}p{2.8cm}p{10.2cm}@{}}
+    \texttt{\lo{class}}         & ссылка, наследование, равенство по ссылке:
+                                  сервис, обработчик \\[0.15em]
+    \texttt{\hi{struct}}        & значение, копируется: маленькое и лучше
+                                  неизменяемое \\[0.15em]
+    \texttt{\hi{record}}        & класс со сгенерированными равенством,
+                                  хэшем, выводом и \texttt{with} \\[0.15em]
+    \texttt{\hi{record struct}} & то же, но значение: идентификатор, почта,
+                                  координата \\[0.15em]
+    \texttt{\lo{interface}}     & контракт без реализации: что умеет, но не
+                                  как \\[0.15em]
+    \texttt{\hi{enum}}          & закрытый набор имён поверх целого числа \\
+  \end{tabular}}
+\end{frame}
+\note{Record: две формы -- позиционная и с телом; наследуется только от
+  record, и сравнение учитывает фактический тип. Record struct -- ровно то,
+  что просит третья лабораторная: <<никаких строк вместо типов>>. Интерфейсы
+  -- в Л10 на них держится вся сборка приложения. Enum не сериализовать
+  наружу числом (Л9); флаги -- степени двойки с атрибутом [Flags].}
+
+\begin{frame}{Правило выбора}
+  \slidetop
+  \begin{center}
+    \begin{tikzpicture}[font=\small,
+      q/.style={draw=hairline,line width=0.8pt,fill=codebg,
+                minimum height=0.8cm,minimum width=2.6cm,align=center,
+                inner sep=0.3em},
+      a/.style={draw=hairline,line width=0.8pt,fill=paper,
+                minimum height=0.8cm,minimum width=2.75cm,align=center,
+                inner sep=0.3em},
+      ar/.style={-{Straight Barb[length=1.8mm]},ink,line width=0.7pt}]
+      \node[q] (root) at (0.7,0) {что это?};
+      \node[q,draw=accent] (dat) at (-4.25,-1.5) {\hi{данные}};
+      \node[q,draw=alt]    (beh) at (1.4,-1.5)  {\lo{поведение}};
+      \node[q]             (set) at (5.7,-1.5)  {закрытый набор};
+      \draw[ar] (root) -- (dat);
+      \draw[ar] (root) -- (beh);
+      \draw[ar] (root) -- (set);
+      \node[a] (rec)  at (-5.7,-3.1) {\texttt{record}\\
+        {\color{muted}\scriptsize в куче}};
+      \node[a] (recs) at (-2.85,-3.1) {\texttt{record struct}\\
+        {\color{muted}\scriptsize маленькие, по значению}};
+      \node[a] (cls)  at (0,-3.1)  {\texttt{class}\\
+        {\color{muted}\scriptsize реализация}};
+      \node[a] (ifc)  at (2.85,-3.1)  {\texttt{interface}\\
+        {\color{muted}\scriptsize контракт}};
+      \node[a] (enm)  at (5.7,-3.1)  {\texttt{enum}\\
+        {\color{muted}\scriptsize набор значений}};
+      \draw[ar] (dat) -- (rec);
+      \draw[ar] (dat) -- (recs);
+      \draw[ar] (beh) -- (cls);
+      \draw[ar] (beh) -- (ifc);
+      \draw[ar] (set) -- (enm);
+    \end{tikzpicture}
+  \end{center}
+
+  \slidegap
+  \aside{Обычная \texttt{struct} остаётся для редкого случая: изменяемая
+    маленькая величина. В сервисе таких \hi{почти не бывает}.}
+\end{frame}
+\note{Члены типа -- голосом: приватные поля, свойства с init и required --
+  неизменяемый объект, который нельзя создать наполовину; первичный
+  конструктор; инициализатор объекта и выражение через стрелку. Если в
+  record появилось десять методов с логикой -- не стал ли он классом?}
+
+\begin{frame}[fragile]{Равенство и идентичность}
+  \slidetop
+  \begin{minipage}[t]{0.6\textwidth}
+\begin{lstlisting}[style=csharp,basicstyle=\ttfamily\scriptsize]
+var a = new UserClass("a@b.c");
+var b = new UserClass("a@b.c");
+Console.WriteLine(a == b);
+
+var c = new UserRecord("a@b.c");
+var d = new UserRecord("a@b.c");
+Console.WriteLine(c == d);
+Console.WriteLine(c);
+
+var e = c with { Email = "x@y.z" };
+Console.WriteLine(c == e);
+
+sealed class UserClass(string email)
+{
+    public string Email { get; } = email;
+}
+
+sealed record UserRecord(string Email);
+\end{lstlisting}
+  \end{minipage}\hfill
+  \begin{minipage}[t]{0.35\textwidth}
+    \eyebrow{вывод}\par
+    \vspace{0.3em}
+\begin{lstlisting}[style=term]
+False
+True
+UserRecord { Email = a@b.c }
+False
+\end{lstlisting}
+    \vspace{1.0em}
+    \aside{Класс сравнивается \lo{по ссылке}: два объекта --- не равны.
+      Record --- \hi{по значению}, и ещё вывод в строку и \texttt{with},
+      который копирует с одним изменением.}
+    \vspace{0.8em}
+    \aside{Record --- \hi{одна строка}. Класс --- четыре, и ничего из
+      этого у него нет.}
+  \end{minipage}
+\end{frame}
+\note{Идентичность, а не равенство. Связка с Л5: на этом держится словарь.
+  Equals -- равны ли два объекта; для record сгенерировано по всем
+  свойствам. Можно написать свой, если равенство учитывает не все поля.}
+
+\begin{frame}{Контракт равенства}
+  \slidetop
+  \claim{Равны $\Rightarrow$ \hi{хэши совпадают}. Обратное не требуется.}
+
+  \begin{center}
+    \begin{tikzpicture}[font=\small,
+      box/.style={draw=hairline,line width=0.8pt,fill=codebg,
+                  minimum height=0.85cm,align=center,inner sep=0.35em},
+      bk/.style={draw=hairline,line width=0.8pt,fill=paper,
+                 minimum height=0.6cm,minimum width=0.9cm},
+      ar/.style={-{Straight Barb[length=1.8mm]},ink,line width=0.7pt}]
+      \node[box,minimum width=2.2cm] (key) at (0,0) {ключ};
+      \foreach \i in {0,...,5} {
+        \node[bk] (b\i) at (4.2+\i*0.9,0) {};
+      }
+      \node[bk,draw=accent,line width=1.0pt] at (b3) {};
+      \node[muted,font=\scriptsize,above=0.3em] at (b2.north east)
+        {корзины};
+      \draw[ar] (key) -- node[above,font=\scriptsize\bfseries,text=accent]
+        {\texttt{GetHashCode}} (b0.west);
+      \node[box,minimum width=3.4cm] (eq) at (6.45,-1.1)
+        {кандидаты: \texttt{Equals}};
+      \draw[ar] (b3.south) -- (b3.south |- eq.north);
+    \end{tikzpicture}
+  \end{center}
+
+  \slidegap
+  \aside{Хэш находит корзину, \texttt{Equals} выбирает внутри. Ключ
+    \hi{неизменяем}: поменяли поле --- объект потерян в старой корзине.}
+
+  \rulegap
+  {\color{alt}\large\bfseries Equals без GetHashCode --- словарь не находит
+   то, что только что положил.}
+\end{frame}
+\note{Record генерирует оба метода вместе -- поэтому от этой ошибки
+  защищает. Пишете равенство руками -- реализуйте ещё IEquatable<T>:
+  обобщённые коллекции сравнивают через него без упаковки. Никаких строк
+  вместо типов: record struct Email с проверкой в конструкторе -- проверка
+  одна, на границе, и передать имя пользователя вместо почты невозможно.
+  Примитивная одержимость. Осторожно с default: у record struct есть
+  экземпляр со строкой null внутри -- элемент нового массива. ToString
+  record -- первое, что увидите в логах; деконструкция -- в Л4.}
+
+\begin{frame}[plain]
+  \keyline{Спросите у каждого типа, данные он или поведение.\\ Для данных
+    берите record и не пишите равенство руками.}
+\end{frame}
+\note{Компилятор сделает это правильно, а вы, скорее всего, забудете хэш-код.}
+
+% ============================================== 4. ACCESS AND BOUNDS =======
+\section{4. Модификаторы доступа}
+
+\begin{frame}[plain]
+  \sectionopener{4}{Модификаторы доступа и границы}{%
+    \normalcolor
+    \begin{tikzpicture}[font=\scriptsize,
+      asm/.style={draw=hairline,line width=0.8pt,fill=codebg,
+                  minimum height=2.1cm,minimum width=4.2cm},
+      t/.style={draw=hairline,line width=0.8pt,fill=paper,
+                minimum height=0.55cm,minimum width=2.9cm,align=center,
+                inner sep=0.2em},
+      ar/.style={-{Straight Barb[length=1.8mm]},line width=0.7pt}]
+      \node[asm] (app) at (0,0) {};
+      \node[anchor=north west,muted] at (app.north west) {App.dll};
+      \node[asm] (dom) at (7.0,0) {};
+      \node[anchor=north west,muted] at (dom.north west) {Domain.dll};
+      \node[t] (pub) at (7.0,0.35) {\texttt{\hi{public} Order}};
+      \node[t] (int) at (7.0,-0.5) {\texttt{\lo{internal} Parser}};
+      \node[t] (use) at (0,0.0) {\texttt{Program}};
+      \draw[ar,accent] (use.east) -- node[above,text=accent,
+        font=\scriptsize\bfseries]{видно} (pub.west);
+      \draw[ar,alt,dashed] (use.east) -- node[pos=0.6,fill=codebg,text=alt,
+        font=\large\bfseries,inner sep=1pt]{$\times$} (int.west);
+      \draw[ar,muted] ([yshift=-0.35cm]app.south east) --
+        node[below,text=muted]{ссылка --- только в одну сторону}
+        ([yshift=-0.35cm]dom.south west);
+    \end{tikzpicture}\par
+    \vspace{0.6em}
+    \texttt{internal} --- видно внутри \hi{сборки}. Не папки и не
+    пространства имён.}
+\end{frame}
+\note{Бюджет: 8 минут. Вопрос в зал: что означает internal? <<Почти как
+  private>> или <<внутри проекта>>? Второе ближе: внутри одной dll -- той
+  самой сборки из прошлой лекции. Public -- обещание; internal -- свобода.
+  По умолчанию всё internal: тип без модификатора -- internal, член --
+  private. Настоящую границу проводит отдельный проект, а не папка. Тестам
+  -- InternalsVisibleTo, Л15. И напомнить: модификаторы -- правила для
+  компилятора, рефлексия достанет всё.}
+
+\begin{frame}{Четыре слова --- четыре причины}
+  \slidetop
+  \begin{tabular}{@{}p{2.8cm}p{10.2cm}@{}}
+    \texttt{\hi{sealed}}   & наследование --- это контракт; не проектировали
+      базу --- запечатайте \\[0.7em]
+    \texttt{\hi{abstract}} & половина реализации плюс контракт на вторую \\[0.7em]
+    \texttt{\hi{static}}   & не объект, а набор функций; здесь живут методы
+      расширения \\[0.7em]
+    \texttt{\hi{partial}}  & вторую половину типа пишет генератор кода \\
+  \end{tabular}
+
+  \slidegap
+  \hrulethin{0.42}
+  \rulegap
+  \aside{Самый дешёвый в сопровождении вариант: \hi{sealed снаружи, private
+    внутри}. \texttt{protected} --- почти \texttt{public}, только для
+    наследников, включая тех, кого писали не вы.}
+\end{frame}
+\note{Бонус sealed: JIT точно знает, какой метод вызывать, и встраивает без
+  проверок; в листинге равенства оба типа запечатаны -- это привычка.
+  Абстрактный класс реже интерфейса: он занимает единственное место базы.
+  Partial: сериализатор в Л9. Ещё два: readonly struct -- компилятор
+  проверяет, что структура не меняется; file -- тип виден в одном файле,
+  нужен генераторам.}
+
+\begin{frame}[plain]
+  \keyline{Internal --- граница сборки, и она ваша.\\ Открывайте наружу
+    только то, за что готовы отвечать.}
+\end{frame}
+\note{Последний раздел закрывает долг про boxing.}
+
+% ===================================================== 5. GENERICS =========
+\section{5. Generics}
+
+\begin{frame}[plain]
+  \sectionopener{5}{Generics}{%
+    Максимум для чисел, строк и дат --- три решения:\par
+    \vspace{0.7em}
+    \normalcolor\small
+    \begin{tabular}{@{}p{4.2cm}p{7.6cm}@{}}
+      \lo{три метода}                 & \texttt{Max(int[])},
+        \texttt{Max(string[])}, \texttt{Max(DateTime[])} \\[0.4em]
+      \lo{один через \texttt{object}} & \texttt{object Max(object[])} \\[0.4em]
+      \hi{один с параметром типа}     & \texttt{T Max<T>(IReadOnlyList<T>)} \\
+    \end{tabular}}
+\end{frame}
+\note{Бюджет: 7 минут. Первое -- дублирование, четвёртый тип -- четвёртый
+  метод. Второе -- работает для всего, но потеряли типы, приводим и
+  надеемся, и каждое число упаковано. Медленно и небезопасно одновременно.}
+
+\begin{frame}[fragile]{Один метод на все типы}
+  \slidetop
+\begin{lstlisting}[style=csharp,basicstyle=\ttfamily\scriptsize]
+int[] numbers = [3, 9, 4];
+string[] names = ["b", "a", "c"];
+Console.WriteLine(Max(numbers));   // 9
+Console.WriteLine(Max(names));     // c
+
+static T Max<T>(IReadOnlyList<T> items) where T : IComparable<T>
+{
+    var best = items[0];
+    for (var i = 1; i < items.Count; i++)
+    {
+        if (items[i].CompareTo(best) > 0)
+            best = items[i];
+    }
+    return best;
+}
+\end{lstlisting}
+  \vspace{0.5em}
+  \aside{\texttt{\hi{T}} --- параметр типа, компилятор выводит его при
+    вызове. \texttt{\hi{where}} --- ограничение: без него \texttt{CompareTo}
+    не скомпилируется, а тип без сравнения \lo{не пройдёт на вызове}.}
+\end{frame}
+\note{Ограничения: интерфейс или базовый класс, class или struct, new(),
+  notnull. Смысл один: рассказать компилятору о T ровно столько, сколько
+  нужно телу. Обобщёнными бывают и типы: результат операции, хранилище
+  сущностей типа T. Параметры называют с буквы T; default(T) -- ноль для
+  чисел, null для ссылок.}
+
+\begin{frame}{Обобщения без стирания}
+  \slidetop
+  \versus{.NET --- тип сохраняется}{%
+    \begin{cbul}{accent}
+      \item \texttt{List<int>}: свой код, числа лежат как числа
+      \item \texttt{List<string>}, \texttt{List<Order>}: общий код для ссылок
+      \item рантайм знает, чем параметризован тип
+    \end{cbul}}{Java --- тип стирается}{%
+    \begin{cbul}{alt}
+      \item \texttt{List<Integer>}: код на \texttt{Object}, числа в коробках
+      \item все \texttt{List<...>} --- один и тот же класс
+      \item после компиляции параметра типа нет
+    \end{cbul}}
+
+  \slidegap
+  \hrulethin{0.42}
+  \rulegap
+  \aside{Один алгоритм, \hi{без потери типов и без boxing} --- раньше
+    приходилось выбирать два из трёх. Цена: для каждой структуры своя копия
+    машинного кода --- больше работы JIT на старте.}
+\end{frame}
+\note{Словарь из чисел в .NET не аллоцирует по объекту на элемент. Цена
+  становится заметной при тысячах обобщённых типов с тысячами структур --
+  одна из причин долгого старта из Л1. Сначала измерить. Дальше: коллекции и
+  LINQ в Л5 -- все обобщённые; ILogger<T> в Л10; статические абстрактные
+  члены интерфейсов и обобщённая арифметика -- верхняя ступень, дойдёте сами.}
+
+\begin{frame}[plain]
+  \keyline{Параметр типа --- способ написать алгоритм один раз\\ и не
+    заплатить за это ни типами, ни коробками.}
+\end{frame}
+\note{Итог: философия -- пишите понятно и мерьте; система типов даёт
+  инструменты: record для данных, интерфейс для контракта, internal для
+  границ, параметр типа для общего кода. Следующая лекция -- синтаксис:
+  сопоставление с образцом, делегаты, null и исключения. Третья
+  лабораторная: доменные типы будущего сервиса.}
+
+\end{document}
