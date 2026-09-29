@@ -750,59 +750,21 @@ Hello, World!
 
 \begin{frame}[plain]
   \sectionopener{5}{Generics}{%
-    Список чисел --- два способа его хранить:\par
+    Нужны коллекции для любых типов. Как их написать?\par
     \vspace{0.7em}
     \normalcolor\small
-    \begin{tabular}{@{}p{4.2cm}p{7.6cm}@{}}
-      \lo{через \texttt{object}} & \texttt{ArrayList} --- хранит что
-        угодно \\[0.4em]
-      \hi{с параметром типа}     & \texttt{List<int>} --- хранит только
-        \texttt{int} \\
+    \begin{tabular}{@{}p{4.4cm}p{7.6cm}@{}}
+      \lo{свою под каждый тип}  & \texttt{IntList}, \texttt{StringList},
+        \ldots{} --- не напишешь \\[0.4em]
+      \lo{одну через \texttt{object}} & \texttt{ArrayList} --- boxing для
+        каждого числа \\[0.4em]
+      \hi{одну с параметром типа} & \texttt{List<T>} --- один код, любой
+        тип \\
     \end{tabular}}
 \end{frame}
-\note{Бюджет: 12 минут. ArrayList -- из первой версии .NET, когда
-  параметров типа ещё не было. List<T> пришёл во второй. Первый вы
-  встретите только в старом коде, и сегодня станет понятно, почему.}
-
-\begin{frame}[fragile]{ArrayList и List<int>}
-  \slidetop
-  \begin{minipage}[t]{0.485\textwidth}
-\begin{lstlisting}[style=csharp,basicstyle=\ttfamily\scriptsize]
-var list = new ArrayList();
-list.Add(42);            // boxing
-list.Add("oops");        // compiles
-int x = (int)list[0];    // unboxing
-int y = (int)list[1];    // fails at run time
-\end{lstlisting}
-  \end{minipage}\hfill
-  \begin{minipage}[t]{0.485\textwidth}
-\begin{lstlisting}[style=csharp,basicstyle=\ttfamily\scriptsize]
-var list = new List<int>();
-list.Add(42);            // no boxing
-// list.Add("oops");     // CS1503
-int x = list[0];         // no cast
-\end{lstlisting}
-  \end{minipage}
-
-  \slidegap
-  \versus{через object}{%
-    \begin{cbul}{alt}
-      \item положить можно что угодно
-      \item достать --- только с приведением
-      \item ошибка типа --- \lo{при запуске}
-      \item каждое число --- \lo{boxing}
-    \end{cbul}}{с параметром типа}{%
-    \begin{cbul}{accent}
-      \item положить можно только \texttt{int}
-      \item достаётся сразу \texttt{int}
-      \item ошибка типа --- \hi{при компиляции}
-      \item числа лежат \hi{как числа}
-    \end{cbul}}
-\end{frame}
-\note{Слева компилятор молчит: для него это список object, и строка
-  такой же object, как число. Ошибка всплывёт при запуске, в том месте,
-  где достают, а не там, где положили. Справа ошибка на строке Add, до
-  запуска. Последний пункт -- про производительность, следующий слайд.}
+\note{Бюджет: 12 минут. ArrayList -- из первой версии .NET, generics
+  пришли во второй. Через object обобщение работает, но теряется тип, и
+  каждое значение проходит boxing -- следующий слайд.}
 
 \begin{frame}{Boxing: цена \texttt{object}}
   \slidetop
@@ -849,49 +811,11 @@ int x = list[0];         // no cast
   \aside{Слева --- объект на каждый элемент для \lo{сборщика мусора}. Справа
     --- \hi{один} на весь список.}
 \end{frame}
-\note{Ради этого generics и появились. Где ещё прячется boxing: API на
+\note{Ради этого generics и придумали. Где ещё прячется boxing: API на
   object, вызов через интерфейс у структуры, enum в object. Видно только в
   счётчике аллокаций. Вызов метода прямо на числе, например ToString, не
   упаковывает -- смотреть на присваивания и параметры. int? -- не boxing,
   а маленькая структура из значения и флага.}
-
-\begin{frame}[fragile]{Как устроен List<T>}
-  \slidetop
-  \begin{minipage}[t]{0.61\textwidth}
-\begin{lstlisting}[style=csharp,basicstyle=\ttfamily\scriptsize]
-public class SimpleList<T>
-{
-    private T[] _items = new T[4];
-    private int _count;
-
-    public void Add(T item)
-    {
-        if (_count == _items.Length)
-            Array.Resize(ref _items, _items.Length * 2);
-        _items[_count++] = item;
-    }
-
-    public T this[int index] => _items[index];
-}
-\end{lstlisting}
-  \end{minipage}\hfill
-  \begin{minipage}[t]{0.36\textwidth}
-    \vspace{0.3em}
-    \begin{cbul}{accent}
-      \item \texttt{\hi{T}} --- параметр типа: <<какой-то тип, узнаем
-            при создании>>
-      \item \texttt{SimpleList<int>} --- внутри \texttt{int[]}, без boxing
-      \item \texttt{SimpleList<string>} --- внутри \texttt{string[]}
-    \end{cbul}
-    \vspace{1.0em}
-    \aside{Код списка написан \hi{один раз}, а работает для любого типа и
-      не теряет его.}
-  \end{minipage}
-\end{frame}
-\note{Упрощённо, но настоящий List<T> устроен так же: массив и счётчик,
-  массив растёт вдвое. Параметров может быть несколько -- ключ и значение
-  у Dictionary<TKey, TValue>. Все коллекции в Л5 обобщённые, и LINQ тоже:
-  каждый его метод обобщённый.}
 
 \begin{frame}[fragile]{Свой обобщённый метод}
   \slidetop
