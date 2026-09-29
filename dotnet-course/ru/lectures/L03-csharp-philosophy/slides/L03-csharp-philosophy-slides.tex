@@ -645,8 +645,43 @@ Hello, World!
 \section{4. Модификаторы доступа}
 
 \begin{frame}[plain]
-  \sectionopener{4}{Модификаторы доступа и границы}{%
-    \normalcolor
+  \sectionopener{4}{Модификаторы доступа и границы}{Кому видно ваш
+    код и где проходит \hi{граница}, которую вы проводите сами.}
+\end{frame}
+\note{Бюджет: 8 минут. Слова, которые пишут перед каждым типом и членом,
+  не задумываясь. Задумаемся.}
+
+\begin{frame}{Кому видно}
+  \slidetop
+  \claim{Четыре модификатора --- четыре круга видимости, от
+    \lo{широкого} к \hi{узкому}.}
+
+  {\renewcommand{\arraystretch}{1.3}
+  \begin{tabular}{@{}p{2.6cm}>{\raggedright\arraybackslash}p{10.6cm}@{}}
+    \texttt{\textbf{\lo{public}}}    & всем, в том числе другим сборкам ---
+      это обещание \\
+    \texttt{\textbf{internal}}       & внутри своей сборки, одной
+      \texttt{dll} \\
+    \texttt{\textbf{protected}}      & самому типу и его наследникам \\
+    \texttt{\textbf{\hi{private}}}   & только внутри самого типа \\
+  \end{tabular}}
+
+  \slidegap
+  \aside{Ещё два составных --- \texttt{protected internal} и
+    \texttt{private protected} --- нужны редко. Умолчания языка на стороне
+    \hi{закрытости}: открывать наружу --- осознанное решение.}
+\end{frame}
+\note{Protected -- почти public, только для наследников, включая тех, кого
+  писали не вы: изменили protected-член -- сломали все подклассы. Public
+  -- обещание, что тип будет здесь с этой сигнатурой; internal -- свобода
+  переименовать и переписать. Дальше -- про internal подробно.}
+
+\begin{frame}{Граница сборки}
+  \slidetop
+  \claim{\texttt{internal} --- видно внутри \hi{сборки}. Не папки и не
+    пространства имён.}
+
+  \begin{center}
     \begin{tikzpicture}[font=\scriptsize,
       asm/.style={draw=hairline,line width=0.8pt,fill=codebg,
                   minimum height=2.1cm,minimum width=4.2cm},
@@ -668,45 +703,16 @@ Hello, World!
       \draw[ar,muted] ([yshift=-0.35cm]app.south east) --
         node[below,text=muted]{ссылка --- только в одну сторону}
         ([yshift=-0.35cm]dom.south west);
-    \end{tikzpicture}\par
-    \vspace{0.6em}
-    \texttt{internal} --- видно внутри \hi{сборки}. Не папки и не
-    пространства имён.}
+    \end{tikzpicture}
+  \end{center}
 \end{frame}
-\note{Бюджет: 8 минут. Вопрос в зал: что означает internal? <<Почти как
+\note{Вопрос в зал: что означает internal? <<Почти как
   private>> или <<внутри проекта>>? Второе ближе: внутри одной dll -- той
   самой сборки из прошлой лекции. Public -- обещание; internal -- свобода.
   По умолчанию всё internal: тип без модификатора -- internal, член --
   private. Настоящую границу проводит отдельный проект, а не папка. Тестам
   -- InternalsVisibleTo, Л15. И напомнить: модификаторы -- правила для
   компилятора, рефлексия достанет всё.}
-
-\begin{frame}{Кому видно}
-  \slidetop
-  \claim{Четыре модификатора --- четыре круга видимости, от
-    \lo{широкого} к \hi{узкому}.}
-
-  {\renewcommand{\arraystretch}{1.3}
-  \begin{tabular}{@{}p{2.6cm}>{\raggedright\arraybackslash}p{6.6cm}>{\raggedright\arraybackslash}p{4.0cm}@{}}
-    & & \eyebrow{по умолчанию} \\
-    \texttt{\textbf{\lo{public}}}    & всем, в том числе другим сборкам ---
-      это обещание & \\
-    \texttt{\textbf{internal}}       & внутри своей сборки, одной
-      \texttt{dll} & \hi{для типа} \\
-    \texttt{\textbf{protected}}      & самому типу и его наследникам & \\
-    \texttt{\textbf{\hi{private}}}   & только внутри самого типа &
-      \hi{для члена типа} \\
-  \end{tabular}}
-
-  \slidegap
-  \aside{Ещё два составных --- \texttt{protected internal} и
-    \texttt{private protected} --- нужны редко. Умолчания языка на стороне
-    \hi{закрытости}: открывать наружу --- осознанное решение.}
-\end{frame}
-\note{Protected -- почти public, только для наследников, включая тех, кого
-  писали не вы: изменили protected-член -- сломали все подклассы. Public
-  -- обещание, что тип будет здесь с этой сигнатурой; internal -- свобода
-  переименовать и переписать. Дальше -- про internal подробно.}
 
 \begin{frame}{Четыре слова --- четыре причины}
   \slidetop
@@ -784,9 +790,9 @@ Hello, World!
 
   \slidegap
   \begin{tabular}{@{}p{3.6cm}p{9.4cm}@{}}
-    \texttt{object o = n;}   & \lo{упаковка}: коробка в куче, копия числа,
-                               ссылка на коробку \\[0.3em]
-    \texttt{int m = (int)o;} & \hi{распаковка}: проверить тип, скопировать
+    \texttt{object o = n;}   & \lo{boxing}: объект в куче, копия числа,
+                               ссылка на объект \\[0.3em]
+    \texttt{int m = (int)o;} & \hi{unboxing}: проверить тип, скопировать
                                обратно \\
   \end{tabular}
 
@@ -832,7 +838,7 @@ static T Max<T>(IReadOnlyList<T> items) where T : IComparable<T>
 
 \begin{frame}[plain]
   \keyline{Параметр типа --- способ написать алгоритм один раз\\ и не
-    заплатить за это ни типами, ни коробками.}
+    заплатить за это ни типами, ни boxing.}
 \end{frame}
 \note{Итог: философия -- пишите понятно и мерьте; система типов даёт
   инструменты: record для данных, интерфейс для контракта, internal для

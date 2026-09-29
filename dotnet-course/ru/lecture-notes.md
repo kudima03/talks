@@ -187,7 +187,7 @@ NativeAOT), сравнить размер и время старта, объяс
 
 ### 4. Модификаторы доступа и границы
 
-- public/internal/protected/private — отдельный слайд «кому видно» с умолчаниями; `internal` —
+- public/internal/protected/private — отдельный слайд «кому видно»; `internal` —
   это граница сборки из Л2, а не «почти private».
 - sealed / abstract / static / partial — по одной причине существования на каждый.
 
