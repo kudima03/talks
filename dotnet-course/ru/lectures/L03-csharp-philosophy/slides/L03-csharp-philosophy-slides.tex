@@ -18,6 +18,7 @@
 
 \usetheme{dotnet}
 \usetikzlibrary{arrows.meta,positioning,calc,decorations.pathreplacing}
+\usepackage{array}   % ragged-right table columns in §3
 
 \dotnetlecture{Л3}
 
@@ -548,6 +549,92 @@ Hello, World!
   молчит; тип для денег -- ругается. Рассказывайте компилятору больше. По
   дороге разберём, где кусаются структуры и что такое boxing.}
 
+\begin{frame}{Из чего строятся типы}
+  \slidetop
+  {\small
+  \begin{tabular}{@{}p{2.7cm}>{\raggedright\arraybackslash}p{6.4cm}>{\raggedright\arraybackslash}p{4.1cm}@{}}
+    & & \eyebrow{где живёт} \\[0.3em]
+    \texttt{\textbf{class}}         & ссылочный тип: наследование, равенство
+                                      по ссылке; поведение & \lo{куча} \\[0.3em]
+    \texttt{\textbf{record}}        & класс со сгенерированными равенством,
+                                      \texttt{ToString} и \texttt{with}; данные
+                                      & \lo{куча} \\[0.3em]
+    \texttt{\textbf{interface}}     & контракт без реализации: что умеет, но не
+                                      как & там, где объект за ним \\[0.3em]
+    \texttt{\textbf{delegate}}      & тип для ссылки на метод & \lo{куча}
+                                      \\[0.3em]
+    \texttt{\textbf{struct}}        & тип-значение: копируется целиком, не
+                                      наследуется & \hi{там, где объявлена}
+                                      \\[0.3em]
+    \texttt{\textbf{record struct}} & то же со сгенерированным равенством:
+                                      маленькие данные & \hi{там, где объявлена}
+                                      \\[0.3em]
+    \texttt{\textbf{enum}}          & закрытый набор имён поверх целого числа
+                                      & \hi{там, где объявлено} \\
+  \end{tabular}}
+
+  \slidegap
+  \aside{<<Там, где объявлена>> --- стек, поле объекта, элемент массива.
+    Ссылочная переменная хранит \hi{только ссылку}, объект --- \lo{в куче}.}
+\end{frame}
+\note{Первые четыре -- ссылочные типы, последние три -- значения. Record:
+  две формы, позиционная и с телом; наследуется только от record. Интерфейс
+  сам не создаётся: за ним объект класса -- в куче, или структура -- и тогда
+  она упаковывается, об этом через пару слайдов. Делегаты подробно -- Л4.
+  Enum не сериализовать наружу числом (Л9); флаги -- степени двойки с
+  атрибутом [Flags].}
+
+\begin{frame}{Встроенные типы}
+  \slidetop
+  \claim{Все --- наследники \texttt{\hi{object}}. Слева значения, справа
+    ссылка.}
+
+  \begin{center}
+    \begin{tikzpicture}[font=\small,
+      box/.style={draw=hairline,line width=0.8pt,fill=codebg,
+                  minimum height=0.7cm,align=center,inner sep=0.35em},
+      fam/.style={draw=hairline,line width=0.8pt,fill=paper,align=left,
+                  inner sep=0.4em,anchor=north,font=\footnotesize},
+      ar/.style={-{Straight Barb[length=1.6mm]},muted,line width=0.6pt}]
+      \node[box,minimum width=2.4cm] (obj) at (0.3,0) {\texttt{object}};
+      \node[box,draw=accent,minimum width=2.6cm] (vt) at (-2.7,-1.15)
+        {\texttt{ValueType}};
+      \node[box,draw=alt,minimum width=2.4cm] (str) at (4.6,-1.15)
+        {\texttt{string}};
+      \draw[ar] (obj.south) -- (vt.north);
+      \draw[ar] (obj.south) -- (str.north);
+
+      \node[fam,text width=2.5cm] (int) at (-5.6,-2.25)
+        {\colhead{accent}{целые}\\[0.2em]
+         \texttt{byte sbyte}\\ \texttt{short ushort}\\ \texttt{int uint}\\
+         \texttt{long ulong}\\ \texttt{nint nuint}};
+      \node[fam,text width=2.6cm] (flt) at (-2.7,-2.25)
+        {\colhead{accent}{дробные}\\[0.2em]
+         \texttt{float double}\\ \texttt{decimal}\\[0.25em]
+         {\color{muted}\scriptsize деньги --- только\\ \texttt{decimal}}};
+      \node[fam,text width=2.5cm] (oth) at (0.2,-2.25)
+        {\colhead{accent}{прочие}\\[0.2em]
+         \texttt{bool}\\ \texttt{char}\\[0.25em]
+         {\color{muted}\scriptsize и ваши \texttt{struct},\\
+          \texttt{enum}}};
+      \foreach \n in {int,flt,oth} \draw[ar] (vt.south) -- (\n.north);
+
+      \node[fam,text width=3.3cm] (sref) at (4.6,-2.25)
+        {неизменяема;\\ \texttt{==} сравнивает\\ содержимое;\\
+         литералы интернированы\\[0.25em]
+         {\color{muted}\scriptsize и ваши \texttt{class},\\
+          \texttt{record}, массивы}};
+      \draw[ar] (str.south) -- (sref.north);
+    \end{tikzpicture}
+  \end{center}
+\end{frame}
+\note{Значения живут там, где объявлены, и копируются; ссылка указывает на
+  объект в куче. Переполнение целых по умолчанию молчит -- есть checked;
+  идентификаторы в базе -- long. Double не умеет точно одну десятую -- я
+  видел бухгалтерию на double. Строка -- ссылочный тип, который ведёт себя
+  как значение. Сравнение строк -- явно: Ordinal для техники, культура для
+  человека.}
+
 \begin{frame}[fragile]{Три ловушки структур}
   \slidetop
   \begin{minipage}[t]{0.62\textwidth}
@@ -590,11 +677,7 @@ struct Point
   -- компилируется, работает, результат не тот. Передать без копии можно:
   ref, in -- только для чтения; readonly struct -- компилятор не делает
   защитных копий. Но правильнее спросить: зачем структура вообще
-  изменяемая? Примитивы: деньги -- только decimal, я видел бухгалтерию на
-  double. Переполнение по умолчанию молчит; идентификаторы в базе -- long.
-  Строка -- ссылочный тип, который ведёт себя как значение: неизменяема,
-  == сравнивает содержимое, литералы интернированы. Сравнение строк --
-  явно: Ordinal для техники, культура для человека.}
+  изменяемая?}
 
 \begin{frame}{Boxing: невидимая аллокация}
   \slidetop
@@ -637,52 +720,6 @@ struct Point
   это не упаковка, а маленькая структура из значения и флага; про
   отсутствие значения -- следующая лекция. Лекарство -- обобщения, в конце
   лекции.}
-
-\begin{frame}{Шесть ступеней}
-  \slidetop
-  \claim{На каждой ступени один вопрос: это \hi{данные} или \lo{поведение}?}
-
-  \begin{center}
-    \begin{tikzpicture}[font=\small,
-      rung/.style={draw=hairline,line width=0.8pt,fill=codebg,
-                   minimum height=0.55cm,minimum width=2.15cm,align=center,
-                   inner sep=0.2em,font=\footnotesize}]
-      \foreach \i/\n in {0/class, 1/struct, 2/record, 3/record struct,
-                         4/interface, 5/enum} {
-        \node[rung] (r\i) at (\i*2.35,\i*0.14) {\texttt{\n}};
-      }
-      \foreach \i in {0,4} {
-        \node[alt,font=\scriptsize\bfseries,below=0.2em] at (r\i.south)
-          {поведение};
-      }
-      \foreach \i in {1,2,3,5} {
-        \node[accent,font=\scriptsize\bfseries,below=0.2em] at (r\i.south)
-          {данные};
-      }
-    \end{tikzpicture}
-  \end{center}
-
-  \slidegap
-  {\small
-  \begin{tabular}{@{}p{2.8cm}p{10.2cm}@{}}
-    \texttt{\lo{class}}         & ссылка, наследование, равенство по ссылке:
-                                  сервис, обработчик \\[0.15em]
-    \texttt{\hi{struct}}        & значение, копируется: маленькое и лучше
-                                  неизменяемое \\[0.15em]
-    \texttt{\hi{record}}        & класс со сгенерированными равенством,
-                                  хэшем, выводом и \texttt{with} \\[0.15em]
-    \texttt{\hi{record struct}} & то же, но значение: идентификатор, почта,
-                                  координата \\[0.15em]
-    \texttt{\lo{interface}}     & контракт без реализации: что умеет, но не
-                                  как \\[0.15em]
-    \texttt{\hi{enum}}          & закрытый набор имён поверх целого числа \\
-  \end{tabular}}
-\end{frame}
-\note{Record: две формы -- позиционная и с телом; наследуется только от
-  record, и сравнение учитывает фактический тип. Record struct -- ровно то,
-  что просит третья лабораторная: <<никаких строк вместо типов>>. Интерфейсы
-  -- в Л10 на них держится вся сборка приложения. Enum не сериализовать
-  наружу числом (Л9); флаги -- степени двойки с атрибутом [Flags].}
 
 \begin{frame}{Правило выбора}
   \slidetop
@@ -729,94 +766,35 @@ struct Point
   конструктор; инициализатор объекта и выражение через стрелку. Если в
   record появилось десять методов с логикой -- не стал ли он классом?}
 
-\begin{frame}[fragile]{Равенство и идентичность}
+\begin{frame}{Equals и GetHashCode}
   \slidetop
-  \begin{minipage}[t]{0.6\textwidth}
-\begin{lstlisting}[style=csharp,basicstyle=\ttfamily\scriptsize]
-var a = new UserClass("a@b.c");
-var b = new UserClass("a@b.c");
-Console.WriteLine(a == b);
+  \claim{\texttt{\hi{Equals}} --- равны ли. \texttt{\hi{GetHashCode}} --- в
+    какую корзину словаря.}
 
-var c = new UserRecord("a@b.c");
-var d = new UserRecord("a@b.c");
-Console.WriteLine(c == d);
-Console.WriteLine(c);
-
-var e = c with { Email = "x@y.z" };
-Console.WriteLine(c == e);
-
-sealed class UserClass(string email)
-{
-    public string Email { get; } = email;
-}
-
-sealed record UserRecord(string Email);
-\end{lstlisting}
-  \end{minipage}\hfill
-  \begin{minipage}[t]{0.35\textwidth}
-    \eyebrow{вывод}\par
-    \vspace{0.3em}
-\begin{lstlisting}[style=term]
-False
-True
-UserRecord { Email = a@b.c }
-False
-\end{lstlisting}
-    \vspace{1.0em}
-    \aside{Класс сравнивается \lo{по ссылке}: два объекта --- не равны.
-      Record --- \hi{по значению}, и ещё вывод в строку и \texttt{with},
-      который копирует с одним изменением.}
-    \vspace{0.8em}
-    \aside{Record --- \hi{одна строка}. Класс --- четыре, и ничего из
-      этого у него нет.}
-  \end{minipage}
-\end{frame}
-\note{Идентичность, а не равенство. Связка с Л5: на этом держится словарь.
-  Equals -- равны ли два объекта; для record сгенерировано по всем
-  свойствам. Можно написать свой, если равенство учитывает не все поля.}
-
-\begin{frame}{Контракт равенства}
-  \slidetop
-  \claim{Равны $\Rightarrow$ \hi{хэши совпадают}. Обратное не требуется.}
-
-  \begin{center}
-    \begin{tikzpicture}[font=\small,
-      box/.style={draw=hairline,line width=0.8pt,fill=codebg,
-                  minimum height=0.85cm,align=center,inner sep=0.35em},
-      bk/.style={draw=hairline,line width=0.8pt,fill=paper,
-                 minimum height=0.6cm,minimum width=0.9cm},
-      ar/.style={-{Straight Barb[length=1.8mm]},ink,line width=0.7pt}]
-      \node[box,minimum width=2.2cm] (key) at (0,0) {ключ};
-      \foreach \i in {0,...,5} {
-        \node[bk] (b\i) at (4.2+\i*0.9,0) {};
-      }
-      \node[bk,draw=accent,line width=1.0pt] at (b3) {};
-      \node[muted,font=\scriptsize,above=0.3em] at (b2.north east)
-        {корзины};
-      \draw[ar] (key) -- node[above,font=\scriptsize\bfseries,text=accent]
-        {\texttt{GetHashCode}} (b0.west);
-      \node[box,minimum width=3.4cm] (eq) at (6.45,-1.1)
-        {кандидаты: \texttt{Equals}};
-      \draw[ar] (b3.south) -- (b3.south |- eq.north);
-    \end{tikzpicture}
-  \end{center}
+  {\renewcommand{\arraystretch}{1.3}
+  \begin{tabular}{@{}>{\raggedright\arraybackslash}p{4.4cm}>{\raggedright\arraybackslash}p{8.8cm}@{}}
+    \texttt{\textbf{class}}  & \lo{по ссылке}: объект равен только самому
+      себе, даже с теми же полями \\[0.6em]
+    \texttt{\textbf{struct}} & по значению всех полей, но реализация по
+      умолчанию \lo{медленная}, а \texttt{==} не определён вовсе \\[0.6em]
+    \texttt{\textbf{record}}, \texttt{\textbf{record struct}} &
+      \hi{по значению}: компилятор сгенерировал \texttt{Equals},
+      \texttt{GetHashCode} и \texttt{==} вместе \\
+  \end{tabular}}
 
   \slidegap
-  \aside{Хэш находит корзину, \texttt{Equals} выбирает внутри. Ключ
-    \hi{неизменяем}: поменяли поле --- объект потерян в старой корзине.}
-
-  \rulegap
-  {\color{alt}\large\bfseries Equals без GetHashCode --- словарь не находит
-   то, что только что положил.}
+  \aside{Работают в \texttt{==}, \texttt{Contains}, \texttt{Distinct},
+    \texttt{Dictionary} и \texttt{HashSet}. Правило одно: равны
+    $\Rightarrow$ \hi{хэши совпадают}. Ключ словаря \lo{неизменяем}:
+    поменяли поле --- объект потерян.}
 \end{frame}
-\note{Record генерирует оба метода вместе -- поэтому от этой ошибки
-  защищает. Пишете равенство руками -- реализуйте ещё IEquatable<T>:
-  обобщённые коллекции сравнивают через него без упаковки. Никаких строк
-  вместо типов: record struct Email с проверкой в конструкторе -- проверка
-  одна, на границе, и передать имя пользователя вместо почты невозможно.
-  Примитивная одержимость. Осторожно с default: у record struct есть
-  экземпляр со строкой null внутри -- элемент нового массива. ToString
-  record -- первое, что увидите в логах; деконструкция -- в Л4.}
+\note{Словарь сначала по хэшу находит корзину, потом внутри сравнивает
+  через Equals. Переопределили Equals и забыли GetHashCode -- словарь не
+  находит то, что только что положил; record генерирует оба вместе. Руками
+  -- ещё и IEquatable<T>, чтобы без упаковки. Никаких строк вместо типов:
+  record struct Email с проверкой в конструкторе. Осторожно с default: у
+  record struct есть экземпляр со строкой null внутри -- элемент нового
+  массива.}
 
 \begin{frame}[plain]
   \keyline{Спросите у каждого типа, данные он или поведение.\\ Для данных
@@ -883,7 +861,7 @@ False
     наследников, включая тех, кого писали не вы.}
 \end{frame}
 \note{Бонус sealed: JIT точно знает, какой метод вызывать, и встраивает без
-  проверок; в листинге равенства оба типа запечатаны -- это привычка.
+  проверок; запечатывать по умолчанию -- это привычка.
   Абстрактный класс реже интерфейса: он занимает единственное место базы.
   Partial: сериализатор в Л9. Ещё два: readonly struct -- компилятор
   проверяет, что структура не меняется; file -- тип виден в одном файле,

@@ -96,13 +96,14 @@
 │   ├── 2. Как начинается программа                                         (5)
 │   │   └── напоминание про Main и top-level → args, exit code (явный — редко)
 │   ├── 3. Система типов (общее → детали)                                   (25)
-│   │   ├── value vs reference: что копируется, что живёт по ссылке
-│   │   ├── примитивы; string как особый зверь (иммутабельность, интернирование)
+│   │   ├── сущности: class, record, interface, delegate, struct, record struct, enum —
+│   │   │   что это и где живёт экземпляр
+│   │   ├── дерево встроенных типов: object → ValueType (целые, дробные, bool/char) | string
+│   │   ├── value vs reference: где это кусается
 │   │   ├── boxing/unboxing — откуда берутся невидимые аллокации
-│   │   ├── объявление типов: class → struct → record → record struct → interface → enum
-│   │   │   └── правило выбора: что здесь данные, а что поведение
+│   │   ├── правило выбора: что здесь данные, а что поведение
 │   │   ├── члены типа: поля, свойства (init), конструкторы (в т.ч. primary), методы
-│   │   └── равенство и идентичность: Equals/GetHashCode/ToString — что даёт record
+│   │   └── Equals/GetHashCode: сравнение и индексация — class, struct, record
 │   ├── 4. Модификаторы доступа и границы                                   (8)
 │   │   ├── public/internal/protected/private — internal и граница сборки (связь с Л2)
 │   │   └── sealed / abstract / static / partial
