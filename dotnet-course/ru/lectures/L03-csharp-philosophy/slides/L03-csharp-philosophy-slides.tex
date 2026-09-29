@@ -8,11 +8,9 @@
 % Build:  make          (latexmk -pdf; engine: pdflatex)
 %         make notes    (same deck plus speaker notes on a second screen)
 %
-% Every BenchmarkDotNet table here is real output of ../benchmarks, captured on
-% the speaker's machine (BenchmarkDotNet 0.15.8, .NET SDK 10.0.401, runtime
-% 10.0.12, Apple M4 Pro) with `dotnet run -c Release -- --filter '*'`. Only
-% the table is quoted; the environment header above it is dropped.
-% Terminal output is real as well, with paths anonymised to /home/user.
+% Each imperative/declarative pair in section 1 was compiled and run on
+% .NET 10 against the same data, and both sides return the same result.
+% Terminal output is real, with paths anonymised to /home/user.
 %
 % House rules: ../CLAUDE.md and ../../../CLAUDE.md. Theme: ../../../../theme/.
 
@@ -173,259 +171,255 @@
   медленнее>>. Машинный код тот же, а индекс в одном месте ушёл за границу.
   Полдня ради оптимизации, которой не было.}
 
-\begin{frame}{Игра: что быстрее?}
+\begin{frame}[fragile]{Что делает этот код?}
   \slidetop
-  \claim{Интуицию проверяем \hi{измерением}, а не спором.}
-
-  \begin{center}
-    \begin{tikzpicture}[font=\small,
-      box/.style={draw=hairline,line width=0.8pt,fill=codebg,
-                  minimum height=1.05cm,minimum width=3.0cm,align=center,
-                  inner sep=0.35em},
-      ar/.style={-{Straight Barb[length=1.8mm]},ink,line width=0.7pt}]
-      \node[box] (code) {код\\{\color{muted}\scriptsize без чисел}};
-      \node[box,right=1.0cm of code] (vote) {голосование};
-      \node[box,right=1.0cm of vote,draw=accent] (table)
-        {таблица\\{\color{muted}\scriptsize BenchmarkDotNet, Release}};
-      \draw[ar] (code) -- (vote);
-      \draw[ar] (vote) -- (table);
-    \end{tikzpicture}
-  \end{center}
-
-  \slidegap
-  \eyebrow{три раунда}\par
-  \vspace{0.5em}
-  цикл или LINQ \quad$\cdot$\quad склейка строк \quad$\cdot$\quad
-  структура или класс
-
-  \slidegap
-  \aside{Отдельный процесс в Release, прогрев, много запусков, среднее и
-    разброс. Цифры сняты заранее на моей машине, на вашей будут другие ---
-    код всех бенчмарков лежит в репозитории курса.}
-\end{frame}
-\note{Подробно про BenchmarkDotNet -- в Л15; сегодня достаточно знать, что
-  он работает только в Release, помня про Debug из первой лекции. Смысл игры
-  не в цифрах. Методы помечены [Benchmark], один из них -- базовый,
-  [MemoryDiagnoser] добавляет колонку выделенной памяти.}
-
-\begin{frame}[fragile]{Раунд 1: цикл или LINQ?}
-  \slidetop
+  \begin{minipage}[t]{0.6\textwidth}
 \begin{lstlisting}[style=csharp,basicstyle=\ttfamily\scriptsize]
-using BenchmarkDotNet.Attributes;
-
-[MemoryDiagnoser]
-public class SumBench
-{
-    private readonly int[] _data = Enumerable.Range(0, 1_000).ToArray();
-
-    [Benchmark(Baseline = true)]
-    public int Loop()
-    {
-        var sum = 0;
-        foreach (var x in _data)
-            if (x % 2 == 0)
-                sum += x;
-        return sum;
+Customer[] buf = new Customer[customers.Length];
+int n = 0;
+for (int i = 0; i < customers.Length; i++) {
+    if (customers[i].IsActive && customers[i].Age >= 18) {
+        buf[n++] = customers[i];
     }
-
-    [Benchmark]
-    public int Linq() => _data.Where(x => x % 2 == 0).Sum();
 }
-\end{lstlisting}
-\end{frame}
-\note{Вопрос в зал -- заголовок слайда. Baseline -- относительно него
-  считается отношение; [MemoryDiagnoser] -- колонка выделенной памяти. Массив из тысячи чисел, сложить чётные. LINQ разберём в Л5, пока
-  просто прочитать: отфильтровать чётные, сложить. Кто за цикл, кто за LINQ,
-  кто за <<одинаково>>?}
-
-\begin{frame}[fragile]{Раунд 1: результат}
-  \slidetop
-  \claim{Цикл быстрее --- зал угадал. Интереснее \hi{единицы измерения}.}
-\begin{lstlisting}[style=term]
-| Method | Mean       | Error    | StdDev   | Ratio | Gen0   | Allocated |
-|------- |-----------:|---------:|---------:|------:|-------:|----------:|
-| Loop   |   247.0 ns |  0.83 ns |  0.77 ns |  1.00 |      - |         - |
-| Linq   | 1,153.3 ns | 22.75 ns | 52.74 ns |  4.67 | 0.0057 |      48 B |
-\end{lstlisting}
-  \slidegap
-  \aside{У LINQ \lo{48 байт на вызов} --- объект, который перебирает массив:
-    то самое давление на сборщик. Но обе версии --- \hi{наносекунды} на
-    тысячу элементов, а один запрос к базе стоит в тысячи раз дороже.
-    Разница реальна и почти никогда не важна.}
-\end{frame}
-\note{Это и есть <<в разумных пределах>>. Делегат для условия без захвата
-  компилятор создаёт один раз и кэширует -- поэтому аллокация одна. В Л5
-  покажу, что для многих операций над массивами LINQ в новых версиях
-  догоняет цикл: библиотека проверяет, не массив ли это, и идёт коротким
-  путём.}
-
-\begin{frame}[fragile]{Раунд 2: склеить три строки}
-  \slidetop
-\begin{lstlisting}[style=csharp,basicstyle=\ttfamily\scriptsize]
-string Concat()  => _a + _b + _c;
-
-string Builder() => new StringBuilder().Append(_a).Append(_b).Append(_c).ToString();
-
-string Join()    => string.Join("", _a, _b, _c);
-\end{lstlisting}
-  \slidegap
-  \eyebrow{вопрос в зал}\par
-  \vspace{0.6em}
-  {\Large\dncnohyph Какой из трёх быстрее?\par}
-\end{frame}
-\note{Плюс, StringBuilder с тремя Append, Join с пустым разделителем. Вас
-  учили, что плюс -- это плохо. Голосуем.}
-
-\begin{frame}[fragile]{Раунд 2: результат}
-  \slidetop
-  \claim{Большинство не угадало: для трёх строк \lo{StringBuilder}
-    проигрывает.}
-\begin{lstlisting}[style=term]
-| Method  | Mean      | Error     | StdDev    | Ratio | Gen0   | Allocated |
-|-------- |----------:|----------:|----------:|------:|-------:|----------:|
-| Concat  |  5.605 ns | 0.0059 ns | 0.0056 ns |  1.00 | 0.0057 |      48 B |
-| Builder | 14.439 ns | 0.0230 ns | 0.0216 ns |  2.58 | 0.0181 |     152 B |
-| Join    |  7.810 ns | 0.0137 ns | 0.0114 ns |  1.39 | 0.0057 |      48 B |
-\end{lstlisting}
-  \slidegap
-  \aside{Три плюса компилятор превращает в один вызов \texttt{string.Concat}:
-    посчитать общую длину и собрать \hi{одну строку одним движением} ---
-    48 байт. StringBuilder --- отдельный объект с буфером, который потом
-    ещё превращают в строку: \lo{152 байта}.}
-\end{frame}
-\note{Интуиция <<StringBuilder быстрее>> -- не ошибка, она из другого
-  контекста. Вот он, на следующем слайде.}
-
-\begin{frame}[fragile]{Тысяча строк в цикле}
-  \slidetop
-\begin{lstlisting}[style=csharp,basicstyle=\ttfamily\scriptsize]
-for (var i = 0; i < 1_000; i++) s += "item;";          // PlusEquals
-for (var i = 0; i < 1_000; i++) sb.Append("item;");    // Builder
-\end{lstlisting}
-  \vspace{0.5em}
-\begin{lstlisting}[style=term]
-| Method     | Mean       | Error     | StdDev    | Ratio | Gen0     | Gen1    | Allocated  |
-|----------- |-----------:|----------:|----------:|------:|---------:|--------:|-----------:|
-| Builder    |   1.796 us | 0.0033 us | 0.0031 us |  1.00 |   3.2406 |  0.2022 |   26.49 KB |
-| PlusEquals | 166.925 us | 0.5507 us | 0.5151 us | 92.94 | 601.0742 | 14.6484 | 4912.08 KB |
-\end{lstlisting}
-  \slidegap
-  \aside{Теперь плюс проигрывает \lo{в 93 раза} и выделяет \lo{почти пять
-    мегабайт}: строка неизменяема, и каждая итерация копирует всё
-    накопленное. StringBuilder дописывает в один буфер. Правило верно для
-    цикла и неверно для трёх строк --- \hi{контекст даёт измерение}.}
-\end{frame}
-\note{Длинные копии -- это и куча больших объектов из прошлой лекции. И
-  чтобы не бояться самого читаемого варианта: интерполяция со знаком
-  доллара в современном компиляторе разворачивается в код, который считает
-  длину и пишет в буфер, без промежуточных строк и без упаковки чисел.
-  Читаемость и производительность не обязаны спорить.}
-
-\begin{frame}[fragile]{Раунд 3: структура или класс?}
-  \slidetop
-  \begin{minipage}[t]{0.58\textwidth}
-\begin{lstlisting}[style=csharp,basicstyle=\ttfamily\scriptsize]
-public struct PointS { public int X; public int Y; }
-
-public class PointC { public int X; public int Y; }
-
-var points = new PointS[1_000_000];   // or PointC[]
-for (var i = 0; i < points.Length; i++)
-    points[i] = new PointS { X = i, Y = i };
-
-long sum = 0;
-foreach (var p in points)
-    sum += p.X + p.Y;
+for (int i = 0; i < n - 1; i++) {
+    for (int j = 0; j < n - 1 - i; j++) {
+        if (buf[j].Name.CompareTo(buf[j + 1].Name) > 0) {
+            Customer t = buf[j];
+            buf[j] = buf[j + 1];
+            buf[j + 1] = t;
+        }
+    }
+}
+string[] emails = new string[Math.Min(n, 10)];
+for (int i = 0; i < emails.Length; i++) {
+    emails[i] = buf[i].Email;
+}
 \end{lstlisting}
   \end{minipage}\hfill
   \begin{minipage}[t]{0.36\textwidth}
     \vspace{0.6em}
     \eyebrow{вопрос в зал}\par
     \vspace{0.6em}
-    {\Large\dncnohyph Миллион точек в массив и сумма координат.\par}
+    {\Large\dncnohyph У вас десять секунд.\par}
     \vspace{1.4em}
-    \aside{Код одинаковый, отличается одно слово в объявлении.}
+    \aside{Это C\#. Компилируется, работает и делает ровно то, что
+      задумано.}
   \end{minipage}
 \end{frame}
-\note{Кто за структуру? Много: <<структуры на стеке, они быстрые>>. Кто за
-  класс?}
+\note{Бюджет раздела сравнений -- около двенадцати минут. Молча дать
+  прочитать. Спросить: что делает? Обычно отвечают по частям: <<фильтрует>>,
+  <<что-то сортирует>>, <<берёт десять>>. Цель -- насмотренность: увидеть
+  один результат, записанный двумя способами, и почувствовать разницу в
+  цене чтения.}
 
-\begin{frame}[fragile]{Раунд 3: результат}
+\begin{frame}[fragile]{Фильтрация, сортировка, проекция}
   \slidetop
-  \claim{Структура выигрывает \hi{в 35 раз} --- здесь зал прав.}
-\begin{lstlisting}[style=term]
-| Method | Mean        | Error     | StdDev    | Ratio | Gen0      | Allocated |
-|------- |------------:|----------:|----------:|------:|----------:|----------:|
-| Struct |    749.6 us |   7.63 us |   7.13 us |  1.00 |  500.0000 |   7.63 MB |
-| Class  | 26,658.0 us | 523.91 us | 751.37 us | 35.57 | 3500.0000 |  30.52 MB |
+  \begin{minipage}[t]{0.54\textwidth}
+    \colhead{alt}{как в C}\par\vspace{0.5em}
+\begin{lstlisting}[style=csharp,basicstyle=\ttfamily\fontsize{6.2}{7.0}\selectfont]
+Customer[] buf = new Customer[customers.Length];
+int n = 0;
+for (int i = 0; i < customers.Length; i++) {
+    if (customers[i].IsActive && customers[i].Age >= 18) {
+        buf[n++] = customers[i];
+    }
+}
+for (int i = 0; i < n - 1; i++) {
+    for (int j = 0; j < n - 1 - i; j++) {
+        if (buf[j].Name.CompareTo(buf[j + 1].Name) > 0) {
+            Customer t = buf[j];
+            buf[j] = buf[j + 1];
+            buf[j + 1] = t;
+        }
+    }
+}
+string[] emails = new string[Math.Min(n, 10)];
+for (int i = 0; i < emails.Length; i++) {
+    emails[i] = buf[i].Email;
+}
 \end{lstlisting}
-  \slidegap
-  \aside{Массив структур --- \hi{один объект}, точки лежат в нём подряд.
-    Массив классов --- ещё \lo{миллион объектов}, каждый со своим
-    заголовком: вчетверо больше памяти, и сборщику нужно обойти их все.}
-\end{frame}
-\note{Помните автобус? Здесь миллион пассажиров вместо одного. Колонки
-  Gen1 и Gen2 на слайде опущены, чтобы таблица помещалась: у классов сборки
-  доходят до второго поколения. А теперь ломаем.}
-
-\begin{frame}[fragile]{Большая структура по цепочке вызовов}
-  \slidetop
-  \claim{Десять полей копируются \lo{при каждой передаче}.}
+  \end{minipage}\hfill
+  \begin{minipage}[t]{0.43\textwidth}
+    \colhead{accent}{как в C\#}\par\vspace{0.5em}
 \begin{lstlisting}[style=csharp,basicstyle=\ttfamily\scriptsize]
-public struct BigS { public long A, B, C, D, E, F, G, H, I, J; }   // 80 bytes
-
-static long S1(BigS s) => S2(s) + s.B;   // three levels, not inlined
+var emails = customers
+    .Where(c => c.IsActive && c.Age >= 18)
+    .OrderBy(c => c.Name)
+    .Take(10)
+    .Select(c => c.Email)
+    .ToArray();
 \end{lstlisting}
-  \vspace{0.5em}
-\begin{lstlisting}[style=term]
-| Method | Mean     | Error     | StdDev    | Ratio | Gen0   | Allocated |
-|------- |---------:|----------:|----------:|------:|-------:|----------:|
-| Class  | 1.944 ns | 0.0084 ns | 0.0074 ns |  1.00 |      - |         - |
-| Struct | 4.410 ns | 0.0024 ns | 0.0023 ns |  2.27 |      - |         - |
-| Boxed  | 5.818 ns | 0.0066 ns | 0.0062 ns |  2.99 | 0.0115 |      96 B |
-\end{lstlisting}
-  \slidegap
-  \aside{Класс передаётся ссылкой, восемь байт. \texttt{Boxed} --- та же
-    структура, положенная в \texttt{object}: \lo{худшее из двух миров},
-    и копирование, и 96 байт в куче. Ответ на <<структура или класс>> ---
-    \hi{<<зависит>>}.}
+    \vspace{0.9em}
+    \aside{Почты первых десяти активных взрослых клиентов по имени. Справа это \hi{написано словами}: отфильтровать, упорядочить, взять, выбрать.}\par
+    \vspace{0.7em}
+    \aside{Слева \lo{три счётчика} и четыре границы цикла --- в каждой можно ошибиться на единицу.}\par
+  \end{minipage}
 \end{frame}
-\note{Упаковка -- boxing, вернёмся к ней через двадцать минут. Честная
-  деталь: если значение после передачи больше не нужно, JIT в .NET 10
-  копию не делает, и та же структура обгоняет класс -- ещё один довод
-  мерить, а не угадывать. Здесь каждый уровень читает поле после вызова,
-  как бывает в настоящем коде.}
+\note{Левый код не плохой, он честный и рабочий -- так писали на C, и так
+  пишут те, кто пришёл из C. Но чтобы понять его, надо исполнить его в
+  голове. Правый читается сверху вниз как постановка задачи. Изменить
+  задачу: ещё одно условие -- ещё один Where, другой порядок -- другой
+  OrderBy. Слева то же изменение -- правка в трёх местах. LINQ подробно --
+  Л5; сейчас достаточно читать названия методов.}
 
-\begin{frame}[fragile]{Как читать таблицу}
+
+\begin{frame}[fragile]{Группировка и агрегация}
   \slidetop
-\begin{lstlisting}[style=term]
-| Method | Mean       | Error    | StdDev   | Ratio | Gen0   | Allocated |
-|------- |-----------:|---------:|---------:|------:|-------:|----------:|
-| Loop   |   247.0 ns |  0.83 ns |  0.77 ns |  1.00 |      - |         - |
-| Linq   | 1,153.3 ns | 22.75 ns | 52.74 ns |  4.67 | 0.0057 |      48 B |
+  \begin{minipage}[t]{0.555\textwidth}
+    \colhead{alt}{как в C}\par\vspace{0.5em}
+\begin{lstlisting}[style=csharp,basicstyle=\ttfamily\fontsize{6.6}{7.6}\selectfont]
+var totals = new Dictionary<int, decimal>();
+foreach (var o in orders) {
+    if (o.IsCancelled) {
+        continue;
+    }
+    if (totals.ContainsKey(o.CustomerId)) {
+        totals[o.CustomerId] += o.Amount;
+    } else {
+        totals[o.CustomerId] = o.Amount;
+    }
+}
+var top = new List<KeyValuePair<int, decimal>>(totals);
+top.Sort((a, b) => b.Value.CompareTo(a.Value));
+if (top.Count > 3) {
+    top.RemoveRange(3, top.Count - 3);
+}
 \end{lstlisting}
-  \slidegap
-  \begin{tabular}{@{}p{2.6cm}p{10.4cm}@{}}
-    \textbf{\hi{Mean}}         & среднее время одного вызова --- главная
-                                 колонка \\[0.35em]
-    \textbf{Error, StdDev}     & погрешность и разброс: разница меньше
-                                 ошибки --- \lo{разницы нет} \\[0.35em]
-    \textbf{\hi{Ratio}}        & во сколько раз от \texttt{Baseline}; от
-                                 машины не зависит \\[0.35em]
-    \textbf{\hi{Allocated}}    & байт на вызов: ноль --- сборщик в этом коде
-                                 не участвует \\[0.35em]
-    \textbf{Gen0}              & сборок нулевого поколения на тысячу
-                                 вызовов \\
+  \end{minipage}\hfill
+  \begin{minipage}[t]{0.42\textwidth}
+    \colhead{accent}{как в C\#}\par\vspace{0.5em}
+\begin{lstlisting}[style=csharp,basicstyle=\ttfamily\scriptsize]
+var top = orders
+    .Where(o => !o.IsCancelled)
+    .GroupBy(o => o.CustomerId)
+    .Select(g => (Customer: g.Key,
+        Total: g.Sum(o => o.Amount)))
+    .OrderByDescending(x => x.Total)
+    .Take(3)
+    .ToList();
+\end{lstlisting}
+    \vspace{0.9em}
+    \aside{Три клиента с самой большой выручкой без отменённых заказов.}\par
+    \vspace{0.7em}
+    \aside{Справа у результата \hi{имена полей}, слева --- \lo{Key и Value}, и читателю остаётся помнить, что из них что.}\par
+  \end{minipage}
+\end{frame}
+\note{Слева вспомогательный словарь, ветка <<есть ключ / нет ключа>>,
+  копирование в список, сортировка с ручным компаратором и обрезка. Каждая
+  из этих строк -- механика, а не задача. Справа каждая строка -- шаг
+  задачи. Кортеж с именами полей -- ещё один способ рассказать компилятору
+  и читателю больше, об этом весь третий раздел.}
+
+
+\begin{frame}[fragile]{Поиск: флаг и break}
+  \slidetop
+  \begin{minipage}[t]{0.555\textwidth}
+    \colhead{alt}{как в C}\par\vspace{0.5em}
+\begin{lstlisting}[style=csharp,basicstyle=\ttfamily\fontsize{6.6}{7.6}\selectfont]
+bool hasOverdue = false;
+for (int i = 0; i < invoices.Length; i++) {
+    if (invoices[i].IsPaid) {
+        continue;
+    }
+    if (invoices[i].DueDate < today) {
+        hasOverdue = true;
+        break;
+    }
+}
+
+Invoice? largest = null;
+for (int i = 0; i < invoices.Length; i++) {
+    if (largest == null ||
+        invoices[i].Amount > largest.Amount) {
+        largest = invoices[i];
+    }
+}
+\end{lstlisting}
+  \end{minipage}\hfill
+  \begin{minipage}[t]{0.42\textwidth}
+    \colhead{accent}{как в C\#}\par\vspace{0.5em}
+\begin{lstlisting}[style=csharp,basicstyle=\ttfamily\scriptsize]
+var hasOverdue = invoices.Any(x =>
+    x.DueDate < today && !x.IsPaid);
+
+var largest = invoices
+    .MaxBy(x => x.Amount);
+\end{lstlisting}
+    \vspace{0.9em}
+    \aside{Есть ли просроченный неоплаченный счёт, и какой самый крупный. Название метода --- \hi{это и есть ответ} на вопрос <<что делает код>>.}\par
+    \vspace{0.7em}
+    \aside{Флаг, \texttt{break} и \texttt{null} как <<ещё не нашли>> --- \lo{три соглашения}, которые читатель восстанавливает сам.}\par
+  \end{minipage}
+\end{frame}
+\note{Any, All, First, Count, Min, Max, MinBy, MaxBy -- у каждого типового
+  цикла поиска есть имя. Any, как и цикл с break, останавливается на первом
+  совпадении: ничего лишнего он не перебирает.}
+
+
+\begin{frame}[fragile]{Строки}
+  \slidetop
+  \begin{minipage}[t]{0.555\textwidth}
+    \colhead{alt}{как в C}\par\vspace{0.5em}
+\begin{lstlisting}[style=csharp,basicstyle=\ttfamily\fontsize{6.6}{7.6}\selectfont]
+var sb = new StringBuilder();
+for (int i = 0; i < names.Length; i++) {
+    if (i > 0) {
+        sb.Append(", ");
+    }
+    sb.Append(names[i]);
+}
+string line = "Total: " + count.ToString()
+    + " (" + sb.ToString() + ")";
+\end{lstlisting}
+  \end{minipage}\hfill
+  \begin{minipage}[t]{0.42\textwidth}
+    \colhead{accent}{как в C\#}\par\vspace{0.5em}
+\begin{lstlisting}[style=csharp,basicstyle=\ttfamily\scriptsize]
+var list = string.Join(", ", names);
+var line = $"Total: {count} ({list})";
+\end{lstlisting}
+    \vspace{0.9em}
+    \aside{Одна и та же строка \texttt{Total: 3 (Ann, Bob, Eve)}.}\par
+    \vspace{0.7em}
+    \aside{Справа видно, \hi{как она будет выглядеть}. Слева её надо
+      собрать в голове, помня, что запятая ставится \lo{перед всеми, кроме
+      первого}.}\par
+  \end{minipage}
+\end{frame}
+\note{Интерполяция со знаком доллара в современном компиляторе
+  разворачивается в код, который считает длину и пишет в буфер, без
+  промежуточных строк и без упаковки чисел. Самый читаемый вариант здесь
+  ещё и один из самых быстрых: язык сделал так, чтобы правильное было
+  удобным.}
+
+\begin{frame}{Что изменилось}
+  \slidetop
+  \claim{Декларативный код говорит, \hi{что} нужно получить, а не \lo{как}
+    двигать индексы.}
+
+  \begin{tabular}{@{}p{4.3cm}p{8.9cm}@{}}
+    \textbf{\hi{шаг --- это слово}} & \texttt{Where}, \texttt{OrderBy},
+      \texttt{Take}, \texttt{Any}: читается как постановка задачи \\[0.5em]
+    \textbf{\hi{нет механики}} & ни индексов, ни флагов, ни временных
+      массивов --- негде ошибиться на единицу \\[0.5em]
+    \textbf{\hi{сверху вниз}} & каждая строка --- один шаг, порядок строк
+      --- порядок шагов \\[0.5em]
+    \textbf{\hi{дёшево менять}} & новое условие --- ещё один \texttt{Where},
+      а не правка в трёх местах \\
   \end{tabular}
 
   \slidegap
-  \aside{Инструмент не думает за вас, но он \hi{честный}.}
+  \aside{Цена справа --- объект-перечислитель и вызов делегата на элемент:
+    \lo{наносекунды}. Один запрос к базе --- \hi{миллисекунды}. Слева
+    <<быстрее>> на величину, которую сервис не заметит, а читать его будут
+    годами.}
 \end{frame}
-\note{Итог игры: зал угадал полтора раза из трёх. Интуиция про
-  производительность врёт у всех, включая меня: я перепроверял результаты
-  на новой версии рантайма. Либо есть таблица из BenchmarkDotNet, снятая в
-  Release, либо разговора о производительности нет. В Л15 вы сами напишете
-  такой бенчмарк.}
+\note{Это и есть насмотренность: когда видишь цикл с флагом, в голове
+  всплывает Any; когда видишь словарь с ContainsKey и суммой -- GroupBy.
+  Декларативная запись -- не модная, а дешёвая: дешевле прочитать, дешевле
+  изменить, дешевле найти ошибку. Для многих операций над массивами LINQ в
+  новых версиях ещё и идёт коротким путём -- проверяет, не массив ли это.}
 
 \begin{frame}{C\# в трёх словах}
   \slidetop
@@ -463,17 +457,17 @@ static long S1(BigS s) => S2(s) + s.B;   // three levels, not inlined
   вместе с платформой, поэтому код десятилетней давности заметно тяжелее
   сегодняшнего -- помнить, читая старые примеры.}
 
-\begin{frame}{Где производительность --- ваша забота}
+\begin{frame}{Когда производительность всё же важна}
   \slidetop
-  \claim{Правило одно: \hi{сначала измерить}, потом оптимизировать.}
+  \claim{Редко. Но на \hi{очень больших объёмах} --- по-настоящему.}
 
-  \begin{tabular}{@{}p{4.6cm}p{8.4cm}@{}}
-    \textbf{горячий путь} & код на каждый запрос, тысячи раз в секунду:
-      разбор, сериализация, маршрутизация \\[0.6em]
-    \textbf{большие объёмы} & файл на гигабайт, отчёт по миллионам строк:
-      алгоритм важнее всего \\[0.6em]
-    \textbf{аллокации в цикле на запрос} & запросы $\times$ итерации ---
-      сборщик ответит паузами \\
+  \begin{tabular}{@{}p{4.3cm}p{8.9cm}@{}}
+    \textbf{\hi{найти место}} & измерить: горячих мест одно-два, а не весь
+      код; интуиция здесь врёт у всех \\[0.6em]
+    \textbf{\hi{оптимизировать его}} & только его: цикл, массив,
+      \texttt{Span} --- остальной код остаётся читаемым \\[0.6em]
+    \textbf{\lo{вынести наружу}} & если и этого мало: C++/CLI или нативная
+      библиотека через P/Invoke \\
   \end{tabular}
 
   \slidegap
@@ -482,11 +476,13 @@ static long S1(BigS s) => S2(s) + s.B;   // three levels, not inlined
   {\large Чаще всего тормозит \hi{ожидание} --- база, сеть, диск, --- а
    не C\#.}
 \end{frame}
-\note{Запрос к базе -- миллисекунды, оптимизация цикла -- наносекунды.
-  Как правильно ждать -- Л6; как не делать лишних запросов -- Л13 и Л14.
-  Где проблема, скажут счётчики и трасса из прошлой лекции; помогло ли
-  решение -- BenchmarkDotNet. Без измерения оптимизация -- гадание, и
-  гадаете вы, самый дорогой ресурс.}
+\note{Горячий путь -- код на каждый запрос, тысячи раз в секунду; большие
+  объёмы -- файл на гигабайт, отчёт по миллионам строк. Там лишняя
+  аллокация умножается на миллионы. Счётчики и трасса из прошлой лекции
+  покажут где; BenchmarkDotNet в Л15 -- помогло ли. C++/CLI -- только
+  Windows; кроссплатформенно -- нативная библиотека и P/Invoke. Запрос к
+  базе -- миллисекунды: как правильно ждать -- Л6; как не делать лишних
+  запросов -- Л13 и Л14.}
 
 \begin{frame}[plain]
   \keyline{Читаемость дороже тактов, потому что дороже вы.\\ Мерьте,
@@ -596,7 +592,7 @@ usage: hello <name>
 \note{Бюджет: 25 минут. Перепутали два строковых параметра -- компилятор
   молчит. Два разных типа -- ругается. Копейки вместо рублей -- два числа,
   молчит; тип для денег -- ругается. Рассказывайте компилятору больше. По
-  дороге закрываем два долга из игры: структуры и boxing.}
+  дороге разберём, где кусаются структуры и что такое boxing.}
 
 \begin{frame}[fragile]{Три ловушки структур}
   \slidetop
@@ -679,7 +675,7 @@ struct Point
 
   \vspace{1.0em}
   \aside{Прячется в API на \texttt{object}, в старых коллекциях, в вызове
-    через интерфейс у структуры. Видно только в \texttt{Allocated}.}
+    через интерфейс у структуры. Видно только в \hi{счётчике аллокаций}.}
 \end{frame}
 \note{Вызов метода прямо на числе, например ToString, не упаковывает.
   Упаковка -- в момент, когда значение кладут в переменную типа object или
