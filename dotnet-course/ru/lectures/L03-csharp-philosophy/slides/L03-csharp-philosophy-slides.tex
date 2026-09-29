@@ -29,11 +29,6 @@
 \author{Дмитрий Курочкин}
 \date{}
 
-% Listings cannot go through a macro argument, so the §2 opener sets its two
-% snippets into boxes first and hands \sectionopener the boxes.
-\newsavebox{\mainclassic}
-\newsavebox{\maintoplevel}
-
 \begin{document}
 
 % ------------------------------------------------------------------ title --
@@ -493,69 +488,29 @@ var line = $"Total: {count} ({list})";
 % ================================================ 2. PROGRAM START =========
 \section{2. Как начинается программа}
 
-\begin{frame}[plain,fragile]
-\begin{lrbox}{\mainclassic}
-\begin{minipage}{6.9cm}
-\begin{lstlisting}[style=csharp,basicstyle=\ttfamily\scriptsize]
-class Program
-{
-    static int Main(string[] args)
-    {
-        Console.WriteLine("Hello, World!");
-        return 0;
-    }
-}
-\end{lstlisting}
-\end{minipage}
-\end{lrbox}
-\begin{lrbox}{\maintoplevel}
-\begin{minipage}{5.3cm}
-\begin{lstlisting}[style=csharp,basicstyle=\ttfamily\scriptsize]
-Console.WriteLine("Hello, World!");
-return 0;
-\end{lstlisting}
-\end{minipage}
-\end{lrbox}
-  \sectionopener{2}{Как начинается программа}{%
-    \normalcolor
-    \begin{minipage}[t]{7.1cm}
-      \colhead{accent}{классический Main}\par\vspace{0.5em}
-      \usebox{\mainclassic}
-    \end{minipage}\hfill
-    \begin{minipage}[t]{5.5cm}
-      \colhead{alt}{инструкции верхнего уровня}\par\vspace{0.5em}
-      \usebox{\maintoplevel}
-    \end{minipage}\par
-    \vspace{0.9em}
-    {\color{muted}Справа --- тот же Main, только написанный компилятором за
-      вас.}}
+\begin{frame}[plain]
+  \sectionopener{2}{Как начинается программа}{Метод \texttt{Main} и
+    инструкции верхнего уровня мы уже видели. Вспомним, \hi{что приходит
+    на вход} и \hi{что уходит на выход}.}
 \end{frame}
-\note{Бюджет: 5 минут. Долг из Л1: куда делся класс с Main. Декомпилятор в
-  прошлой лекции его показал. Правила: такой файл в проекте один, инструкции
-  раньше объявлений типов; await в файле -- и сгенерированный Main станет
-  асинхронным сам. Шаблону консольного приложения можно попросить
-  классический вид ключом.}
+\note{Бюджет: 5 минут. Main и инструкции верхнего уровня разбирали в Л1 и
+  в декомпиляторе в Л2 -- не повторяем. Остаётся контракт программы с
+  внешним миром: аргументы на входе, код завершения на выходе.}
 
 \begin{frame}[fragile]{Аргументы и код завершения}
   \slidetop
   \begin{minipage}[t]{0.5\textwidth}
 \begin{lstlisting}[style=csharp,basicstyle=\ttfamily\scriptsize]
-if (args.Length == 0)
-{
-    Console.Error.WriteLine("usage: hello <name>");
-    return 2;
-}
-
-Console.WriteLine($"Hello, {args[0]}!");
-return 0;
+var name = args.Length > 0 ? args[0] : "World";
+Console.WriteLine($"Hello, {name}!");
 \end{lstlisting}
   \vspace{0.6em}
 \begin{lstlisting}[style=term]
 $ dotnet run -- Ann
 Hello, Ann!
 $ dotnet run; echo $?
-usage: hello <name>
-2
+Hello, World!
+0
 \end{lstlisting}
   \end{minipage}\hfill
   \begin{minipage}[t]{0.44\textwidth}
@@ -563,23 +518,22 @@ usage: hello <name>
     \begin{cbul}{accent}
       \item \texttt{\hi{args}} приходит из командной строки после
             \texttt{-{}-}
-      \item \texttt{\hi{return}} --- код завершения: ноль успех, остальное
-            ошибка
-      \item \texttt{\hi{Console.Error}} --- поток ошибок, для человека
+      \item код завершения --- \hi{ноль}, если программа дошла до конца,
+            и не ноль, если вылетело исключение
+      \item явный \texttt{\lo{return 2;}} возможен, но нужен \lo{редко}
     \end{cbul}
     \vspace{1.0em}
     \aside{Код завершения читает не пользователь, а тот, кто запустил:
-      скрипт, планировщик, оболочка. Утилита, которая падает и
-      \lo{возвращает ноль}, ломает любой скрипт вокруг себя.}
+      скрипт, планировщик, оболочка.}
   \end{minipage}
 \end{frame}
-\note{Ночные задачи, которые месяцами не работали при зелёном мониторинге,
-  -- ровно отсюда. Непойманное исключение само завершит процесс с
-  трассировкой и ненулевым кодом -- правильное поведение по умолчанию; не
-  оборачивайте всё в try с <<что-то пошло не так>>. Где ловить исключения
-  -- Л4. Обычный вывод -- результат для конвейера; в сервисе будут логи,
-  Л12. Сервис в Л8 начинается так же: файл верхнего уровня, только до
-  первого return строк тридцать.}
+\note{Явный код нужен утилите, которой есть что сказать скрипту кроме
+  <<успех или падение>>: например, 2 -- неверные аргументы. В сервисе и в
+  большинстве утилит его нет. Непойманное исключение само завершит процесс
+  с трассировкой и ненулевым кодом -- правильное поведение по умолчанию; не
+  оборачивайте всё в try с <<что-то пошло не так>>: скроете трассировку и
+  рискуете вернуть ноль. Где ловить исключения -- Л4. Сообщения об ошибках --
+  в Console.Error, результат -- в обычный вывод.}
 
 % ================================================== 3. TYPE SYSTEM =========
 \section{3. Система типов}
