@@ -750,45 +750,94 @@ Hello, World!
 
 \begin{frame}[plain]
   \sectionopener{5}{Generics}{%
-    Максимум для чисел, строк и дат --- три решения:\par
+    Список чисел --- два способа его хранить:\par
     \vspace{0.7em}
     \normalcolor\small
     \begin{tabular}{@{}p{4.2cm}p{7.6cm}@{}}
-      \lo{три метода}                 & \texttt{Max(int[])},
-        \texttt{Max(string[])}, \texttt{Max(DateTime[])} \\[0.4em]
-      \lo{один через \texttt{object}} & \texttt{object Max(object[])} \\[0.4em]
-      \hi{один с параметром типа}     & \texttt{T Max<T>(IReadOnlyList<T>)} \\
+      \lo{через \texttt{object}} & \texttt{ArrayList} --- хранит что
+        угодно \\[0.4em]
+      \hi{с параметром типа}     & \texttt{List<int>} --- хранит только
+        \texttt{int} \\
     \end{tabular}}
 \end{frame}
-\note{Бюджет: 12 минут. Первое -- дублирование, четвёртый тип -- четвёртый
-  метод. Второе -- работает для всего, но потеряли типы, приводим и
-  надеемся, и каждое число упаковано -- что это значит, на следующем
-  слайде. Медленно и небезопасно одновременно.}
+\note{Бюджет: 12 минут. ArrayList -- из первой версии .NET, когда
+  параметров типа ещё не было. List<T> пришёл во второй. Первый вы
+  встретите только в старом коде, и сегодня станет понятно, почему.}
 
-\begin{frame}{Boxing: невидимая аллокация}
+\begin{frame}[fragile]{ArrayList и List<int>}
   \slidetop
-  \claim{Значение в \texttt{object} --- это \lo{аллокация без слова
-    \texttt{new}}.}
+  \begin{minipage}[t]{0.485\textwidth}
+\begin{lstlisting}[style=csharp,basicstyle=\ttfamily\scriptsize]
+var list = new ArrayList();
+list.Add(42);            // boxing
+list.Add("oops");        // compiles
+int x = (int)list[0];    // unboxing
+int y = (int)list[1];    // fails at run time
+\end{lstlisting}
+  \end{minipage}\hfill
+  \begin{minipage}[t]{0.485\textwidth}
+\begin{lstlisting}[style=csharp,basicstyle=\ttfamily\scriptsize]
+var list = new List<int>();
+list.Add(42);            // no boxing
+// list.Add("oops");     // CS1503
+int x = list[0];         // no cast
+\end{lstlisting}
+  \end{minipage}
+
+  \slidegap
+  \versus{через object}{%
+    \begin{cbul}{alt}
+      \item положить можно что угодно
+      \item достать --- только с приведением
+      \item ошибка типа --- \lo{при запуске}
+      \item каждое число --- \lo{boxing}
+    \end{cbul}}{с параметром типа}{%
+    \begin{cbul}{accent}
+      \item положить можно только \texttt{int}
+      \item достаётся сразу \texttt{int}
+      \item ошибка типа --- \hi{при компиляции}
+      \item числа лежат \hi{как числа}
+    \end{cbul}}
+\end{frame}
+\note{Слева компилятор молчит: для него это список object, и строка
+  такой же object, как число. Ошибка всплывёт при запуске, в том месте,
+  где достают, а не там, где положили. Справа ошибка на строке Add, до
+  запуска. Последний пункт -- про производительность, следующий слайд.}
+
+\begin{frame}{Boxing: цена \texttt{object}}
+  \slidetop
+  \claim{Число в \texttt{object} --- это \lo{отдельный объект в куче},
+    созданный без слова \texttt{new}.}
 
   \begin{center}
     \begin{tikzpicture}[font=\small,
-      box/.style={draw=hairline,line width=0.8pt,fill=codebg,
-                  minimum height=0.75cm,align=center,inner sep=0.3em},
-      ar/.style={-{Straight Barb[length=1.8mm]},line width=0.7pt}]
-      \node[muted,font=\scriptsize] at (0,1.05) {КАДР СТЕКА};
-      \node[box,minimum width=2.8cm] (n) at (0,0.45) {\texttt{int n = 42}};
-      \node[box,minimum width=2.8cm] (o) at (0,-0.4) {\texttt{object o}};
-      \node[muted,font=\scriptsize] at (7.2,1.05) {КУЧА};
-      \node[box,minimum width=3.4cm,draw=alt] (b) at (7.2,0.02)
-        {заголовок $\mid$ \texttt{42}};
-      \draw[ar,alt] (n.east) -- node[above,font=\scriptsize\bfseries,
-        text=alt,sloped]{box: копия} (b.west);
-      \draw[ar,ink] (o.east) -- node[below,font=\scriptsize,text=muted,
-        sloped]{ссылка} (b.west);
+      cell/.style={draw=hairline,line width=0.8pt,fill=codebg,
+                   minimum width=0.85cm,minimum height=0.6cm,inner sep=0pt},
+      obj/.style={draw=alt,line width=0.8pt,fill=paper,font=\scriptsize,
+                  minimum width=0.85cm,minimum height=0.55cm,inner sep=0pt},
+      ar/.style={-{Straight Barb[length=1.5mm]},alt,line width=0.6pt}]
+      \node[anchor=west,font=\scriptsize\bfseries,text=alt] at (-0.45,0.65)
+        {ArrayList};
+      \foreach \i in {0,...,3} {
+        \node[cell] (a\i) at (\i*0.85,0) {\textbullet};
+      }
+      \node[obj] (o0) at (-0.3,-1.2) {\texttt{42}};
+      \node[obj] (o1) at (1.1,-1.55) {\texttt{7}};
+      \node[obj] (o2) at (2.3,-1.1) {\texttt{13}};
+      \node[obj] (o3) at (3.5,-1.5)  {\texttt{5}};
+      \foreach \i in {0,...,3} { \draw[ar] (a\i.center) -- (o\i.north); }
+
+      \node[anchor=west,font=\scriptsize\bfseries,text=accent] at (7.55,0.65)
+        {List<int>};
+      \foreach \v [count=\i from 0] in {42,7,13,5} {
+        \node[cell,draw=accent] at (8+\i*0.85,0) {\texttt{\v}};
+      }
+      \node[muted,font=\scriptsize,anchor=north west,align=left] at (7.55,-0.5)
+        {один массив,\\ числа подряд};
     \end{tikzpicture}
   \end{center}
 
-  \slidegap
+  \rulegap
   \begin{tabular}{@{}p{3.6cm}p{9.4cm}@{}}
     \texttt{object o = n;}   & \lo{boxing}: объект в куче, копия числа,
                                ссылка на объект \\[0.3em]
@@ -796,17 +845,55 @@ Hello, World!
                                обратно \\
   \end{tabular}
 
-  \vspace{1.0em}
-  \aside{Прячется в API на \texttt{object}, в старых коллекциях, в вызове
-    через интерфейс у структуры. Видно только в \hi{счётчике аллокаций}.}
+  \vspace{0.5em}
+  \aside{Слева --- объект на каждый элемент для \lo{сборщика мусора}. Справа
+    --- \hi{один} на весь список.}
 \end{frame}
-\note{Вызов метода прямо на числе, например ToString, не упаковывает.
-  Упаковка -- в момент, когда значение кладут в переменную типа object или
-  интерфейса: смотреть на присваивания и параметры, а не на вызовы. int? --
-  это не упаковка, а маленькая структура из значения и флага; про
-  отсутствие значения -- следующая лекция. Лекарство -- параметр типа, следующий слайд.}
+\note{Ради этого generics и появились. Где ещё прячется boxing: API на
+  object, вызов через интерфейс у структуры, enum в object. Видно только в
+  счётчике аллокаций. Вызов метода прямо на числе, например ToString, не
+  упаковывает -- смотреть на присваивания и параметры. int? -- не boxing,
+  а маленькая структура из значения и флага.}
 
-\begin{frame}[fragile]{Один метод на все типы}
+\begin{frame}[fragile]{Как устроен List<T>}
+  \slidetop
+  \begin{minipage}[t]{0.61\textwidth}
+\begin{lstlisting}[style=csharp,basicstyle=\ttfamily\scriptsize]
+public class SimpleList<T>
+{
+    private T[] _items = new T[4];
+    private int _count;
+
+    public void Add(T item)
+    {
+        if (_count == _items.Length)
+            Array.Resize(ref _items, _items.Length * 2);
+        _items[_count++] = item;
+    }
+
+    public T this[int index] => _items[index];
+}
+\end{lstlisting}
+  \end{minipage}\hfill
+  \begin{minipage}[t]{0.36\textwidth}
+    \vspace{0.3em}
+    \begin{cbul}{accent}
+      \item \texttt{\hi{T}} --- параметр типа: <<какой-то тип, узнаем
+            при создании>>
+      \item \texttt{SimpleList<int>} --- внутри \texttt{int[]}, без boxing
+      \item \texttt{SimpleList<string>} --- внутри \texttt{string[]}
+    \end{cbul}
+    \vspace{1.0em}
+    \aside{Код списка написан \hi{один раз}, а работает для любого типа и
+      не теряет его.}
+  \end{minipage}
+\end{frame}
+\note{Упрощённо, но настоящий List<T> устроен так же: массив и счётчик,
+  массив растёт вдвое. Параметров может быть несколько -- ключ и значение
+  у Dictionary<TKey, TValue>. Все коллекции в Л5 обобщённые, и LINQ тоже:
+  каждый его метод обобщённый.}
+
+\begin{frame}[fragile]{Свой обобщённый метод}
   \slidetop
 \begin{lstlisting}[style=csharp,basicstyle=\ttfamily\scriptsize]
 int[] numbers = [3, 9, 4];
@@ -826,18 +913,16 @@ static T Max<T>(IReadOnlyList<T> items) where T : IComparable<T>
 }
 \end{lstlisting}
   \vspace{0.5em}
-  \aside{\texttt{\hi{T}} --- параметр типа, компилятор выводит его при
-    вызове. \texttt{\hi{where}} --- ограничение: без него \texttt{CompareTo}
-    не скомпилируется, а тип без сравнения \lo{не пройдёт на вызове}.}
+  \aside{\texttt{\hi{T}} компилятор выводит при вызове. \texttt{\hi{where}}
+    --- ограничение: без него \texttt{CompareTo} не скомпилируется, а тип без
+    сравнения \lo{не пройдёт на вызове}.}
 \end{frame}
 \note{Ограничения: интерфейс или базовый класс, class или struct, new(),
   notnull. Смысл один: рассказать компилятору о T ровно столько, сколько
-  нужно телу. Обобщёнными бывают и типы: результат операции, хранилище
-  сущностей типа T. Параметры называют с буквы T; default(T) -- ноль для
-  чисел, null для ссылок.}
+  нужно телу. Этот метод понадобится в лабораторной.}
 
 \begin{frame}[plain]
-  \keyline{Параметр типа --- способ написать алгоритм один раз\\ и не
+  \keyline{Параметр типа --- способ написать код один раз\\ и не
     заплатить за это ни типами, ни boxing.}
 \end{frame}
 \note{Итог: философия -- пишите понятно и мерьте; система типов даёт
