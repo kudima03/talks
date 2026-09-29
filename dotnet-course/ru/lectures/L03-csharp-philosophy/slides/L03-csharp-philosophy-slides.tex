@@ -142,31 +142,6 @@
   алгоритма -- не микрооптимизация; перебор списка из миллиона вместо
   словаря -- это ошибка, и она стоит секунд. Границы -- в конце раздела.}
 
-\begin{frame}{Рантайм оптимизирует за вас}
-  \slidetop
-  \claim{И делает это \hi{лучше, чем вы}. Хитрый код ему \lo{мешает}.}
-
-  \begin{tabular}{@{}p{4.3cm}p{8.9cm}@{}}
-    \textbf{\hi{аллокация на стеке}} & объект не убегает из метода ---
-      \texttt{new} есть, кучи нет \\[0.5em]
-    \textbf{\hi{инлайн}} & маленький метод вставлен в место вызова: имя в
-      исходнике, прямой код в машине \\[0.5em]
-    \textbf{\hi{проверки границ}} & цикл от нуля до \texttt{Length}: JIT
-      доказал, что индекс в пределах, --- проверки нет \\[0.5em]
-    \textbf{\hi{оптимизация по профилю}} & уровень 0 собирает статистику,
-      уровень 1 компилирует под реальные данные \\
-  \end{tabular}
-
-  \slidegap
-  {\color{accent}\large\bfseries Дайте ему это сделать.}
-\end{frame}
-\note{Аллокацию на стеке видели в прошлой лекции. Проверки границ:
-  безопасность осталась, цена исчезла -- но <<оптимизированный>> хитрый цикл
-  мешает JIT доказать, и проверки вернутся. История из жизни: foreach по
-  массиву переписали на while с ручным индексом, потому что <<foreach
-  медленнее>>. Машинный код тот же, а индекс в одном месте ушёл за границу.
-  Полдня ради оптимизации, которой не было.}
-
 \begin{frame}[fragile]{Что делает этот код?}
   \slidetop
   \begin{minipage}[t]{0.6\textwidth}
@@ -211,8 +186,8 @@ for (int i = 0; i < emails.Length; i++) {
 
 \begin{frame}[fragile]{Фильтрация, сортировка, проекция}
   \slidetop
-  \begin{minipage}[t]{0.54\textwidth}
-    \colhead{alt}{как в C}\par\vspace{0.5em}
+  \begin{minipage}[t]{0.53\textwidth}
+    \colhead{alt}{императивно}\par\vspace{0.5em}
 \begin{lstlisting}[style=csharp,basicstyle=\ttfamily\fontsize{6.2}{7.0}\selectfont]
 Customer[] buf = new Customer[customers.Length];
 int n = 0;
@@ -236,8 +211,8 @@ for (int i = 0; i < emails.Length; i++) {
 }
 \end{lstlisting}
   \end{minipage}\hfill
-  \begin{minipage}[t]{0.43\textwidth}
-    \colhead{accent}{как в C\#}\par\vspace{0.5em}
+  \begin{minipage}[t]{0.445\textwidth}
+    \colhead{accent}{декларативно}\par\vspace{0.5em}
 \begin{lstlisting}[style=csharp,basicstyle=\ttfamily\scriptsize]
 var emails = customers
     .Where(c => c.IsActive && c.Age >= 18)
@@ -263,7 +238,7 @@ var emails = customers
 \begin{frame}[fragile]{Группировка и агрегация}
   \slidetop
   \begin{minipage}[t]{0.555\textwidth}
-    \colhead{alt}{как в C}\par\vspace{0.5em}
+    \colhead{alt}{императивно}\par\vspace{0.5em}
 \begin{lstlisting}[style=csharp,basicstyle=\ttfamily\fontsize{6.6}{7.6}\selectfont]
 var totals = new Dictionary<int, decimal>();
 foreach (var o in orders) {
@@ -284,7 +259,7 @@ if (top.Count > 3) {
 \end{lstlisting}
   \end{minipage}\hfill
   \begin{minipage}[t]{0.42\textwidth}
-    \colhead{accent}{как в C\#}\par\vspace{0.5em}
+    \colhead{accent}{декларативно}\par\vspace{0.5em}
 \begin{lstlisting}[style=csharp,basicstyle=\ttfamily\scriptsize]
 var top = orders
     .Where(o => !o.IsCancelled)
@@ -308,55 +283,11 @@ var top = orders
   и читателю больше, об этом весь третий раздел.}
 
 
-\begin{frame}[fragile]{Поиск: флаг и break}
-  \slidetop
-  \begin{minipage}[t]{0.555\textwidth}
-    \colhead{alt}{как в C}\par\vspace{0.5em}
-\begin{lstlisting}[style=csharp,basicstyle=\ttfamily\fontsize{6.6}{7.6}\selectfont]
-bool hasOverdue = false;
-for (int i = 0; i < invoices.Length; i++) {
-    if (invoices[i].IsPaid) {
-        continue;
-    }
-    if (invoices[i].DueDate < today) {
-        hasOverdue = true;
-        break;
-    }
-}
-
-Invoice? largest = null;
-for (int i = 0; i < invoices.Length; i++) {
-    if (largest == null ||
-        invoices[i].Amount > largest.Amount) {
-        largest = invoices[i];
-    }
-}
-\end{lstlisting}
-  \end{minipage}\hfill
-  \begin{minipage}[t]{0.42\textwidth}
-    \colhead{accent}{как в C\#}\par\vspace{0.5em}
-\begin{lstlisting}[style=csharp,basicstyle=\ttfamily\scriptsize]
-var hasOverdue = invoices.Any(x =>
-    x.DueDate < today && !x.IsPaid);
-
-var largest = invoices
-    .MaxBy(x => x.Amount);
-\end{lstlisting}
-    \vspace{0.9em}
-    \aside{Есть ли просроченный неоплаченный счёт, и какой самый крупный. Название метода --- \hi{это и есть ответ} на вопрос <<что делает код>>.}\par
-    \vspace{0.7em}
-    \aside{Флаг, \texttt{break} и \texttt{null} как <<ещё не нашли>> --- \lo{три соглашения}, которые читатель восстанавливает сам.}\par
-  \end{minipage}
-\end{frame}
-\note{Any, All, First, Count, Min, Max, MinBy, MaxBy -- у каждого типового
-  цикла поиска есть имя. Any, как и цикл с break, останавливается на первом
-  совпадении: ничего лишнего он не перебирает.}
-
 
 \begin{frame}[fragile]{Строки}
   \slidetop
   \begin{minipage}[t]{0.555\textwidth}
-    \colhead{alt}{как в C}\par\vspace{0.5em}
+    \colhead{alt}{императивно}\par\vspace{0.5em}
 \begin{lstlisting}[style=csharp,basicstyle=\ttfamily\fontsize{6.6}{7.6}\selectfont]
 var sb = new StringBuilder();
 for (int i = 0; i < names.Length; i++) {
@@ -370,7 +301,7 @@ string line = "Total: " + count.ToString()
 \end{lstlisting}
   \end{minipage}\hfill
   \begin{minipage}[t]{0.42\textwidth}
-    \colhead{accent}{как в C\#}\par\vspace{0.5em}
+    \colhead{accent}{декларативно}\par\vspace{0.5em}
 \begin{lstlisting}[style=csharp,basicstyle=\ttfamily\scriptsize]
 var list = string.Join(", ", names);
 var line = $"Total: {count} ({list})";
@@ -396,7 +327,7 @@ var line = $"Total: {count} ({list})";
 
   \begin{tabular}{@{}p{4.3cm}p{8.9cm}@{}}
     \textbf{\hi{шаг --- это слово}} & \texttt{Where}, \texttt{OrderBy},
-      \texttt{Take}, \texttt{Any}: читается как постановка задачи \\[0.5em]
+      \texttt{Take}, \texttt{GroupBy}: читается как постановка задачи \\[0.5em]
     \textbf{\hi{нет механики}} & ни индексов, ни флагов, ни временных
       массивов --- негде ошибиться на единицу \\[0.5em]
     \textbf{\hi{сверху вниз}} & каждая строка --- один шаг, порядок строк
@@ -412,7 +343,7 @@ var line = $"Total: {count} ({list})";
     годами.}
 \end{frame}
 \note{Это и есть насмотренность: когда видишь цикл с флагом, в голове
-  всплывает Any; когда видишь словарь с ContainsKey и суммой -- GroupBy.
+  всплывает Where; когда видишь словарь с ContainsKey и суммой -- GroupBy.
   Декларативная запись -- не модная, а дешёвая: дешевле прочитать, дешевле
   изменить, дешевле найти ошибку. Для многих операций над массивами LINQ в
   новых версиях ещё и идёт коротким путём -- проверяет, не массив ли это.}
@@ -423,7 +354,7 @@ var line = $"Total: {count} ({list})";
     \textbf{\hi{лаконичность}} & свойства, запросы к данным в языке,
       \texttt{async} двумя словами, типы для данных в одну строку \\[0.65em]
     \textbf{\hi{строгие типы}} & компилятор ловит ошибки до запуска;
-      обобщения не стираются во время выполнения \\[0.65em]
+      обобщения сохраняют типы \\[0.65em]
     \textbf{\hi{широкая поддержка}} & стандартная библиотека на всё,
       инструменты из коробки, все ОС, открытый код \\
   \end{tabular}
@@ -441,15 +372,9 @@ var line = $"Total: {count} ({list})";
     \end{tikzpicture}
   \end{center}
 
-  \slidegap
-  \aside{И честно: \lo{многое взято из Java} --- управляемая память,
-    виртуальная машина, одиночное наследование с интерфейсами. Свойства
-    --- из Delphi.}
 \end{frame}
 \note{Второе поколение, та же сделка, что у Java. Многое из списка Java
-  потом добавила у себя -- языки учатся друг у друга. C\# -- это Java,
-  которой дали двадцать лет учиться на своих и чужих ошибках: то самое
-  <<постельное после стирки>> из первой лекции. Язык обновляется каждый год
+  потом добавила у себя -- языки учатся друг у друга. Язык обновляется каждый год
   вместе с платформой, поэтому код десятилетней давности заметно тяжелее
   сегодняшнего -- помнить, читая старые примеры.}
 
@@ -482,7 +407,7 @@ var line = $"Total: {count} ({list})";
 
 \begin{frame}[plain]
   \keyline{Читаемость дороже тактов, потому что дороже вы.\\ Мерьте,
-    прежде чем оптимизировать, и дайте рантайму делать его работу.}
+    прежде чем оптимизировать.}
 \end{frame}
 \note{Дальше пять минут о том, с чего программа начинается.}
 
@@ -491,10 +416,10 @@ var line = $"Total: {count} ({list})";
 
 \begin{frame}[plain]
   \sectionopener{2}{Как начинается программа}{Метод \texttt{Main} и
-    инструкции верхнего уровня мы уже видели. Вспомним, \hi{что приходит
+    Top-level statements мы уже видели. Вспомним, \hi{что приходит
     на вход} и \hi{что уходит на выход}.}
 \end{frame}
-\note{Бюджет: 5 минут. Main и инструкции верхнего уровня разбирали в Л1 и
+\note{Бюджет: 5 минут. Main и top-level statements разбирали в Л1 и
   в декомпиляторе в Л2 -- не повторяем. Остаётся контракт программы с
   внешним миром: аргументы на входе, код завершения на выходе.}
 
@@ -544,10 +469,9 @@ Hello, World!
     о ваших данных. Чем больше он знает, тем больше ошибок поймает до
     запуска.}
 \end{frame}
-\note{Бюджет: 25 минут. Перепутали два строковых параметра -- компилятор
+\note{Бюджет: 20 минут. Перепутали два строковых параметра -- компилятор
   молчит. Два разных типа -- ругается. Копейки вместо рублей -- два числа,
-  молчит; тип для денег -- ругается. Рассказывайте компилятору больше. По
-  дороге разберём, где кусаются структуры и что такое boxing.}
+  молчит; тип для денег -- ругается. Рассказывайте компилятору больше.}
 
 \begin{frame}{Из чего строятся типы}
   \slidetop
@@ -580,14 +504,13 @@ Hello, World!
 \note{Первые четыре -- ссылочные типы, последние три -- значения. Record:
   две формы, позиционная и с телом; наследуется только от record. Интерфейс
   сам не создаётся: за ним объект класса -- в куче, или структура -- и тогда
-  она упаковывается, об этом через пару слайдов. Делегаты подробно -- Л4.
+  она упаковывается, об этом в разделе про generics. Делегаты подробно -- Л4.
   Enum не сериализовать наружу числом (Л9); флаги -- степени двойки с
   атрибутом [Flags].}
 
 \begin{frame}{Встроенные типы}
   \slidetop
-  \claim{Все --- наследники \texttt{\hi{object}}. Слева значения, справа
-    ссылка.}
+  \claim{Все наследуют \texttt{\hi{object}}, и все \hi{неизменяемы}.}
 
   \begin{center}
     \begin{tikzpicture}[font=\small,
@@ -628,98 +551,14 @@ Hello, World!
     \end{tikzpicture}
   \end{center}
 \end{frame}
-\note{Значения живут там, где объявлены, и копируются; ссылка указывает на
+\note{Неизменяемы: x += 1 не меняет пятёрку, а кладёт в переменную новое
+  значение; любая операция над строкой даёт новую строку. Значения живут
+  там, где объявлены, и копируются; ссылка указывает на
   объект в куче. Переполнение целых по умолчанию молчит -- есть checked;
   идентификаторы в базе -- long. Double не умеет точно одну десятую -- я
   видел бухгалтерию на double. Строка -- ссылочный тип, который ведёт себя
   как значение. Сравнение строк -- явно: Ordinal для техники, культура для
   человека.}
-
-\begin{frame}[fragile]{Три ловушки структур}
-  \slidetop
-  \begin{minipage}[t]{0.62\textwidth}
-\begin{lstlisting}[style=csharp,basicstyle=\ttfamily\scriptsize]
-var points = new List<Point> { new() { X = 1, Y = 1 } };
-// points[0].X = 5;        // (1)
-
-var array = new Point[] { new() { X = 1, Y = 1 } };
-array[0].X = 5;            // (2)
-
-var p = array[0];
-Move(p);                   // (3)
-Console.WriteLine(p.X);
-
-static void Move(Point point) => point.X += 10;
-
-struct Point
-{
-    public int X;
-    public int Y;
-}
-\end{lstlisting}
-  \end{minipage}\hfill
-  \begin{minipage}[t]{0.35\textwidth}
-    \raggedright
-    \vspace{0.3em}
-    \textbf{(1)} \lo{ошибка компиляции} \texttt{CS1612}: индексатор списка
-    --- метод, он вернул копию\par
-    \vspace{0.7em}
-    \textbf{(2)} \hi{работает}: элемент массива --- настоящая переменная\par
-    \vspace{0.7em}
-    \textbf{(3)} \lo{тихий баг}: метод двигал копию, печатается
-    \texttt{5}\par
-    \vspace{1.0em}
-    \aside{Одна строка, два результата: список --- класс с методами,
-      массив --- память.}
-  \end{minipage}
-\end{frame}
-\note{Первая -- хорошая новость: ошибка компиляции, а не тихий баг. Третья
-  -- компилируется, работает, результат не тот. Передать без копии можно:
-  ref, in -- только для чтения; readonly struct -- компилятор не делает
-  защитных копий. Но правильнее спросить: зачем структура вообще
-  изменяемая?}
-
-\begin{frame}{Boxing: невидимая аллокация}
-  \slidetop
-  \claim{Значение в \texttt{object} --- это \lo{аллокация без слова
-    \texttt{new}}.}
-
-  \begin{center}
-    \begin{tikzpicture}[font=\small,
-      box/.style={draw=hairline,line width=0.8pt,fill=codebg,
-                  minimum height=0.75cm,align=center,inner sep=0.3em},
-      ar/.style={-{Straight Barb[length=1.8mm]},line width=0.7pt}]
-      \node[muted,font=\scriptsize] at (0,1.05) {КАДР СТЕКА};
-      \node[box,minimum width=2.8cm] (n) at (0,0.45) {\texttt{int n = 42}};
-      \node[box,minimum width=2.8cm] (o) at (0,-0.4) {\texttt{object o}};
-      \node[muted,font=\scriptsize] at (7.2,1.05) {КУЧА};
-      \node[box,minimum width=3.4cm,draw=alt] (b) at (7.2,0.02)
-        {заголовок $\mid$ \texttt{42}};
-      \draw[ar,alt] (n.east) -- node[above,font=\scriptsize\bfseries,
-        text=alt,sloped]{box: копия} (b.west);
-      \draw[ar,ink] (o.east) -- node[below,font=\scriptsize,text=muted,
-        sloped]{ссылка} (b.west);
-    \end{tikzpicture}
-  \end{center}
-
-  \slidegap
-  \begin{tabular}{@{}p{3.6cm}p{9.4cm}@{}}
-    \texttt{object o = n;}   & \lo{упаковка}: коробка в куче, копия числа,
-                               ссылка на коробку \\[0.3em]
-    \texttt{int m = (int)o;} & \hi{распаковка}: проверить тип, скопировать
-                               обратно \\
-  \end{tabular}
-
-  \vspace{1.0em}
-  \aside{Прячется в API на \texttt{object}, в старых коллекциях, в вызове
-    через интерфейс у структуры. Видно только в \hi{счётчике аллокаций}.}
-\end{frame}
-\note{Вызов метода прямо на числе, например ToString, не упаковывает.
-  Упаковка -- в момент, когда значение кладут в переменную типа object или
-  интерфейса: смотреть на присваивания и параметры, а не на вызовы. int? --
-  это не упаковка, а маленькая структура из значения и флага; про
-  отсутствие значения -- следующая лекция. Лекарство -- обобщения, в конце
-  лекции.}
 
 \begin{frame}{Правило выбора}
   \slidetop
@@ -842,6 +681,33 @@ struct Point
   -- InternalsVisibleTo, Л15. И напомнить: модификаторы -- правила для
   компилятора, рефлексия достанет всё.}
 
+\begin{frame}{Кому видно}
+  \slidetop
+  \claim{Четыре модификатора --- четыре круга видимости, от
+    \lo{широкого} к \hi{узкому}.}
+
+  {\renewcommand{\arraystretch}{1.3}
+  \begin{tabular}{@{}p{2.6cm}>{\raggedright\arraybackslash}p{6.6cm}>{\raggedright\arraybackslash}p{4.0cm}@{}}
+    & & \eyebrow{по умолчанию} \\
+    \texttt{\textbf{\lo{public}}}    & всем, в том числе другим сборкам ---
+      это обещание & \\
+    \texttt{\textbf{internal}}       & внутри своей сборки, одной
+      \texttt{dll} & \hi{для типа} \\
+    \texttt{\textbf{protected}}      & самому типу и его наследникам & \\
+    \texttt{\textbf{\hi{private}}}   & только внутри самого типа &
+      \hi{для члена типа} \\
+  \end{tabular}}
+
+  \slidegap
+  \aside{Ещё два составных --- \texttt{protected internal} и
+    \texttt{private protected} --- нужны редко. Умолчания языка на стороне
+    \hi{закрытости}: открывать наружу --- осознанное решение.}
+\end{frame}
+\note{Protected -- почти public, только для наследников, включая тех, кого
+  писали не вы: изменили protected-член -- сломали все подклассы. Public
+  -- обещание, что тип будет здесь с этой сигнатурой; internal -- свобода
+  переименовать и переписать. Дальше -- про internal подробно.}
+
 \begin{frame}{Четыре слова --- четыре причины}
   \slidetop
   \begin{tabular}{@{}p{2.8cm}p{10.2cm}@{}}
@@ -888,9 +754,51 @@ struct Point
       \hi{один с параметром типа}     & \texttt{T Max<T>(IReadOnlyList<T>)} \\
     \end{tabular}}
 \end{frame}
-\note{Бюджет: 7 минут. Первое -- дублирование, четвёртый тип -- четвёртый
+\note{Бюджет: 12 минут. Первое -- дублирование, четвёртый тип -- четвёртый
   метод. Второе -- работает для всего, но потеряли типы, приводим и
-  надеемся, и каждое число упаковано. Медленно и небезопасно одновременно.}
+  надеемся, и каждое число упаковано -- что это значит, на следующем
+  слайде. Медленно и небезопасно одновременно.}
+
+\begin{frame}{Boxing: невидимая аллокация}
+  \slidetop
+  \claim{Значение в \texttt{object} --- это \lo{аллокация без слова
+    \texttt{new}}.}
+
+  \begin{center}
+    \begin{tikzpicture}[font=\small,
+      box/.style={draw=hairline,line width=0.8pt,fill=codebg,
+                  minimum height=0.75cm,align=center,inner sep=0.3em},
+      ar/.style={-{Straight Barb[length=1.8mm]},line width=0.7pt}]
+      \node[muted,font=\scriptsize] at (0,1.05) {КАДР СТЕКА};
+      \node[box,minimum width=2.8cm] (n) at (0,0.45) {\texttt{int n = 42}};
+      \node[box,minimum width=2.8cm] (o) at (0,-0.4) {\texttt{object o}};
+      \node[muted,font=\scriptsize] at (7.2,1.05) {КУЧА};
+      \node[box,minimum width=3.4cm,draw=alt] (b) at (7.2,0.02)
+        {заголовок $\mid$ \texttt{42}};
+      \draw[ar,alt] (n.east) -- node[above,font=\scriptsize\bfseries,
+        text=alt,sloped]{box: копия} (b.west);
+      \draw[ar,ink] (o.east) -- node[below,font=\scriptsize,text=muted,
+        sloped]{ссылка} (b.west);
+    \end{tikzpicture}
+  \end{center}
+
+  \slidegap
+  \begin{tabular}{@{}p{3.6cm}p{9.4cm}@{}}
+    \texttt{object o = n;}   & \lo{упаковка}: коробка в куче, копия числа,
+                               ссылка на коробку \\[0.3em]
+    \texttt{int m = (int)o;} & \hi{распаковка}: проверить тип, скопировать
+                               обратно \\
+  \end{tabular}
+
+  \vspace{1.0em}
+  \aside{Прячется в API на \texttt{object}, в старых коллекциях, в вызове
+    через интерфейс у структуры. Видно только в \hi{счётчике аллокаций}.}
+\end{frame}
+\note{Вызов метода прямо на числе, например ToString, не упаковывает.
+  Упаковка -- в момент, когда значение кладут в переменную типа object или
+  интерфейса: смотреть на присваивания и параметры, а не на вызовы. int? --
+  это не упаковка, а маленькая структура из значения и флага; про
+  отсутствие значения -- следующая лекция. Лекарство -- параметр типа, следующий слайд.}
 
 \begin{frame}[fragile]{Один метод на все типы}
   \slidetop
@@ -921,33 +829,6 @@ static T Max<T>(IReadOnlyList<T> items) where T : IComparable<T>
   нужно телу. Обобщёнными бывают и типы: результат операции, хранилище
   сущностей типа T. Параметры называют с буквы T; default(T) -- ноль для
   чисел, null для ссылок.}
-
-\begin{frame}{Обобщения без стирания}
-  \slidetop
-  \versus{.NET --- тип сохраняется}{%
-    \begin{cbul}{accent}
-      \item \texttt{List<int>}: свой код, числа лежат как числа
-      \item \texttt{List<string>}, \texttt{List<Order>}: общий код для ссылок
-      \item рантайм знает, чем параметризован тип
-    \end{cbul}}{Java --- тип стирается}{%
-    \begin{cbul}{alt}
-      \item \texttt{List<Integer>}: код на \texttt{Object}, числа в коробках
-      \item все \texttt{List<...>} --- один и тот же класс
-      \item после компиляции параметра типа нет
-    \end{cbul}}
-
-  \slidegap
-  \hrulethin{0.42}
-  \rulegap
-  \aside{Один алгоритм, \hi{без потери типов и без boxing} --- раньше
-    приходилось выбирать два из трёх. Цена: для каждой структуры своя копия
-    машинного кода --- больше работы JIT на старте.}
-\end{frame}
-\note{Словарь из чисел в .NET не аллоцирует по объекту на элемент. Цена
-  становится заметной при тысячах обобщённых типов с тысячами структур --
-  одна из причин долгого старта из Л1. Сначала измерить. Дальше: коллекции и
-  LINQ в Л5 -- все обобщённые; ILogger<T> в Л10; статические абстрактные
-  члены интерфейсов и обобщённая арифметика -- верхняя ступень, дойдёте сами.}
 
 \begin{frame}[plain]
   \keyline{Параметр типа --- способ написать алгоритм один раз\\ и не
