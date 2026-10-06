@@ -537,7 +537,7 @@ static string Describe(object? input) => input switch
     привести \lo{к другому}.}
 \end{frame}
 
-\begin{frame}[fragile]{Образец в \texttt{if}}
+\begin{frame}[fragile]{Pattern matching в \texttt{if}}
   \slidetop
   \begin{minipage}[t]{0.5\textwidth}
 \begin{lstlisting}[style=csharp,basicstyle=\ttfamily\small]
@@ -618,12 +618,12 @@ if ((x, y) == (0, 0)) { }           // element-wise comparison
 
   \slidegap
   \aside{Любой тип разбирается, если у него есть метод \texttt{Deconstruct}.
-    Поэтому кортеж и образец --- \hi{один механизм}: то, что можно разобрать,
+    Поэтому кортеж и pattern matching --- \hi{один механизм}: то, что можно разобрать,
     можно и сопоставить.}
 \end{frame}
 
 \begin{frame}[plain]
-  \keyline{Образец переносит проверку формы данных на компилятор:\\
+  \keyline{Pattern matching переносит проверку формы данных на компилятор:\\
     вы описываете, что ожидаете, а он проверяет и извлекает.}
 \end{frame}
 
