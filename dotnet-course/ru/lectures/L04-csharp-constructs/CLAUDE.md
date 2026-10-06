@@ -43,7 +43,6 @@ That decides two things for this deck:
 | 4–9, 14, 15, 17, 20, 21, 22, 24, 28, 29, 31, 34, 36–39, 43, 46 | Compiled and run on dotnet SDK **10.0.112** in a stock `dotnet new console`, with the minimal types around them (`Order`, `User`, `Point`); outputs in comments (`// False`, `// 2..9`) are what it printed. |
 | 9 | Both columns were also run side by side for scores 100, 95, 90, 80, 75, 60, 59, 0: the `if` ladder and the switch expression give the same grade every time. |
 | 12, 13, 45 | Fragments: `Process`, `row`, `Invoice`, `file` are not defined anywhere. The constructs themselves (`var`, `new()` into a field and a parameter, catch order, `throw;`) were compiled separately. |
-| — | `CS8510`, `CS8509` and `CS8524`, quoted by voice in §2 since its order-and-exhaustiveness frame was cut, are real diagnostics from the same SDK: general arm above a specific one, no `_` on `object`, an enum without `_`. |
 | 37 | `NameLength` gives `CS8602`, as the comment says. |
 | 45 | `throw e;` gives `CA2200`; a general `catch` above a specific one is error `CS0160`. |
 | 48 | Real output of `PORT=abc dotnet run` on a `HelloWorld` whose `Program.cs` is the frame-46 listing plus two lines on top. Captured in a scratch directory, path rewritten to `/home/user/HelloWorld`; line numbers 1, 8, 16 match that file. Re-capture rather than edit. |
@@ -75,7 +74,8 @@ reason.
   логика, позиция, список.
 - One `\statement` (frame 41, «каждый ! — это долг»), no `\shout`. Four
   `\keyline`s (frames 18, 25, 32, 49); §4 closes on the statement. §2's keyline
-  is about patterns only — the switch-or-polymorphism half went with its frame.
+  is about patterns only — the switch-or-polymorphism half went with its frame
+  and its text.
 - One `\vote` frame: 11, «Что такое var?», asked for in review. The other
   questions to the room have no frame, as in Л3.
 
@@ -92,9 +92,16 @@ reason.
 - **The two remarks on enabling annotations** (warnings in old projects,
   unannotated packages).
 - **«Почему я на этом останавливаюсь»** at the end of §1.
-- **Four §2 frames**: the list-pattern command parser, the pattern-ladder table,
-  order and exhaustiveness, the switch-or-polymorphism table. Their text stays
-  in the script and is delivered by voice; the README tags those theses `[—]`.
+- **Four §2 frames and their text**: the list-pattern command parser, the
+  pattern-ladder table and the «одиннадцать ветвей» summary, order and
+  exhaustiveness with the «убрали `_`» question, and the whole
+  switch-or-polymorphism block. Gone from the script, the README and the course
+  documents (`course-structure.md`, `lecture-notes.md`) alike. The script now
+  points `catch` order back at §1's switch, and the property-pattern paragraph
+  forward to `?.` in §4.
+- **Lab 4 was adjusted to match**: the task shows the `.. var name` tail itself,
+  and the two questions that needed the cut text (switch or a virtual method;
+  why `Command` is not exhaustive) are replaced by one on positional patterns.
 - **«и сахар»** in §1's name and the opener's subtitle; **«if (count) не
   скомпилируется, в отличие от C»** on frame 4 and in the script.
 
@@ -105,10 +112,7 @@ The author's call. Do not quietly "fix" these:
 1. **The Latin Modern fallback** has not been checked for this deck; it builds
    with PT Sans.
 2. **Timings were not re-budgeted** after the review added §1 material (if,
-   ladder, early return, `when`, `var`) and cut parts of §3.
+   ladder, early return, `when`, `var`) and cut parts of §2 and §3. §2 is
+   still budgeted at 20 minutes with seven content frames.
 3. **`ru/lecture-notes.md` still has the IQueryable link** for Л4 §3, cut in
    review here.
-4. **Lab 4 leans on voice-only material.** Its parser is built on list patterns
-   with a `..` tail and on «switch, not polymorphism» — both now live in §2's
-   voice, not on a frame. Frame 20 (`Describe`) still shows `[]` and
-   `[var first, ..]`.

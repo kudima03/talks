@@ -119,8 +119,7 @@
 │   │   └── target-typed new, collection expressions
 │   ├── 2. Pattern matching (ядро лекции)                                   (20)
 │   │   ├── по типу → property → relational → logical → list patterns
-│   │   ├── деконструкция и кортежи
-│   │   └── когда switch-expression честнее полиморфизма, а когда наоборот
+│   │   └── деконструкция и кортежи
 │   ├── 3. Делегаты, лямбды, замыкания                                      (15)
 │   │   ├── делегат — это тип; Func/Action/Predicate
 │   │   ├── лямбда и захват переменных: что реально живёт дольше, чем вы думали

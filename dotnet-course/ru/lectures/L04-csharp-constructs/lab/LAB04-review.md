@@ -79,7 +79,6 @@ Unhandled exception. System.InvalidOperationException: boom
 | Правка | Результат |
 |---|---|
 | Убрать `_` из `CommandParser.Parse` | `warning CS8509: The switch expression does not handle all possible values of its input type (it is not exhaustive)` |
-| Убрать `_` из `Shell.Execute` | тот же `CS8509`, хотя все наследники `Command` перечислены |
 | Поставить `["new", ..]` выше правильной ветки `new` | `error CS8510: The pattern is unreachable` |
 | `catch (Exception)` выше `catch (DomainException)` | `error CS0160: A previous catch clause already catches all exceptions of this or of a super type ('Exception')` |
 | `throw e;` внутри `catch` | `warning CA2200: Re-throwing caught exception changes stack information` |
@@ -130,22 +129,21 @@ Unhandled exception. System.InvalidOperationException: boom
 - Что в `name` после `["new", var email, .. var name]`?
   *Массив оставшихся слов: `["Ann", "Smith"]`. Для `new ann@example.com` — пустой массив,
   поэтому в `when` проверяется длина.*
-- Почему компилятор не доказывает полноту ни для массива строк, ни для `Command`?
-  *Массив может быть любой длины с любыми строками. `Command` — открытая иерархия: наследника
-  можно добавить в другой сборке. `_` нужна всегда.*
+- Почему компилятор не доказывает полноту для массива строк?
+  *Массив может быть любой длины с любыми строками: перечислить все формы нельзя. Поэтому `_`
+  нужна всегда, а без неё switch-выражение бросит исключение при выполнении.*
 - Где здесь константный образец, где `var`, где хвост?
   *`"new"` — константа, `var email` — возьми, `.. var name` — хвост. `when` — то, что образцом
   не выразить: успешный `TryParse`.*
 
-**Про `switch` и полиморфизм**
+**Про позиционные образцы**
 
-- Почему `Execute` — switch, а не метод у каждой команды?
-  *Команды — данные с закрытым по смыслу набором форм, операция над ними одна и живёт в одном
-  месте. Метод у каждой команды размазал бы выполнение по десяти record и протащил бы `Shell`
-  внутрь каждого. Хороший ответ ссылается на «что меняется чаще».*
-- Когда бы вы выбрали полиморфизм?
-  *Если команды приходят из плагинов, набор открыт и у каждой своя большая логика с
-  состоянием.*
+- Как `AddItem(var n, var q, var p, var product)` знает порядок частей?
+  *Позиционный record генерирует `Deconstruct` с параметрами в порядке первичного
+  конструктора; образец разбирает именно его.*
+- Как так же разбирать обычный класс?
+  *Написать ему метод `Deconstruct` с выходными параметрами — образец и деконструкция
+  кортежем заработают.*
 
 **Про `null`, делегаты и кортеж**
 
