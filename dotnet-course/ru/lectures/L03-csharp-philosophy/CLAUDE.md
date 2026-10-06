@@ -19,8 +19,8 @@ The five move together. As in Л2, every thesis in `README.md` carries a frame
 number and `[—]` marks a thesis with no frame. **Adding, cutting or reordering
 a frame invalidates those numbers** — renumber the cues in the script, then
 re-derive the tags in `README.md`, in the same commit. The lab asks for nothing
-the lecture does not cover, and `LAB03-task.md` §7 depends on `Max<T>` staying
-in the deck (frame 29).
+the lecture does not cover. The lab is built from the five entities of the
+selection rule (frame 19) and no longer uses `Max<T>` — frame 29 is lecture-only.
 
 ## Code on the slides — how it was checked
 
