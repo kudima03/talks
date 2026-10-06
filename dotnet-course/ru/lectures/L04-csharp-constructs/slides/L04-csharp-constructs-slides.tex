@@ -740,8 +740,7 @@ foreach (var a in actions) a();
 
 \begin{frame}[fragile]{События}
   \slidetop
-  \begin{minipage}[t]{0.52\textwidth}
-\begin{lstlisting}[style=csharp,basicstyle=\twocol]
+\begin{lstlisting}[style=csharp,basicstyle=\ttfamily\small]
 sealed class Downloader
 {
     public event Action<int>? ProgressChanged;
@@ -753,21 +752,10 @@ sealed class Downloader
 downloader.ProgressChanged += OnProgress;
 downloader.ProgressChanged -= OnProgress;
 \end{lstlisting}
-    \vspace{0.6em}
-    \aside{Делегат, к которому снаружи можно только \hi{подписаться} и
-      отписаться; вызывает владелец.}
-  \end{minipage}\hfill
-  \begin{minipage}[t]{0.43\textwidth}
-    \colhead{alt}{почему не в сервисе}\par\vspace{0.5em}
-    \begin{cbul}{alt}
-      \item \textbf{неявный поток}: кто подписан и в каком порядке, в месте
-            вызова не видно
-      \item \textbf{время жизни}: издатель держит подписчиков, забыли
-            отписаться --- утечка
-      \item \textbf{тестируемость}: зависимость через конструктор проще
-            подменить (Л10)
-    \end{cbul}
-  \end{minipage}
+
+  \slidegap
+  \aside{Делегат, к которому снаружи можно только \hi{подписаться} и
+    отписаться; вызывает владелец.}
 \end{frame}
 
 \begin{frame}[plain]
