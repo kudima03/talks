@@ -566,7 +566,7 @@ Console.WriteLine(text.Length);
   \end{minipage}
 \end{frame}
 
-\begin{frame}[fragile]{Кортеж: вернуть два значения}
+\begin{frame}[fragile]{Tuple: вернуть два значения}
   \slidetop
 \begin{lstlisting}[style=csharp,basicstyle=\ttfamily\small]
 var (lo, hi) = MinMax([5, 2, 9]);
@@ -586,11 +586,11 @@ static (int Min, int Max) MinMax(IEnumerable<int> values)
 \end{lstlisting}
 \end{frame}
 
-\begin{frame}{Где уместен кортеж}
+\begin{frame}{Где уместен tuple}
   \slidetop
-  \claim{Кортеж \hi{локальный}, record \lo{публичный}.}
+  \claim{Tuple \hi{локальный}, record \lo{публичный}.}
 
-  \versus{кортеж}{%
+  \versus{tuple}{%
     \begin{cbul}{accent}
       \item вернуть из метода и тут же разобрать
       \item два-три значения
@@ -603,7 +603,7 @@ static (int Min, int Max) MinMax(IEnumerable<int> values)
     \end{cbul}}
 
   \slidegap
-  \aside{Кортеж --- структура, сравнивается по значению. Имена элементов есть
+  \aside{Tuple --- структура, сравнивается по значению. Имена элементов есть
     только для компилятора: во время выполнения их нет.}
 \end{frame}
 
@@ -618,7 +618,7 @@ if ((x, y) == (0, 0)) { }           // element-wise comparison
 
   \slidegap
   \aside{Любой тип разбирается, если у него есть метод \texttt{Deconstruct}.
-    Поэтому кортеж и pattern matching --- \hi{один механизм}: то, что можно разобрать,
+    Поэтому tuple и pattern matching --- \hi{один механизм}: то, что можно разобрать,
     можно и сопоставить.}
 \end{frame}
 
