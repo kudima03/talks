@@ -30,7 +30,8 @@ That decides two things for this deck:
   slides on plain `if`, the ladder, early return, `when`, `var`, target-typed
   `new`, collection expressions, ranges, tuples, lambdas, events, `int?`,
   enabling annotations, the null operators, `TryParse` and try/catch
-  mechanics. Do not thin them out to match Л3's density.
+  mechanics. Do not thin them out to match Л3's density. The cuts the author
+  did make (see «Cut in review») are his call, not a licence to cut more.
 - **No `\note{}`.** The deck carries no speaker notes and no `\shownotes`
   block; the delivery lives in the script only. (`make notes` still exists
   because the Makefile is shared; it builds the same deck.)
@@ -39,12 +40,13 @@ That decides two things for this deck:
 
 | Frames | How it was verified |
 |---|---|
-| 4–9, 13, 14, 16, 19–21, 24, 26, 31, 32, 34, 37, 39–42, 46, 49 | Compiled and run on dotnet SDK **10.0.112** in a stock `dotnet new console`, with the minimal types around them (`Order`, `User`, `Point`); outputs in comments (`// False`, `// 2..9`) are what it printed. |
-| 11, 12, 48 | Fragments: `Process`, `row`, `Invoice`, `file` are not defined anywhere. The constructs themselves (`var`, `new()` into a field and a parameter, catch order, `throw;`) were compiled separately. |
-| 23 | `CS8510`, `CS8509` and `CS8524` are real diagnostics from the same SDK: general arm above a specific one, no `_` on `object`, an enum without `_`. |
-| 40 | `NameLength` gives `CS8602`, as the comment says. |
-| 48 | `throw e;` gives `CA2200`; a general `catch` above a specific one is error `CS0160`. |
-| 51 | Real output of `PORT=abc dotnet run` on a `HelloWorld` whose `Program.cs` is the frame-49 listing plus two lines on top. Captured in a scratch directory, path rewritten to `/home/user/HelloWorld`; line numbers 1, 8, 16 match that file. Re-capture rather than edit. |
+| 4–9, 14, 15, 17, 20, 21, 22, 24, 28, 29, 31, 34, 36–39, 43, 46 | Compiled and run on dotnet SDK **10.0.112** in a stock `dotnet new console`, with the minimal types around them (`Order`, `User`, `Point`); outputs in comments (`// False`, `// 2..9`) are what it printed. |
+| 9 | Both columns were also run side by side for scores 100, 95, 90, 80, 75, 60, 59, 0: the `if` ladder and the switch expression give the same grade every time. |
+| 12, 13, 45 | Fragments: `Process`, `row`, `Invoice`, `file` are not defined anywhere. The constructs themselves (`var`, `new()` into a field and a parameter, catch order, `throw;`) were compiled separately. |
+| — | `CS8510`, `CS8509` and `CS8524`, quoted by voice in §2 since its order-and-exhaustiveness frame was cut, are real diagnostics from the same SDK: general arm above a specific one, no `_` on `object`, an enum without `_`. |
+| 37 | `NameLength` gives `CS8602`, as the comment says. |
+| 45 | `throw e;` gives `CA2200`; a general `catch` above a specific one is error `CS0160`. |
+| 48 | Real output of `PORT=abc dotnet run` on a `HelloWorld` whose `Program.cs` is the frame-46 listing plus two lines on top. Captured in a scratch directory, path rewritten to `/home/user/HelloWorld`; line numbers 1, 8, 16 match that file. Re-capture rather than edit. |
 
 Listings are ASCII only, including string literals: the script's listings use
 the same English strings as the deck. Two frames break the course's Allman
@@ -56,19 +58,26 @@ reason.
 ## Facts this lecture commits to
 
 - Section timings: **15 / 20 / 15 / 12 / 18** = 80 minutes.
-- **52 slides**, numbered 1–52 in order: §1 2–17, §2 18–28, §3 29–35,
-  §4 36–44, §5 45–52.
+- **49 slides**, numbered 1–49 in order: §1 2–18, §2 19–25, §3 26–32,
+  §4 33–41, §5 42–49.
+- §1 is called **«Управляющие конструкции»**, without «и сахар», in the
+  script, the deck, the README and the course documents. Its opener has no
+  subtitle line.
 - The order in §1 is the ladder **if → тернарный → switch → switch-выражение**,
   then values: **var → new() → коллекции → индексы и диапазоны**. The
   switch expression is called «аналог тернарного в семье switch» (frame 10).
 - The grade ladder (`score >= 90 → "A"`) is one thread through frames 5, 9 and
   §2's relational pattern: keep the numbers in step if one of them changes.
+  Frame 9 is built for beginners: one arm taken apart (pattern, `when`,
+  result), then the `if` ladder and the switch expression line for line.
 - `??`, `??=` and `?.` live in §4, not §1.
 - The pattern ladder has **six steps**: константа, тип, свойство, отношение и
   логика, позиция, список.
-- One `\statement` (frame 44, «каждый ! — это долг»), no `\shout`. Four
-  `\keyline`s (frames 17, 28, 35, 52); §4 closes on the statement.
-- Questions to the room (`[ВОПРОС В ЗАЛ]`) have no `\vote` frames, as in Л3.
+- One `\statement` (frame 41, «каждый ! — это долг»), no `\shout`. Four
+  `\keyline`s (frames 18, 25, 32, 49); §4 closes on the statement. §2's keyline
+  is about patterns only — the switch-or-polymorphism half went with its frame.
+- One `\vote` frame: 11, «Что такое var?», asked for in review. The other
+  questions to the room have no frame, as in Л3.
 
 ## Cut in review — not to be restored without asking
 
@@ -83,6 +92,11 @@ reason.
 - **The two remarks on enabling annotations** (warnings in old projects,
   unannotated packages).
 - **«Почему я на этом останавливаюсь»** at the end of §1.
+- **Four §2 frames**: the list-pattern command parser, the pattern-ladder table,
+  order and exhaustiveness, the switch-or-polymorphism table. Their text stays
+  in the script and is delivered by voice; the README tags those theses `[—]`.
+- **«и сахар»** in §1's name and the opener's subtitle; **«if (count) не
+  скомпилируется, в отличие от C»** on frame 4 and in the script.
 
 ## Open items
 
@@ -94,3 +108,7 @@ The author's call. Do not quietly "fix" these:
    ladder, early return, `when`, `var`) and cut parts of §3.
 3. **`ru/lecture-notes.md` still has the IQueryable link** for Л4 §3, cut in
    review here.
+4. **Lab 4 leans on voice-only material.** Its parser is built on list patterns
+   with a `..` tail and on «switch, not polymorphism» — both now live in §2's
+   voice, not on a frame. Frame 20 (`Describe`) still shows `[]` and
+   `[var first, ..]`.

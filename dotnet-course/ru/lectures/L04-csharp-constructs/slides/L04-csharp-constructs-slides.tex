@@ -9,7 +9,7 @@
 % Build:  make          (latexmk -pdf; engine: pdflatex)
 %
 % Every listing was compiled on .NET 10; outputs in comments are real.
-% Frame 51 is real terminal output, with the path anonymised to /home/user.
+% Frame 48 is real terminal output, with the path anonymised to /home/user.
 %
 % House rules: ../CLAUDE.md and ../../../CLAUDE.md. Theme: ../../../../theme/.
 
@@ -38,11 +38,10 @@
 \end{frame}
 
 % ======================================================= 1. CONSTRUCTS =====
-\section{1. Управляющие конструкции и сахар}
+\section{1. Управляющие конструкции}
 
 \begin{frame}[plain]
-  \sectionopener{1}{Управляющие конструкции и сахар}{От \texttt{if} к
-    switch-выражению --- и как создавать значения \hi{без повторов}.}
+  \sectionopener{1}{Управляющие конструкции}{}
 \end{frame}
 
 \begin{frame}{Лестница ветвлений}
@@ -99,8 +98,7 @@ else
   \begin{minipage}[t]{0.48\textwidth}
     \vspace{0.2em}
     \begin{cbul}{accent}
-      \item условие --- всегда \hi{\texttt{bool}}: \texttt{if (count)} не
-            скомпилируется, в отличие от C
+      \item условие --- всегда \hi{\texttt{bool}}
       \item ветка выполнится, если условие истинно
       \item \texttt{else} --- на случай лжи, необязателен
     \end{cbul}
@@ -268,9 +266,41 @@ var label = status switch
 
 \begin{frame}[fragile]{\texttt{when}: условие к ветке}
   \slidetop
-  \begin{minipage}[t]{0.55\textwidth}
-\begin{lstlisting}[style=csharp,basicstyle=\ttfamily\scriptsize]
-static string Grade(int score) => score switch
+  \begin{center}
+    \begin{tikzpicture}[font=\ttfamily\small,
+      part/.style={draw=hairline,line width=0.8pt,fill=codebg,
+                   minimum height=0.75cm,inner sep=0.45em},
+      lab/.style={font=\normalfont\scriptsize,text=muted,align=center,
+                  text width=3.4cm,below=0.3em}]
+      \node[part] (p) at (0,0) {var s};
+      \node[part,draw=accent,line width=1.0pt,anchor=west]
+        (w) at ([xshift=1.1cm]p.east) {\hi{when} s >= 90};
+      \node[part,anchor=west] (r) at ([xshift=1.1cm]w.east) {=> "A"};
+      \node[lab] at (p.south) {образец: любое число,\\ назовём его \texttt{s}};
+      \node[lab] at (w.south) {условие: ветка подходит,\\ только если оно
+        \hi{истинно}};
+      \node[lab] at (r.south) {результат\\ ветки};
+    \end{tikzpicture}
+  \end{center}
+
+  \vspace{0.4em}
+  \begin{minipage}[t]{0.47\textwidth}
+    \colhead{alt}{лестница if}\par\vspace{0.5em}
+\begin{lstlisting}[style=csharp,basicstyle=\twocol]
+string grade;
+
+if (score == 100) grade = "A+";
+else if (score >= 90) grade = "A";
+else if (score >= 75) grade = "B";
+else if (score >= 60) grade = "C";
+else grade = "F";
+
+\end{lstlisting}
+  \end{minipage}\hfill
+  \begin{minipage}[t]{0.47\textwidth}
+    \colhead{accent}{switch с when}\par\vspace{0.5em}
+\begin{lstlisting}[style=csharp,basicstyle=\twocol]
+var grade = score switch
 {
     100 => "A+",
     var s when s >= 90 => "A",
@@ -279,19 +309,6 @@ static string Grade(int score) => score switch
     _ => "F",
 };
 \end{lstlisting}
-  \end{minipage}\hfill
-  \begin{minipage}[t]{0.41\textwidth}
-    \vspace{0.2em}
-    \begin{cbul}{accent}
-      \item \texttt{100} --- константа
-      \item \texttt{var s} --- любое число, назови его \texttt{s}
-      \item \texttt{\hi{when}} --- условие, при котором ветка подходит
-      \item сверху вниз, как ступени лестницы
-    \end{cbul}
-    \vspace{1.0em}
-    \aside{Та же лестница оценок, но без присваивания в каждой ветке и без
-      \texttt{else}. Во втором разделе \texttt{var s when s >= 90} станет
-      просто \texttt{>= 90}.}
   \end{minipage}
 \end{frame}
 
@@ -315,6 +332,10 @@ static string Grade(int score) => score switch
   \aside{Выбор между столбцами один и тот же: нужно \lo{действие} или нужно
     \hi{значение}. Захотелось в ветке записать в лог и вернуть --- это
     инструкция, и честнее взять её.}
+\end{frame}
+
+\begin{frame}[plain]
+  \vote{Что такое \texttt{var}?}
 \end{frame}
 
 \begin{frame}[fragile]{\texttt{var}: вывод типа, а не динамика}
@@ -545,70 +566,6 @@ Console.WriteLine(text.Length);
   \end{minipage}
 \end{frame}
 
-\begin{frame}[fragile]{Образец списка: разбор команды}
-  \slidetop
-\begin{lstlisting}[style=csharp,basicstyle=\ttfamily\small]
-static string Run(string line) =>
-    line.Split(' ', StringSplitOptions.RemoveEmptyEntries) switch
-    {
-        ["move", var x, var y] => $"move to {x}:{y}",
-        ["delete", var id] => $"delete {id}",
-        ["say", .. var words] => string.Join(' ', words),
-        [] => "",
-        _ => "unknown command",
-    };
-\end{lstlisting}
-
-  \slidegap
-  \aside{Каждая ветка сразу проверяет \hi{количество} аргументов,
-    \hi{значение} первого и \hi{извлекает} остальные. \texttt{.. var words}
-    --- весь хвост отдельным куском. \texttt{"move 10 20"} $\rightarrow$
-    \texttt{move to 10:20}.}
-\end{frame}
-
-\begin{frame}{Лестница образцов}
-  \slidetop
-  {\renewcommand{\arraystretch}{1.25}
-  \begin{tabular}{@{}p{3.2cm}>{\raggedright\arraybackslash}p{4.6cm}>{\raggedright\arraybackslash}p{5.2cm}@{}}
-    \eyebrow{ступень} & \eyebrow{образец} & \eyebrow{читается} \\
-    \textbf{константа}  & \texttt{null}, \texttt{100}, \texttt{"move"}
-                        & равно этому значению \\
-    \textbf{тип}        & \texttt{\hi{int n}}
-                        & число --- назови \texttt{n} \\
-    \textbf{свойство}   & \texttt{string \{ Length: 0 \}}
-                        & строка длины ноль \\
-    \textbf{отношение и логика} & \texttt{\hi{>= 90}}, \texttt{int and < 0}
-                        & сравнение как образец \\
-    \textbf{позиция}    & \texttt{Point(var x, var y)}
-                        & разобрать на части \\
-    \textbf{список}     & \texttt{\hi{["move", var x, ..]}}
-                        & форма массива \\[0.4em]
-    \lo{\texttt{var x}} / \lo{\texttt{\_}} & внутри любого образца
-                        & возьми / не нужно \\
-  \end{tabular}}
-\end{frame}
-
-\begin{frame}{Порядок и полнота}
-  \slidetop
-  \claim{Ветки проверяются \hi{сверху вниз}, первая подходящая побеждает.}
-
-  {\renewcommand{\arraystretch}{1.5}
-  \begin{tabular}{@{}p{5.4cm}>{\raggedright\arraybackslash}p{7.8cm}@{}}
-    общий образец выше частного  & \lo{ошибка} \texttt{CS8510}: ветка
-                                   недостижима \\
-    нет ветки \texttt{\_}         & предупреждение \texttt{CS8509}, при
-                                   выполнении --- исключение \\
-    перечисление без \texttt{\_}  & тоже \texttt{CS8524}: в переменную
-                                   можно положить число без имени \\
-  \end{tabular}}
-
-  \slidegap
-  \hrulethin{0.42}
-  \rulegap
-  {\large Последняя ветка \texttt{\hi{\_}} есть всегда. Остальное ---
-    ошибка? Тогда в ней \hi{исключение}.}
-\end{frame}
-
 \begin{frame}[fragile]{Кортеж: вернуть два значения}
   \slidetop
 \begin{lstlisting}[style=csharp,basicstyle=\ttfamily\small]
@@ -665,29 +622,9 @@ if ((x, y) == (0, 0)) { }           // element-wise comparison
     можно и сопоставить.}
 \end{frame}
 
-\begin{frame}{\texttt{switch} или полиморфизм}
-  \slidetop
-  \claim{Вопрос не вкуса, а того, что меняется \hi{чаще}: типы или
-    операции.}
-
-  {\renewcommand{\arraystretch}{1.7}
-  \begin{tabular}{@{}p{3.4cm}>{\raggedright\arraybackslash}p{4.4cm}>{\raggedright\arraybackslash}p{4.6cm}@{}}
-    & \eyebrow{операций мало} & \eyebrow{операций много} \\
-    \textbf{типов мало}  & \textcolor{muted}{что проще}
-                         & \hi{\texttt{switch}}: операция в одном месте \\
-    \textbf{типов много} & \lo{полиморфизм}: новый тип --- новый класс
-                         & \textcolor{muted}{данные или поведение?} \\
-  \end{tabular}}
-
-  \slidegap
-  \aside{Много больших веток по типу, живущих годами, --- просился
-    \lo{полиморфизм}. Десять методов в каждом классе иерархии --- просились
-    \hi{record и \texttt{switch}}.}
-\end{frame}
-
 \begin{frame}[plain]
-  \keyline{Образец переносит проверку формы данных на компилятор.\\
-    Switch или полиморфизм --- вопрос о том, что меняется чаще.}
+  \keyline{Образец переносит проверку формы данных на компилятор:\\
+    вы описываете, что ожидаете, а он проверяет и извлекает.}
 \end{frame}
 
 % ========================================================= 3. DELEGATES ====
