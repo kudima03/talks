@@ -1,0 +1,1210 @@
+% Л4 -- C#: constructs, patterns, delegates and errors. Slides.
+%
+% Companion to the spoken script in ../L04-csharp-constructs.md, which is
+% the source of truth: the slides carry code, diagrams and short claims, and
+% the delivery lives in the script only: by the author's decision this deck
+% carries no speaker notes. Slide text is in Russian because that is the
+% content; everything else in this file is English.
+%
+% Build:  make          (latexmk -pdf; engine: pdflatex)
+%
+% Every listing was compiled on .NET 10; outputs in comments are real.
+% Frame 51 is real terminal output, with the path anonymised to /home/user.
+%
+% House rules: ../CLAUDE.md and ../../../CLAUDE.md. Theme: ../../../../theme/.
+
+\documentclass[aspectratio=169,10pt,t]{beamer}
+
+\usetheme{dotnet}
+\usetikzlibrary{arrows.meta,positioning,calc}
+\usepackage{array}   % ragged-right table columns
+
+\dotnetlecture{Л4}
+
+\title[Л4. Конструкции C\#]{C\#: конструкции, паттерны, делегаты и ошибки}
+\author{Дмитрий Курочкин}
+\date{}
+
+% A listing set one step under \scriptsize, for two columns of code side by
+% side. Smaller than this does not carry to the back of the room.
+\newcommand{\twocol}{\ttfamily\fontsize{7.0}{8.2}\selectfont}
+
+\begin{document}
+
+% ------------------------------------------------------------------ title --
+\begin{frame}[plain]
+  \titlepagednc{Лекция 4}{C\#: конструкции, паттерны, делегаты и ошибки}{}{Дмитрий
+    Курочкин}
+\end{frame}
+
+% ======================================================= 1. CONSTRUCTS =====
+\section{1. Управляющие конструкции и сахар}
+
+\begin{frame}[plain]
+  \sectionopener{1}{Управляющие конструкции и сахар}{От \texttt{if} к
+    switch-выражению --- и как создавать значения \hi{без повторов}.}
+\end{frame}
+
+\begin{frame}{Лестница ветвлений}
+  \slidetop
+  \claim{От простого к сложному: каждая ступень --- та же задача, записанная
+    \hi{короче}.}
+
+  \begin{center}
+    \begin{tikzpicture}[font=\small,
+      st/.style={draw=hairline,line width=0.8pt,fill=codebg,
+                 minimum height=0.95cm,minimum width=2.2cm,align=center,
+                 inner sep=0.3em},
+      ar/.style={-{Straight Barb[length=1.8mm]},muted,line width=0.6pt}]
+      \node[st,draw=alt]    (a) at (0,0)    {\texttt{if}};
+      \node[st,draw=accent] (b) at (2.75,0) {\texttt{? :}};
+      \node[st,draw=alt]    (c) at (5.5,0)  {\texttt{switch}};
+      \node[st,draw=accent] (d) at (8.25,0) {\texttt{switch}\\[-0.1em]
+        {\scriptsize выражение}};
+      \node[st,dashed,fill=paper] (e) at (11.0,0) {образцы\\[-0.1em]
+        {\scriptsize раздел 2}};
+      \draw[ar] (a) -- (b); \draw[ar] (b) -- (c);
+      \draw[ar] (c) -- (d); \draw[ar] (d) -- (e);
+      \foreach \n in {a,c} \node[above=0.35em,font=\scriptsize\bfseries,
+        text=alt] at (\n.north) {инструкция};
+      \foreach \n in {b,d} \node[above=0.35em,font=\scriptsize\bfseries,
+        text=accent] at (\n.north) {выражение};
+      \foreach \n/\t in {a/два исхода,b/два исхода,c/много исходов,
+                         d/много исходов} \node[below=0.35em,
+        font=\scriptsize,text=muted] at (\n.south) {\t};
+    \end{tikzpicture}
+  \end{center}
+
+  \slidegap
+  \aside{\lo{Инструкция} выполняет действие, результат собирают через
+    переменную. \hi{Выражение} возвращает значение: его присваивают,
+    возвращают, передают.}
+\end{frame}
+
+\begin{frame}[fragile]{\texttt{if}: ветвление по условию}
+  \slidetop
+  \begin{minipage}[t]{0.46\textwidth}
+\begin{lstlisting}[style=csharp,basicstyle=\ttfamily\small]
+decimal shipping;
+if (order.Total >= 5000m)
+{
+    shipping = 0m;
+}
+else
+{
+    shipping = 300m;
+}
+\end{lstlisting}
+  \end{minipage}\hfill
+  \begin{minipage}[t]{0.48\textwidth}
+    \vspace{0.2em}
+    \begin{cbul}{accent}
+      \item условие --- всегда \hi{\texttt{bool}}: \texttt{if (count)} не
+            скомпилируется, в отличие от C
+      \item ветка выполнится, если условие истинно
+      \item \texttt{else} --- на случай лжи, необязателен
+    \end{cbul}
+    \vspace{1.2em}
+    \aside{Обе ветки делают одно и то же: присваивают \texttt{shipping},
+      объявленную \lo{до} \texttt{if}. Запомните этот листинг.}
+  \end{minipage}
+\end{frame}
+
+\begin{frame}[fragile]{Лестница: плоская, а не вложенная}
+  \slidetop
+  \begin{minipage}[t]{0.47\textwidth}
+    \colhead{alt}{вложенная}\par\vspace{0.5em}
+\begin{lstlisting}[style=csharp,basicstyle=\ttfamily\scriptsize]
+if (score >= 90) {
+    grade = "A";
+} else {
+    if (score >= 75) {
+        grade = "B";
+    } else {
+        if (score >= 60) {
+            grade = "C";
+        } else {
+            grade = "F";
+        }
+    }
+}
+\end{lstlisting}
+  \end{minipage}\hfill
+  \begin{minipage}[t]{0.47\textwidth}
+    \colhead{accent}{плоская}\par\vspace{0.5em}
+\begin{lstlisting}[style=csharp,basicstyle=\ttfamily\scriptsize]
+if (score >= 90) {
+    grade = "A";
+} else if (score >= 75) {
+    grade = "B";
+} else if (score >= 60) {
+    grade = "C";
+} else {
+    grade = "F";
+}
+\end{lstlisting}
+    \vspace{0.8em}
+    \aside{Сверху вниз, срабатывает \hi{первое} истинное условие;
+      \texttt{else} ловит остальное. Частное --- выше общего.}
+  \end{minipage}
+\end{frame}
+
+\begin{frame}[fragile]{Ранний выход}
+  \slidetop
+  \begin{minipage}[t]{0.45\textwidth}
+    \colhead{alt}{всё внутри if}\par\vspace{0.5em}
+\begin{lstlisting}[style=csharp,basicstyle=\ttfamily\fontsize{6.8}{7.9}\selectfont]
+string Pay(Order? order, User user) {
+    if (order is not null) {
+        if (user.CanPay) {
+            if (order.IsNew) {
+                order.MarkPaid();
+                return "paid";
+            } else {
+                return "already paid";
+            }
+        } else {
+            return "forbidden";
+        }
+    } else {
+        return "no order";
+    }
+}
+\end{lstlisting}
+  \end{minipage}\hfill
+  \begin{minipage}[t]{0.51\textwidth}
+    \colhead{accent}{проверки сверху}\par\vspace{0.5em}
+\begin{lstlisting}[style=csharp,basicstyle=\ttfamily\fontsize{6.8}{7.9}\selectfont]
+string Pay(Order? order, User user) {
+    if (order is null) return "no order";
+    if (!user.CanPay) return "forbidden";
+    if (!order.IsNew) return "already paid";
+
+    order.MarkPaid();
+    return "paid";
+}
+\end{lstlisting}
+    \vspace{0.8em}
+    \aside{Список условий, потом суть --- на \hi{первом} уровне отступа,
+      без единого \texttt{else}. Слева, чтобы понять строку на четвёртом
+      уровне, надо помнить \lo{все условия} над ней.}
+  \end{minipage}
+\end{frame}
+
+\begin{frame}[fragile]{Тернарный оператор}
+  \slidetop
+  \claim{\texttt{if}, который \hi{возвращает значение}.}
+
+  \begin{minipage}[t]{0.34\textwidth}
+    \colhead{alt}{инструкция}\par\vspace{0.5em}
+\begin{lstlisting}[style=csharp,basicstyle=\ttfamily\scriptsize]
+decimal shipping;
+if (order.Total >= 5000m)
+{
+    shipping = 0m;
+}
+else
+{
+    shipping = 300m;
+}
+\end{lstlisting}
+  \end{minipage}\hfill
+  \begin{minipage}[t]{0.61\textwidth}
+    \colhead{accent}{выражение}\par\vspace{0.5em}
+\begin{lstlisting}[style=csharp,basicstyle=\ttfamily\scriptsize]
+var shipping = order.Total >= 5000m ? 0m : 300m;
+\end{lstlisting}
+    \vspace{1.0em}
+    \aside{Условие, \texttt{?}, значение для истины, \texttt{:}, значение
+      для лжи. Результат можно присвоить, вернуть, передать в метод,
+      вставить в интерполяцию.}\par
+    \vspace{0.8em}
+    \aside{Хорош, пока \hi{короткий}. Тернарный внутри тернарного ---
+      \lo{сигнал} брать \texttt{switch}.}
+  \end{minipage}
+\end{frame}
+
+\begin{frame}[fragile]{\texttt{switch}: было / стало}
+  \slidetop
+  \begin{minipage}[t]{0.485\textwidth}
+    \colhead{alt}{инструкция}\par\vspace{0.5em}
+\begin{lstlisting}[style=csharp,basicstyle=\ttfamily\fontsize{6.4}{7.4}\selectfont]
+string label;
+switch (status)
+{
+    case OrderStatus.New:
+        label = "new";
+        break;
+    case OrderStatus.Paid:
+        label = "paid";
+        break;
+    case OrderStatus.Shipped:
+        label = "shipped";
+        break;
+    default:
+        throw new ArgumentOutOfRangeException(
+            nameof(status));
+}
+\end{lstlisting}
+  \end{minipage}\hfill
+  \begin{minipage}[t]{0.485\textwidth}
+    \colhead{accent}{выражение}\par\vspace{0.5em}
+\begin{lstlisting}[style=csharp,basicstyle=\ttfamily\fontsize{6.4}{7.4}\selectfont]
+var label = status switch
+{
+    OrderStatus.New => "new",
+    OrderStatus.Paid => "paid",
+    OrderStatus.Shipped => "shipped",
+    _ => throw new ArgumentOutOfRangeException(
+        nameof(status)),
+};
+\end{lstlisting}
+    \vspace{0.8em}
+    \aside{\texttt{switch} после значения, стрелки вместо \texttt{:} и
+      \texttt{break}, \texttt{\_} вместо \texttt{default}. Выражение
+      \hi{обязано} вернуть значение.}
+  \end{minipage}
+\end{frame}
+
+\begin{frame}[fragile]{\texttt{when}: условие к ветке}
+  \slidetop
+  \begin{minipage}[t]{0.55\textwidth}
+\begin{lstlisting}[style=csharp,basicstyle=\ttfamily\scriptsize]
+static string Grade(int score) => score switch
+{
+    100 => "A+",
+    var s when s >= 90 => "A",
+    var s when s >= 75 => "B",
+    var s when s >= 60 => "C",
+    _ => "F",
+};
+\end{lstlisting}
+  \end{minipage}\hfill
+  \begin{minipage}[t]{0.41\textwidth}
+    \vspace{0.2em}
+    \begin{cbul}{accent}
+      \item \texttt{100} --- константа
+      \item \texttt{var s} --- любое число, назови его \texttt{s}
+      \item \texttt{\hi{when}} --- условие, при котором ветка подходит
+      \item сверху вниз, как ступени лестницы
+    \end{cbul}
+    \vspace{1.0em}
+    \aside{Та же лестница оценок, но без присваивания в каждой ветке и без
+      \texttt{else}. Во втором разделе \texttt{var s when s >= 90} станет
+      просто \texttt{>= 90}.}
+  \end{minipage}
+\end{frame}
+
+\begin{frame}{Инструкция и выражение}
+  \slidetop
+  \claim{Switch-выражение --- это \hi{тернарный оператор} в семье
+    \texttt{switch}.}
+
+  {\renewcommand{\arraystretch}{1.6}
+  \begin{tabular}{@{}p{3.6cm}p{4.2cm}p{4.6cm}@{}}
+    & \colhead{alt}{инструкция} & \colhead{accent}{выражение} \\
+    \textbf{два исхода}    & \texttt{if} / \texttt{else}
+                           & \texttt{\hi{cond ? a : b}} \\
+    \textbf{много исходов} & \texttt{switch} / \texttt{case}
+                           & \texttt{\hi{x switch \{ ... \}}} \\
+  \end{tabular}}
+
+  \slidegap
+  \hrulethin{0.42}
+  \rulegap
+  \aside{Выбор между столбцами один и тот же: нужно \lo{действие} или нужно
+    \hi{значение}. Захотелось в ветке записать в лог и вернуть --- это
+    инструкция, и честнее взять её.}
+\end{frame}
+
+\begin{frame}[fragile]{\texttt{var}: вывод типа, а не динамика}
+  \slidetop
+  \claim{Тип у переменной есть, он один и известен \hi{при компиляции}.}
+
+  \begin{minipage}[t]{0.47\textwidth}
+    \colhead{accent}{тип виден справа}\par\vspace{0.5em}
+\begin{lstlisting}[style=csharp,basicstyle=\ttfamily\scriptsize]
+var customers = new List<Customer>();
+var point = new Point(1, 2);
+var total = (decimal)row["total"];
+\end{lstlisting}
+  \end{minipage}\hfill
+  \begin{minipage}[t]{0.47\textwidth}
+    \colhead{alt}{тип не виден}\par\vspace{0.5em}
+\begin{lstlisting}[style=csharp,basicstyle=\ttfamily\scriptsize]
+var result = Process(order);   // ?
+Invoice result = Process(order);
+\end{lstlisting}
+  \end{minipage}
+
+  \slidegap
+  \hrulethin{0.42}
+  \rulegap
+  {\large Тип должен быть виден в строке \hi{хотя бы один раз}.}
+\end{frame}
+
+\begin{frame}[fragile]{\texttt{new} без имени типа}
+  \slidetop
+  \claim{Тип известен из контекста --- пишем его \hi{один раз}.}
+
+\begin{lstlisting}[style=csharp,basicstyle=\ttfamily\small]
+Dictionary<string, List<int>> scores = new();
+private readonly List<Order> _orders = new();
+Point origin = new(0, 0);
+Draw(new(10, 20));                    // parameter of type Point
+\end{lstlisting}
+
+  \slidegap
+  \aside{Работает при присваивании в переменную объявленного типа, в поле,
+    в параметр и при возврате из метода. То же правило, что у
+    \texttt{var}, только \hi{в другую сторону}: тип слева, короткий
+    \texttt{new} справа.}
+\end{frame}
+
+\begin{frame}[fragile]{Выражения коллекций}
+  \slidetop
+  \begin{minipage}[t]{0.52\textwidth}
+    \colhead{alt}{три синтаксиса}\par\vspace{0.5em}
+\begin{lstlisting}[style=csharp,basicstyle=\twocol]
+int[] a = new int[] { 1, 2, 3 };
+List<string> b = new List<string> { "x", "y" };
+Span<int> c = stackalloc int[] { 1, 2, 3 };
+
+var all = new List<int>(a);
+all.Add(4);
+var none = new List<int>();
+\end{lstlisting}
+  \end{minipage}\hfill
+  \begin{minipage}[t]{0.44\textwidth}
+    \colhead{accent}{один}\par\vspace{0.5em}
+\begin{lstlisting}[style=csharp,basicstyle=\twocol]
+int[] a = [1, 2, 3];
+List<string> b = ["x", "y"];
+Span<int> c = [1, 2, 3];
+
+List<int> all = [.. a, 4];
+
+List<int> none = [];
+\end{lstlisting}
+  \end{minipage}
+
+  \slidegap
+  \aside{\texttt{\hi{..}} --- оператор расширения: вставить все элементы
+    другой коллекции. Представление компилятор выбирает под целевой тип:
+    массив, список, Span на стеке. Пустые скобки --- \hi{дешёвая} пустая
+    коллекция.}
+\end{frame}
+
+\begin{frame}[fragile]{Индексы и диапазоны}
+  \slidetop
+  \begin{minipage}[t]{0.55\textwidth}
+    \colhead{alt}{арифметика}\par\vspace{0.5em}
+\begin{lstlisting}[style=csharp,basicstyle=\twocol]
+var last = items[items.Length - 1];
+var beforeLast = items[items.Length - 2];
+var middle = items.Skip(1)
+    .Take(items.Length - 2).ToArray();
+\end{lstlisting}
+  \end{minipage}\hfill
+  \begin{minipage}[t]{0.41\textwidth}
+    \colhead{accent}{намерение}\par\vspace{0.5em}
+\begin{lstlisting}[style=csharp,basicstyle=\twocol]
+var last = items[^1];
+var beforeLast = items[^2];
+var middle = items[1..^1];
+\end{lstlisting}
+  \end{minipage}
+
+  \slidegap
+  \aside{<<Последний элемент>> и <<длина минус один>> --- разные
+    высказывания. Первое говорит, \hi{что} вы хотите, второе --- \lo{как}
+    вычисляете, и в вычислении можно ошибиться на единицу.}
+\end{frame}
+
+\begin{frame}{Счёт с начала и с конца}
+  \slidetop
+  \begin{center}
+    \begin{tikzpicture}[font=\small,
+      cell/.style={draw=hairline,line width=0.8pt,fill=codebg,
+                   minimum width=1.5cm,minimum height=0.9cm,inner sep=0pt}]
+      \foreach \v [count=\i from 0] in {10,20,30,40,50} {
+        \node[cell] (c\i) at (\i*1.5,0) {\texttt{\v}};
+        \node[accent,font=\small\ttfamily,above=0.3em] at (c\i.north) {\i};
+      }
+      \foreach \i/\l in {0/\textasciicircum5,1/\textasciicircum4,
+                         2/\textasciicircum3,3/\textasciicircum2,
+                         4/\textasciicircum1} {
+        \node[alt,font=\small\ttfamily,below=0.3em] at (c\i.south) {\l};
+      }
+      \draw[accent,line width=1.6pt] ([xshift=1pt,yshift=1pt]c1.south west)
+        rectangle ([xshift=-1pt,yshift=-1pt]c3.north east);
+      \node[accent,font=\small\bfseries,anchor=west] at (8.0,0)
+        {\texttt{1..\textasciicircum1}};
+      \node[muted,font=\scriptsize,anchor=west] at (8.0,-0.45)
+        {= 20, 30, 40};
+    \end{tikzpicture}
+  \end{center}
+
+  \slidegap
+  {\small
+  \begin{tabular}{@{}p{2.6cm}p{6.0cm}@{}}
+    \texttt{\hi{..\textasciicircum1}} & всё, кроме последнего \\[0.2em]
+    \texttt{\hi{1..}}  & всё, начиная со второго \\[0.2em]
+    \texttt{\hi{1..\textasciicircum1}} & без первого и последнего \\
+  \end{tabular}}
+\end{frame}
+
+\begin{frame}[fragile]{Диапазон: копия или окно}
+  \slidetop
+\begin{lstlisting}[style=csharp,basicstyle=\ttfamily\small]
+Range body = 1..^1;                         // a value like any other
+int[] copy = array[body];                   // new array
+Span<int> window = array.AsSpan()[body];    // the same memory
+\end{lstlisting}
+
+  \slidegap
+  \versus{на Span --- окно}{%
+    \begin{cbul}{accent}
+      \item та же память, без копирования
+      \item режьте Span в горячем пути
+    \end{cbul}}{на массиве --- копия}{%
+    \begin{cbul}{alt}
+      \item новый массив, копия куска
+      \item синтаксис тот же, стоимость другая
+    \end{cbul}}
+
+  \slidegap
+  \aside{\texttt{Index} и \texttt{Range} --- обычные типы стандартной
+    библиотеки: их можно сохранить в переменную и передать в метод.}
+\end{frame}
+
+\begin{frame}[plain]
+  \keyline{Пишите выражениями, а не инструкциями:\\ выражение обязано
+    вернуть значение, и это делает его честнее.}
+\end{frame}
+
+% ================================================= 2. PATTERN MATCHING =====
+\section{2. Pattern matching}
+
+\begin{frame}[plain]
+  \sectionopener{2}{Pattern matching}{Шесть ступеней: константа $\rightarrow$
+    тип $\rightarrow$ свойство $\rightarrow$ отношение и логика
+    $\rightarrow$ позиция $\rightarrow$ \hi{список}.}
+\end{frame}
+
+\begin{frame}[fragile]{Одно выражение вместо цепочки приведений}
+  \slidetop
+\begin{lstlisting}[style=csharp,basicstyle=\ttfamily\fontsize{7.2}{8.3}\selectfont]
+static string Describe(object? input) => input switch
+{
+    null => "nothing",
+    int and < 0 => "negative number",
+    int n => $"number {n}",
+    string { Length: 0 } => "empty string",
+    string s => $"string of {s.Length} chars",
+    Point { X: 0, Y: 0 } => "origin",
+    Point(var x, var y) when x == y => $"on the diagonal: {x}",
+    Point p => $"point {p.X}:{p.Y}",
+    int[] and [] => "empty array",
+    int[] and [var first, ..] => $"array, first is {first}",
+    _ => "something else",
+};
+\end{lstlisting}
+  \vspace{0.3em}
+  \aside{Проверка и извлечение \hi{одновременно}: ни одного каста, ни одной
+    временной переменной, ни одного места, где можно проверить одно, а
+    привести \lo{к другому}.}
+\end{frame}
+
+\begin{frame}[fragile]{Образец в \texttt{if}}
+  \slidetop
+  \begin{minipage}[t]{0.5\textwidth}
+\begin{lstlisting}[style=csharp,basicstyle=\ttfamily\small]
+if (input is string s)
+{
+    Console.WriteLine(s.Length);
+}
+
+if (input is not string text)
+{
+    return;
+}
+Console.WriteLine(text.Length);
+\end{lstlisting}
+  \end{minipage}\hfill
+  \begin{minipage}[t]{0.44\textwidth}
+    \vspace{0.2em}
+    \begin{cbul}{accent}
+      \item внутри первого \texttt{if} \texttt{s} уже строка
+      \item \texttt{\hi{is not}} и выход: ниже \texttt{text} --- строка
+            \hi{во всём методе}
+    \end{cbul}
+    \vspace{1.0em}
+    \aside{Проверка, приведение и ранний выход из первого раздела --- одной
+      строкой. Так начинается половина методов, разбирающих вход.}
+  \end{minipage}
+\end{frame}
+
+\begin{frame}[fragile]{Образец списка: разбор команды}
+  \slidetop
+\begin{lstlisting}[style=csharp,basicstyle=\ttfamily\small]
+static string Run(string line) =>
+    line.Split(' ', StringSplitOptions.RemoveEmptyEntries) switch
+    {
+        ["move", var x, var y] => $"move to {x}:{y}",
+        ["delete", var id] => $"delete {id}",
+        ["say", .. var words] => string.Join(' ', words),
+        [] => "",
+        _ => "unknown command",
+    };
+\end{lstlisting}
+
+  \slidegap
+  \aside{Каждая ветка сразу проверяет \hi{количество} аргументов,
+    \hi{значение} первого и \hi{извлекает} остальные. \texttt{.. var words}
+    --- весь хвост отдельным куском. \texttt{"move 10 20"} $\rightarrow$
+    \texttt{move to 10:20}.}
+\end{frame}
+
+\begin{frame}{Лестница образцов}
+  \slidetop
+  {\renewcommand{\arraystretch}{1.25}
+  \begin{tabular}{@{}p{3.2cm}>{\raggedright\arraybackslash}p{4.6cm}>{\raggedright\arraybackslash}p{5.2cm}@{}}
+    \eyebrow{ступень} & \eyebrow{образец} & \eyebrow{читается} \\
+    \textbf{константа}  & \texttt{null}, \texttt{100}, \texttt{"move"}
+                        & равно этому значению \\
+    \textbf{тип}        & \texttt{\hi{int n}}
+                        & число --- назови \texttt{n} \\
+    \textbf{свойство}   & \texttt{string \{ Length: 0 \}}
+                        & строка длины ноль \\
+    \textbf{отношение и логика} & \texttt{\hi{>= 90}}, \texttt{int and < 0}
+                        & сравнение как образец \\
+    \textbf{позиция}    & \texttt{Point(var x, var y)}
+                        & разобрать на части \\
+    \textbf{список}     & \texttt{\hi{["move", var x, ..]}}
+                        & форма массива \\[0.4em]
+    \lo{\texttt{var x}} / \lo{\texttt{\_}} & внутри любого образца
+                        & возьми / не нужно \\
+  \end{tabular}}
+\end{frame}
+
+\begin{frame}{Порядок и полнота}
+  \slidetop
+  \claim{Ветки проверяются \hi{сверху вниз}, первая подходящая побеждает.}
+
+  {\renewcommand{\arraystretch}{1.5}
+  \begin{tabular}{@{}p{5.4cm}>{\raggedright\arraybackslash}p{7.8cm}@{}}
+    общий образец выше частного  & \lo{ошибка} \texttt{CS8510}: ветка
+                                   недостижима \\
+    нет ветки \texttt{\_}         & предупреждение \texttt{CS8509}, при
+                                   выполнении --- исключение \\
+    перечисление без \texttt{\_}  & тоже \texttt{CS8524}: в переменную
+                                   можно положить число без имени \\
+  \end{tabular}}
+
+  \slidegap
+  \hrulethin{0.42}
+  \rulegap
+  {\large Последняя ветка \texttt{\hi{\_}} есть всегда. Остальное ---
+    ошибка? Тогда в ней \hi{исключение}.}
+\end{frame}
+
+\begin{frame}[fragile]{Кортеж: вернуть два значения}
+  \slidetop
+\begin{lstlisting}[style=csharp,basicstyle=\ttfamily\small]
+var (lo, hi) = MinMax([5, 2, 9]);
+Console.WriteLine($"{lo}..{hi}");   // 2..9
+
+static (int Min, int Max) MinMax(IEnumerable<int> values)
+{
+    var min = int.MaxValue;
+    var max = int.MinValue;
+    foreach (var v in values)
+    {
+        if (v < min) min = v;
+        if (v > max) max = v;
+    }
+    return (min, max);
+}
+\end{lstlisting}
+\end{frame}
+
+\begin{frame}{Где уместен кортеж}
+  \slidetop
+  \claim{Кортеж \hi{локальный}, record \lo{публичный}.}
+
+  \versus{кортеж}{%
+    \begin{cbul}{accent}
+      \item вернуть из метода и тут же разобрать
+      \item два-три значения
+      \item вместо \texttt{out}-параметров
+    \end{cbul}}{record}{%
+    \begin{cbul}{alt}
+      \item параметр метода
+      \item поле, коллекция, наружу из класса
+      \item данные, которые живут дольше вызова
+    \end{cbul}}
+
+  \slidegap
+  \aside{Кортеж --- структура, сравнивается по значению. Имена элементов есть
+    только для компилятора: во время выполнения их нет.}
+\end{frame}
+
+\begin{frame}[fragile]{Деконструкция}
+  \slidetop
+\begin{lstlisting}[style=csharp,basicstyle=\ttfamily\small]
+var (_, max) = MinMax(values);      // only Max is needed
+(a, b) = (b, a);                    // swap, no temporary
+var (x, y) = new Point(3, 4);       // a record deconstructs too
+if ((x, y) == (0, 0)) { }           // element-wise comparison
+\end{lstlisting}
+
+  \slidegap
+  \aside{Любой тип разбирается, если у него есть метод \texttt{Deconstruct}.
+    Поэтому кортеж и образец --- \hi{один механизм}: то, что можно разобрать,
+    можно и сопоставить.}
+\end{frame}
+
+\begin{frame}{\texttt{switch} или полиморфизм}
+  \slidetop
+  \claim{Вопрос не вкуса, а того, что меняется \hi{чаще}: типы или
+    операции.}
+
+  {\renewcommand{\arraystretch}{1.7}
+  \begin{tabular}{@{}p{3.4cm}>{\raggedright\arraybackslash}p{4.4cm}>{\raggedright\arraybackslash}p{4.6cm}@{}}
+    & \eyebrow{операций мало} & \eyebrow{операций много} \\
+    \textbf{типов мало}  & \textcolor{muted}{что проще}
+                         & \hi{\texttt{switch}}: операция в одном месте \\
+    \textbf{типов много} & \lo{полиморфизм}: новый тип --- новый класс
+                         & \textcolor{muted}{данные или поведение?} \\
+  \end{tabular}}
+
+  \slidegap
+  \aside{Много больших веток по типу, живущих годами, --- просился
+    \lo{полиморфизм}. Десять методов в каждом классе иерархии --- просились
+    \hi{record и \texttt{switch}}.}
+\end{frame}
+
+\begin{frame}[plain]
+  \keyline{Образец переносит проверку формы данных на компилятор.\\
+    Switch или полиморфизм --- вопрос о том, что меняется чаще.}
+\end{frame}
+
+% ========================================================= 3. DELEGATES ====
+\section{3. Делегаты, лямбды, замыкания}
+
+\begin{frame}[plain]
+  \sectionopener{3}{Делегаты, лямбды, замыкания}{Делегат --- это \hi{тип},
+    описывающий сигнатуру метода.}
+\end{frame}
+
+\begin{frame}{Готовые формы}
+  \slidetop
+  \claim{Свои делегаты объявляют \hi{редко}: стандартная библиотека уже
+    объявила все формы.}
+
+  {\renewcommand{\arraystretch}{1.6}
+  \begin{tabular}{@{}p{4.6cm}p{2.4cm}p{6.2cm}@{}}
+    \texttt{\hi{Func<T, TResult>}} & \textbf{вычисли} & принимает 0--16
+      параметров, последний тип --- результат \\
+    \texttt{\hi{Action<T>}}         & \textbf{сделай}  & то же, ничего не
+      возвращает \\
+    \texttt{Predicate<T>}           & \textbf{проверь} & один параметр,
+      \texttt{bool}; в новом коде --- \texttt{Func<T, bool>} \\
+  \end{tabular}}
+
+  \slidegap
+  \aside{Экземпляр делегата --- пара: ссылка на метод и ссылка на объект,
+    у которого его вызывать. Поэтому \lo{не указатель}: указатель не знает
+    про объект.}
+\end{frame}
+
+\begin{frame}[fragile]{Формы лямбды}
+  \slidetop
+\begin{lstlisting}[style=csharp,basicstyle=\ttfamily\small]
+Func<int, bool> isEven = x => x % 2 == 0;
+Func<int, int, int> add = (a, b) => a + b;
+Action<string> print = Console.WriteLine;     // method group
+Func<string, int> parse = s =>
+{
+    var n = int.Parse(s);
+    return n * 2;
+};
+Func<Task> wait = async () => await Task.Delay(100);
+var square = (int x) => x * x;                // Func<int, int>
+\end{lstlisting}
+
+  \slidegap
+  \aside{Параметры, стрелка, тело. Одно выражение --- без скобок и
+    \texttt{return}. Типы параметров компилятор выводит \hi{из ожидаемого
+    делегата}.}
+\end{frame}
+
+\begin{frame}[fragile]{Замыкания: захват переменной, а не значения}
+  \slidetop
+  \begin{minipage}[t]{0.66\textwidth}
+\begin{lstlisting}[style=csharp,basicstyle=\ttfamily\fontsize{7.6}{9.0}\selectfont]
+var counter = 0;
+Action increment = () => counter++;
+increment();
+increment();
+Console.WriteLine(counter);
+
+var actions = new List<Action>();
+for (var i = 0; i < 3; i++)
+    actions.Add(() => Console.Write(i));
+foreach (var a in actions) a();
+
+actions.Clear();
+foreach (var j in new[] { 0, 1, 2 })
+    actions.Add(() => Console.Write(j));
+foreach (var a in actions) a();
+\end{lstlisting}
+  \end{minipage}\hfill
+  \begin{minipage}[t]{0.30\textwidth}
+    \vspace{2.2em}
+    {\large\ttfamily\hi{2}}\enspace\aside{та же переменная}\par
+    \vspace{3.75em}
+    {\large\ttfamily\lo{333}}\enspace\aside{одна \texttt{i} на весь цикл}\par
+    \vspace{3.75em}
+    {\large\ttfamily\hi{012}}\enspace\aside{новая \texttt{j} на итерацию}
+  \end{minipage}
+\end{frame}
+
+\begin{frame}{Что живёт дольше, чем вы думали}
+  \slidetop
+  \claim{Захваченное живёт, пока жива \hi{лямбда}, а не метод.}
+
+  \begin{center}
+    \begin{tikzpicture}[font=\small,
+      b/.style={draw=hairline,line width=0.8pt,fill=codebg,
+                minimum height=0.9cm,align=center,inner sep=0.4em},
+      ar/.style={-{Straight Barb[length=1.8mm]},line width=0.7pt}]
+      \node[b,minimum width=2.6cm] (m) at (0,0) {метод\\[-0.1em]
+        {\scriptsize\color{muted} кадр стека}};
+      \node[b,draw=alt,minimum width=3.4cm] (h) at (4.6,0)
+        {скрытый класс\\[-0.1em]{\scriptsize\ttfamily int counter;
+         int[] big;}};
+      \node[b,draw=accent,minimum width=2.6cm] (l) at (9.2,0) {лямбда\\[-0.1em]
+        {\scriptsize\color{muted} в кэше, в поле, в событии}};
+      \draw[ar,muted] (m) -- node[above,font=\scriptsize]{создаёт} (h);
+      \draw[ar,accent] (l) -- node[above,font=\scriptsize]{держит} (h);
+      \draw[ar,alt,dashed] (h.south) -- ++(0,-0.8) node[below,
+        font=\scriptsize\bfseries,text=alt]{живёт, пока жива лямбда};
+    \end{tikzpicture}
+  \end{center}
+
+  \slidegap
+  \aside{Захватили большой массив ради его длины и положили лямбду в
+    долгоживущий объект --- массив \lo{не соберётся никогда}.
+    \texttt{\hi{static}} перед лямбдой запрещает захват: компилятор
+    проверит, и аллокации нет.}
+\end{frame}
+
+\begin{frame}[fragile]{События}
+  \slidetop
+  \begin{minipage}[t]{0.52\textwidth}
+\begin{lstlisting}[style=csharp,basicstyle=\twocol]
+sealed class Downloader
+{
+    public event Action<int>? ProgressChanged;
+
+    void Report(int percent) =>
+        ProgressChanged?.Invoke(percent);
+}
+
+downloader.ProgressChanged += OnProgress;
+downloader.ProgressChanged -= OnProgress;
+\end{lstlisting}
+    \vspace{0.6em}
+    \aside{Делегат, к которому снаружи можно только \hi{подписаться} и
+      отписаться; вызывает владелец.}
+  \end{minipage}\hfill
+  \begin{minipage}[t]{0.43\textwidth}
+    \colhead{alt}{почему не в сервисе}\par\vspace{0.5em}
+    \begin{cbul}{alt}
+      \item \textbf{неявный поток}: кто подписан и в каком порядке, в месте
+            вызова не видно
+      \item \textbf{время жизни}: издатель держит подписчиков, забыли
+            отписаться --- утечка
+      \item \textbf{тестируемость}: зависимость через конструктор проще
+            подменить (Л10)
+    \end{cbul}
+  \end{minipage}
+\end{frame}
+
+\begin{frame}[plain]
+  \keyline{Делегат --- тип для метода, лямбда --- метод без имени,\\
+    замыкание --- переменная, которая переехала в кучу.\\ Смотрите, что
+    захватываете.}
+\end{frame}
+
+% ============================================================ 4. NULL ======
+\section{4. Отсутствие значения}
+
+\begin{frame}[plain]
+  \sectionopener{4}{Отсутствие значения}{\texttt{null} --- самая дорогая
+    ошибка в истории программирования.}
+\end{frame}
+
+\begin{frame}[fragile]{\texttt{int?}: значение и флаг}
+  \slidetop
+  \begin{minipage}[t]{0.5\textwidth}
+\begin{lstlisting}[style=csharp,basicstyle=\ttfamily\small]
+int? age = null;
+
+age.HasValue              // False
+age.GetValueOrDefault()   // 0
+age + 1                   // null
+age > 3                   // False
+age.Value                 // exception
+\end{lstlisting}
+  \end{minipage}\hfill
+  \begin{minipage}[t]{0.44\textwidth}
+    \vspace{0.2em}
+    \begin{cbul}{accent}
+      \item \hi{отдельный тип}: структура из числа и флага <<есть ли
+            значение>>
+      \item арифметика с пустым даёт пустое
+      \item сравнение с пустым --- ложь
+    \end{cbul}
+    \vspace{1.0em}
+    \aside{Число не может быть \texttt{null}, а <<не указано>> бывает:
+      возраст, дата. Для этого обёртка.}
+  \end{minipage}
+\end{frame}
+
+\begin{frame}{Два механизма с одним знаком}
+  \slidetop
+  \versus{int? --- тип}{%
+    \begin{cbul}{accent}
+      \item \texttt{Nullable<int>}, структура
+      \item существует во время выполнения
+      \item \texttt{HasValue}, \texttt{Value}
+    \end{cbul}}{string? --- аннотация}{%
+    \begin{cbul}{alt}
+      \item тот же \texttt{string}
+      \item во время выполнения её нет
+      \item читает только компилятор
+    \end{cbul}}
+
+  \slidegap
+  \hrulethin{0.42}
+  \rulegap
+  \aside{Аннотация --- компромисс: двадцать лет кода считали, что ссылка может
+    быть \texttt{null}. Новый тип сломал бы всё, аннотация не ломает ничего,
+    а новый код получает \hi{предупреждения}.}
+\end{frame}
+
+\begin{frame}[fragile]{Компилятор думает о \texttt{null} вместе с вами}
+  \slidetop
+  \begin{minipage}[t]{0.42\textwidth}
+\begin{lstlisting}[style=xml,basicstyle=\ttfamily\small]
+<Nullable>enable</Nullable>
+\end{lstlisting}
+    \vspace{0.6em}
+    \aside{Одна строка в \texttt{csproj} из Л1. В новых проектах уже
+      включена.}
+  \end{minipage}\hfill
+  \begin{minipage}[t]{0.54\textwidth}
+\begin{lstlisting}[style=csharp,basicstyle=\ttfamily\small]
+static int Length(string? text)
+{
+    if (text is null)
+    {
+        return 0;
+    }
+    return text.Length;   // no warning
+}
+\end{lstlisting}
+  \end{minipage}
+
+  \slidegap
+  \aside{Анализ потока понимает \texttt{return} после проверки,
+    \texttt{\hi{is null}} и \texttt{\hi{is not null}}, оператор
+    \texttt{??}. После проверки компилятор знает, что дальше не
+    \texttt{null}, и молчит.}
+\end{frame}
+
+\begin{frame}[fragile]{Предупреждение ловит ошибку прода}
+  \slidetop
+\begin{lstlisting}[style=csharp,basicstyle=\ttfamily\small]
+static string Greeting(User? user)
+{
+    var name = user?.Name ?? "guest";   // string? became string
+    return $"Hello, {name}!";
+}
+
+static int NameLength(User user)
+{
+    return user.Name.Length;            // CS8602: Name may be null
+}
+
+sealed record User(string? Name);
+\end{lstlisting}
+  \vspace{0.4em}
+  \aside{Второй метод компилируется, но с \lo{предупреждением} --- ровно там,
+    где упал бы первый пользователь без имени.}
+\end{frame}
+
+\begin{frame}[fragile]{\texttt{?.} --- если есть}
+  \slidetop
+  \claim{Стратегия: \hi{распространить} отсутствие дальше.}
+
+\begin{lstlisting}[style=csharp,basicstyle=\ttfamily\small]
+var city = order?.Customer?.Address?.City ?? "unknown";
+\end{lstlisting}
+  \vspace{0.6em}
+  \aside{Заказ, если есть, его покупатель, если есть, его адрес, если есть,
+    город --- а если по дороге пусто, <<unknown>>. Старым способом --- четыре
+    вложенных \texttt{if}.}
+
+  \slidegap
+  \hrulethin{0.42}
+  \rulegap
+  {\large \texttt{?.} \lo{прячет} отсутствие. Адрес обязан быть, а его нет
+    --- строка молча вернёт <<unknown>>.}
+\end{frame}
+
+\begin{frame}[fragile]{\texttt{??} и \texttt{??=}}
+  \slidetop
+  \begin{minipage}[t]{0.52\textwidth}
+    \colhead{alt}{через if}\par\vspace{0.5em}
+\begin{lstlisting}[style=csharp,basicstyle=\twocol]
+string name;
+if (user.Name != null)
+    name = user.Name;
+else
+    name = "guest";
+
+if (_cache == null)
+    _cache = new Dictionary<int, User>();
+\end{lstlisting}
+  \end{minipage}\hfill
+  \begin{minipage}[t]{0.44\textwidth}
+    \colhead{accent}{одной строкой}\par\vspace{0.5em}
+\begin{lstlisting}[style=csharp,basicstyle=\twocol]
+var name = user.Name ?? "guest";
+
+_cache ??= new Dictionary<int, User>();
+\end{lstlisting}
+  \end{minipage}
+
+  \slidegap
+  {\renewcommand{\arraystretch}{1.4}
+  \begin{tabular}{@{}p{1.6cm}p{11.6cm}@{}}
+    \texttt{\hi{??}}  & <<или>>: \hi{заменить} отсутствие осмысленным ---
+                        имя или <<гость>>, список или пустой список \\
+    \texttt{\hi{??=}} & <<если пусто, присвоить>>: \hi{ленивая}
+                        инициализация, кэш создаётся при первом обращении \\
+  \end{tabular}}
+\end{frame}
+
+\begin{frame}{Что здесь значит \texttt{null}?}
+  \slidetop
+  \claim{Один \texttt{null} --- три разные вещи. Решите, какая, \hi{до}
+    того, как писать \texttt{??}.}
+
+  {\renewcommand{\arraystretch}{1.5}
+  \begin{tabular}{@{}p{4.4cm}>{\raggedright\arraybackslash}p{8.8cm}@{}}
+    \textbf{нормальный исход}   & <<не найден>> --- \hi{\texttt{User?}} в
+                                  сигнатуре, вызывающий обязан обработать \\
+    \textbf{ошибка контракта}   & пустой идентификатор --- \lo{исключение} на
+                                  границе, внутри без вопросов \\
+    \textbf{<<не загружено>>}   & ошибка проектирования: объект не создаётся
+                                  наполовину, \texttt{required} \\
+    \textbf{коллекция}          & \hi{пустая}, а не \texttt{null}. Никогда \\
+  \end{tabular}}
+
+  \slidegap
+  \aside{\texttt{null} не должен молча пересекать границу слоя.}
+\end{frame}
+
+\begin{frame}[plain]
+  \statement{Каждый \lo{\texttt{!}} --- это долг.\\[0.3em] {\color{muted}
+    Рядом с ним --- комментарий, почему \texttt{null} здесь невозможен.}}
+\end{frame}
+
+% =========================================================== 5. ERRORS =====
+\section{5. Ошибки}
+
+\begin{frame}[plain]
+  \sectionopener{5}{Ошибки}{Исключение --- это \hi{исключение}, а не поток
+    управления.}
+\end{frame}
+
+\begin{frame}[fragile]{Неверный ввод --- не исключение}
+  \slidetop
+  \begin{minipage}[t]{0.47\textwidth}
+    \colhead{alt}{исключение}\par\vspace{0.5em}
+\begin{lstlisting}[style=csharp,basicstyle=\ttfamily\scriptsize]
+try
+{
+    var age = int.Parse(input);
+    Save(age);
+}
+catch (FormatException)
+{
+    Console.WriteLine("Not a number");
+}
+\end{lstlisting}
+  \end{minipage}\hfill
+  \begin{minipage}[t]{0.47\textwidth}
+    \colhead{accent}{возвращаемое значение}\par\vspace{0.5em}
+\begin{lstlisting}[style=csharp,basicstyle=\ttfamily\scriptsize]
+if (int.TryParse(input, out var age))
+{
+    Save(age);
+}
+else
+{
+    Console.WriteLine("Not a number");
+}
+\end{lstlisting}
+  \end{minipage}
+
+  \slidegap
+  \aside{Исключение раскручивает стек, собирает трассировку и проходит все
+    \texttt{finally} --- на \lo{порядки} дороже возврата. Но главное ---
+    \hi{скрытый переход}: управление оказывается в \texttt{catch} в другом
+    файле.}
+\end{frame}
+
+\begin{frame}{Два вида плохого входа}
+  \slidetop
+  \versus{ошибка сценария}{%
+    \begin{cbul}{accent}
+      \item клиент всё сделал правильно
+      \item{} <<средств недостаточно>>
+      \item \hi{возвращаемое значение}
+    \end{cbul}}{ошибка контракта}{%
+    \begin{cbul}{alt}
+      \item клиент нарушил договор
+      \item{} <<сумма минус пять>>
+      \item \lo{исключение}, один раз на границе
+    \end{cbul}}
+
+  \slidegap
+  \hrulethin{0.42}
+  \rulegap
+  \aside{Можно описать в терминах домена, и клиент может осмысленно
+    отреагировать --- это результат. Чего по договору быть не может --- это
+    исключение контракта.}
+\end{frame}
+
+\begin{frame}[fragile]{Механика}
+  \slidetop
+  \begin{minipage}[t]{0.52\textwidth}
+\begin{lstlisting}[style=csharp,basicstyle=\ttfamily\scriptsize]
+try
+{
+    Process(file);
+}
+catch (FileNotFoundException)
+{
+    UseDefaults();
+}
+catch (IOException e)
+{
+    Log(e);
+    throw;
+}
+finally
+{
+    file.Close();
+}
+\end{lstlisting}
+  \end{minipage}\hfill
+  \begin{minipage}[t]{0.44\textwidth}
+    \vspace{0.2em}
+    \begin{cbul}{accent}
+      \item \texttt{catch} сверху вниз: \hi{частные выше общих}, иначе
+            ошибка компиляции \texttt{CS0160}
+      \item \texttt{\hi{throw;}} --- дальше с исходной трассировкой
+      \item \texttt{\lo{throw e;}} --- трассировка \lo{перезаписана}
+            (\texttt{CA2200})
+      \item \texttt{finally} выполняется \hi{всегда}, даже после
+            \texttt{return}
+    \end{cbul}
+  \end{minipage}
+\end{frame}
+
+\begin{frame}[fragile]{Бросок, фильтр, цепочка}
+  \slidetop
+\begin{lstlisting}[style=csharp,basicstyle=\ttfamily\fontsize{6.8}{7.8}\selectfont]
+static int ParsePort(string? raw)
+{
+    try
+    {
+        return int.Parse(raw ?? throw new ConfigurationException("PORT is not set"));
+    }
+    catch (FormatException e) when (raw is { Length: 0 })
+    {
+        throw new ConfigurationException("PORT is empty", e);
+    }
+    catch (FormatException e)
+    {
+        throw new ConfigurationException($"PORT has a wrong format: '{raw}'", e);
+    }
+}
+
+sealed class ConfigurationException(string message, Exception? inner = null)
+    : Exception(message, inner);
+\end{lstlisting}
+\end{frame}
+
+\begin{frame}{Где ловить всё}
+  \slidetop
+  \claim{Ловите только то, что можете \hi{обработать}.}
+
+  \begin{center}
+    \begin{tikzpicture}[font=\small,
+      fr/.style={draw=hairline,line width=0.8pt,fill=codebg,
+                 minimum width=5.6cm,minimum height=0.62cm,inner sep=0.2em},
+      ar/.style={-{Straight Barb[length=1.6mm]},muted,line width=0.6pt}]
+      \node[fr,draw=accent,line width=1.2pt,fill=paper] (b) at (0,0)
+        {\texttt{\hi{catch (Exception)}} --- граница};
+      \foreach \t/\y [count=\i] in {OrderController/-0.85,OrderService/-1.7,
+                                    PaymentClient/-2.55} {
+        \node[fr] (f\i) at (0,\y) {\texttt{\t}};
+        \node[alt,font=\scriptsize,anchor=west] at (3.0,\y)
+          {$\times$\ \texttt{catch (Exception)}};
+      }
+      \draw[ar] (f3.west) -- ++(-0.6,0) |- (b.west);
+      \node[muted,font=\scriptsize,anchor=east] at (-3.45,-1.3)
+        {летит вверх};
+    \end{tikzpicture}
+  \end{center}
+
+  \slidegap
+  \aside{Граница: точка входа утилиты, обработчик запроса (Л8), фоновая
+    задача. Ниже <<поймать всё>> \lo{запрещено}: поймали баг, отмену,
+    нехватку памяти и оставили систему в неизвестном состоянии.}
+\end{frame}
+
+\begin{frame}[fragile]{Как читать исключение}
+  \slidetop
+\begin{lstlisting}[style=term,basicstyle=\ttfamily\fontsize{6.9}{8.2}\selectfont]
+$ PORT=abc dotnet run
+Unhandled exception. ConfigurationException: PORT has a wrong format: 'abc'
+ ---> System.FormatException: The input string 'abc' was not in a correct format.
+   at System.Number.ThrowFormatException[TChar](ReadOnlySpan`1 value)
+   at System.Int32.Parse(String s)
+   at Program.<<Main>$>g__ParsePort|0_0(String raw) in /home/user/HelloWorld/Program.cs:line 8
+   --- End of inner exception stack trace ---
+   at Program.<<Main>$>g__ParsePort|0_0(String raw) in /home/user/HelloWorld/Program.cs:line 16
+   at Program.<Main>$(String[] args) in /home/user/HelloWorld/Program.cs:line 1
+\end{lstlisting}
+
+  \slidegap
+  \aside{Тип, сообщение, вложенное после \texttt{-{}-->}, трассировка. Читать
+    с \hi{самого внутреннего}: оно ближе всего к причине. Файл и строка ---
+    только если рядом лежит \texttt{pdb} (Л1).}
+\end{frame}
+
+\begin{frame}[plain]
+  \keyline{Ловите только то, что можете обработать.\\ Остальное пусть
+    долетит до границы: она одна, и она для этого существует.}
+\end{frame}
+
+\end{document}
