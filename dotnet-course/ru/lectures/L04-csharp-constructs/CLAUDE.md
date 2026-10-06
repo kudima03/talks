@@ -1,4 +1,4 @@
-# Л4. C#: конструкции, паттерны, делегаты и ошибки — house rules
+# Л4. C#: конструкции, делегаты и ошибки — house rules
 
 Working notes for this lecture's directory. Course-wide rules — the palette,
 the two-colour system, what may go on a slide, the build, the slide-cue
