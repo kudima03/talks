@@ -12,12 +12,15 @@ first; this file carries only what is specific to Л5.
 | `L05-collections-and-linq.md` | The spoken script. **Source of truth.** |
 | `README.md` | Theses — a summary and a crib sheet for the lectern, with the frame each thesis lives on. |
 | `slides/L05-collections-and-linq-slides.tex` | The deck. One frame per `[СЛАЙД n — …]` cue. |
+| `lab/LAB05-task.md` | The lab, as handed to the student. |
+| `lab/LAB05-review.md` | The same lab for whoever accepts it. |
 
-Three move together, not five: **this lecture has no `lab/` yet** (see Open
-items). Every thesis in `README.md` carries a frame number and `[—]` marks a
-thesis with no frame. **Adding, cutting or reordering a frame invalidates
-those numbers** — renumber the cues in the script, then re-derive the tags in
-`README.md`, in the same commit.
+The five move together. Every thesis in `README.md` carries a frame number
+and `[—]` marks a thesis with no frame. **Adding, cutting or reordering a
+frame invalidates those numbers** — renumber the cues in the script, then
+re-derive the tags in `README.md`, in the same commit. The lab continues
+`Shop.Domain`/`HelloWorld`/`Shell` from Л3–Л4's labs and asks for nothing the
+lecture does not cover.
 
 ## Shape specific to Л5
 
@@ -64,6 +67,23 @@ English-language code comment where the script's prose carries the Russian
 gloss instead, same rule as every other lecture — `pdflatex` + T2A does not
 set Cyrillic inside `lstlisting`.
 
+## Lab — how it was checked
+
+`LAB05-review.md`'s expected output, the double-`querying orders...` demo and
+the four compiler diagnostics all come from a minimal reference
+implementation (`Shop.Domain` + a `Program.cs` standing in for `Shell`),
+built and run on dotnet SDK **10.0.112** in a scratch directory, not
+committed to the repo. Three orders — two paid for Ann (150 + 150), one
+shipped for Bob (120) — produce the exact `report`/`top 2` session quoted in
+the review file; `top 2` genuinely returns one row on that data, because Bob
+has no paid order, and that is the correct result, not a bug in the
+reference solution.
+
+The four diagnostics in the review file's table (`CS1105`, `CS0021`,
+`CS0029`, `CS8604`) were each triggered against the reference solution and
+copied verbatim, including the exact type names GroupBy/Select produce —
+re-check them if `OrderExtensions`' signatures change.
+
 ## Facts this lecture commits to
 
 - Section timings as labelled in the script: **30 / 15 / 22 / 10 / 8** = 85
@@ -88,7 +108,5 @@ The author's call. Do not quietly "fix" these:
    split into two passes (PR review, same thread as above); sections 2–5
    were not re-budgeted to compensate. Either trim §1 or accept 85 as the
    real number.
-2. **No `lab/` for this lecture yet.** `LAB05-task.md` and `LAB05-review.md`
-   were not requested with the slides/README/CLAUDE pass — a separate task.
-3. **The Latin Modern fallback has not been checked** for this deck; it
+2. **The Latin Modern fallback has not been checked** for this deck; it
    builds with PT Sans.
