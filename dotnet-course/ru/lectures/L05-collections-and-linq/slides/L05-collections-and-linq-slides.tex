@@ -147,26 +147,31 @@
   \begin{center}
     \begin{tikzpicture}[font=\footnotesize,
       nd/.style={draw=hairline,line width=0.8pt,fill=codebg,
-                 minimum width=1.6cm,minimum height=0.9cm,inner sep=0pt},
-      ptr/.style={draw=muted,circle,fill=paper,minimum size=0.42cm,
-                  inner sep=0pt,font=\tiny}]
+                 minimum width=1.9cm,minimum height=0.9cm,inner sep=0pt,
+                 align=center},
+      ptr/.style={draw=muted,line width=0.7pt,circle,fill=paper,
+                  minimum size=0.4cm,inner sep=0pt,font=\tiny},
+      ar/.style={-{Straight Barb[length=1.6mm]},muted,line width=0.6pt}]
       \node[nd] (a) at (0,0) {значение};
-      \node[ptr] (pa) at ([xshift=0.55cm,yshift=0.3cm]a.east) {N};
-      \node[muted,font=\scriptsize,below=0.5em] at (a.south)
+      \node[ptr] (pa) at ([xshift=-0.3cm]a.east) {N};
+      \draw[ar] (pa.east) -- ++(0.9,0);
+      \node[muted,font=\scriptsize,below=0.6em] at (a.south)
         {однонаправленный};
 
-      \node[nd] (b) at (6.0,0) {значение};
-      \node[ptr] (pb1) at ([xshift=0.55cm,yshift=0.3cm]b.east) {N};
-      \node[ptr] (pb2) at ([xshift=0.55cm,yshift=-0.3cm]b.east) {P};
-      \node[muted,font=\scriptsize,below=0.5em] at (b.south)
+      \node[nd] (b) at (6.4,0) {значение};
+      \node[ptr] (pbn) at ([xshift=-0.3cm]b.east) {N};
+      \draw[ar] (pbn.east) -- ++(0.9,0);
+      \node[ptr] (pbp) at ([xshift=0.3cm]b.west) {P};
+      \draw[ar] (pbp.west) -- ++(-0.9,0);
+      \node[muted,font=\scriptsize,below=0.6em] at (b.south)
         {двунаправленный};
     \end{tikzpicture}
   \end{center}
 
   \slidegap
-  \aside{Лишний кружок --- лишний указатель и лишняя память на \hi{каждый}
-    узел. В обмен: удаление по одной ссылке на сам узел, без поиска
-    \lo{соседей}.}
+  \aside{Каждый кружок --- отдельный указатель внутри узла, и у каждого своя
+    стрелка наружу. Лишний кружок --- лишняя память на \hi{каждый} узел. В
+    обмен: удаление по одной ссылке на сам узел, без поиска \lo{соседей}.}
 \end{frame}
 
 \begin{frame}{Хеш-таблица}
@@ -180,11 +185,14 @@
                    minimum width=1.3cm,minimum height=0.8cm,inner sep=0pt},
       chain/.style={draw=hairline,line width=0.7pt,fill=paper,
                     minimum width=1.0cm,minimum height=0.6cm,inner sep=0pt},
+      fn/.style={draw=accent,line width=1.0pt,fill=codebg,
+                 minimum width=1.8cm,minimum height=0.8cm},
       ar/.style={-{Straight Barb[length=1.8mm]},accent,line width=0.6pt}]
-      \foreach \i in {0,1,2,3,4} \node[cell] (c\i) at (\i*1.3,0) {};
-      \node[accent,font=\scriptsize\ttfamily,above=0.9cm] (k) at (c2.north)
-        {ключ};
-      \draw[ar] (k) -- node[right,font=\scriptsize,text=accent]{хеш} (c2.north);
+      \node[font=\ttfamily] (val) at (0,0.9) {значение};
+      \node[fn] (fn) at (3.0,0.9) {hash()};
+      \draw[ar] (val) -- (fn);
+      \foreach \i in {0,1,2,3,4} \node[cell] (c\i) at (\i*1.3,-0.9) {};
+      \draw[ar] (fn.south) -- (c2.north);
       \node[chain] (h1) at ([yshift=-0.8cm]c2.south) {};
       \draw[muted,line width=0.6pt] (c2.south) -- (h1.north);
       \node[alt,font=\scriptsize,anchor=west] at ([xshift=0.6cm]h1.east)
@@ -293,54 +301,35 @@
     прошлых слайдов.}
 \end{frame}
 
-\begin{frame}{Массив → \texttt{T[]}}
+\begin{frame}{По строкам или по столбцам?}
   \slidetop
-  \claim{Единственная структура с собственными инструкциями в \hi{IL}.}
+  \claim{Двумерный массив десять на десять, сложить каждую ячейку ровно
+    один раз: быстрее \hi{по строкам}, по столбцам или без разницы?}
 
   \begin{center}
-  \begin{tikzpicture}
-    \node[draw=hairline,line width=0.8pt,fill=codebg,inner sep=0.6em] {%
-      \begin{tabular}{@{}ll@{}}
-        \texttt{\hi{newarr}}  & создать массив \\
-        \texttt{\hi{ldlen}}   & узнать длину \\
-        \texttt{\hi{ldelem}}  & взять элемент \\
-        \texttt{\hi{stelem}}  & положить элемент \\
-      \end{tabular}};
-  \end{tikzpicture}
+    \begin{tikzpicture}[font=\scriptsize,
+      cell/.style={draw=hairline,line width=0.6pt,fill=codebg,
+                   minimum width=0.62cm,minimum height=0.62cm,inner sep=0pt}]
+      \begin{scope}
+        \foreach \r in {0,...,4}
+          \foreach \c in {0,...,4}
+            \node[cell] at (\c*0.62,-\r*0.62) {};
+        \draw[{Straight Barb[length=1.6mm]}-,accent,line width=1.1pt]
+          (2.8,0) -- (0,0) -- (0,-0.62) -- (2.8,-0.62);
+        \node[accent,font=\scriptsize\bfseries,below=0.4em] at (1.4,-2.48)
+          {по строкам};
+      \end{scope}
+      \begin{scope}[xshift=5.3cm]
+        \foreach \r in {0,...,4}
+          \foreach \c in {0,...,4}
+            \node[cell] at (\c*0.62,-\r*0.62) {};
+        \draw[{Straight Barb[length=1.6mm]}-,alt,line width=1.1pt]
+          (0,-2.48) -- (0,0) -- (0.62,0) -- (0.62,-2.48);
+        \node[alt,font=\scriptsize\bfseries,below=0.4em] at (1.4,-2.48)
+          {по столбцам};
+      \end{scope}
+    \end{tikzpicture}
   \end{center}
-
-  \slidegap
-  \aside{Всё остальное в библиотеке --- список, словарь, очередь ---
-    построено поверх массива обычным кодом на C\#.}
-\end{frame}
-
-\begin{frame}{Один индекс или два}
-  \slidetop
-  \begin{minipage}[t]{0.47\textwidth}
-    \colhead{accent}{int[]}\par\vspace{0.6em}
-    \begin{tikzpicture}[font=\small,
-      cell/.style={draw=hairline,line width=0.7pt,fill=codebg,
-                   minimum width=0.85cm,minimum height=0.75cm,inner sep=0pt}]
-      \foreach \i in {0,...,4} \node[cell] (c\i) at (\i*0.85,0) {};
-    \end{tikzpicture}\par\vspace{0.5em}
-    \aside{адрес = начало + \texttt{i} × размер}
-  \end{minipage}\hfill
-  \begin{minipage}[t]{0.47\textwidth}
-    \colhead{alt}{int[,]}\par\vspace{0.6em}
-    \begin{tikzpicture}[font=\small,
-      cell/.style={draw=hairline,line width=0.7pt,fill=codebg,
-                   minimum width=0.85cm,minimum height=0.6cm,inner sep=0pt}]
-      \foreach \r in {0,...,2}
-        \foreach \c in {0,...,2}
-          \node[cell] at (\c*0.85,-\r*0.6) {};
-    \end{tikzpicture}\par\vspace{0.5em}
-    \aside{адрес = начало + (\texttt{row}×\texttt{width}+\texttt{col}) ×
-      размер}
-  \end{minipage}
-
-  \slidegap
-  \aside{Один непрерывный блок в обоих случаях --- рантайм просто считает
-    адрес по \hi{двум} индексам вместо одного.}
 \end{frame}
 
 \begin{frame}[fragile]{Динамический массив → \texttt{List<T>}}
@@ -442,11 +431,26 @@
   \claim{Словарь \hi{без значений}: тот же хэш, тот же \texttt{Equals},
     ответ --- есть или нет.}
 
-  {\renewcommand{\arraystretch}{1.6}
-  \begin{tabular}{@{}p{5.4cm}>{\centering\arraybackslash}p{2.8cm}@{}}
-    список в \lo{список} (\texttt{Contains} в цикле) & $O(n^2)$ \\
-    список в \hi{множество}                           & $O(n)$ \\
-  \end{tabular}}
+  \begin{center}
+    \begin{tikzpicture}[font=\scriptsize,
+      cell/.style={draw=hairline,line width=0.7pt,fill=codebg,
+                   minimum width=0.7cm,minimum height=0.6cm,inner sep=0pt},
+      ar/.style={-{Straight Barb[length=1.3mm]},line width=0.4pt}]
+      \foreach \i in {0,1,2} \node[cell] (b\i) at (\i*0.8,0.9) {};
+      \foreach \i in {0,1,2} \node[cell] (i\i) at (\i*0.8,0) {};
+      \foreach \j in {0,1,2}
+        \foreach \i in {0,1,2}
+          \draw[ar,alt] (b\j) -- (i\i);
+      \node[alt,font=\scriptsize,anchor=west] at (2.7,0.45)
+        {список в список: \lo{$O(n^2)$}};
+
+      \foreach \i in {0,1,2} \node[cell] (c\i) at (\i*0.8,-1.3) {};
+      \node[cell,draw=accent,line width=0.9pt] (set) at (4.6,-1.3) {};
+      \foreach \i in {0,1,2} \draw[ar,accent] (c\i) -- (set);
+      \node[accent,font=\scriptsize,anchor=west] at (5.1,-1.3)
+        {список в множество: \hi{$O(n)$}};
+    \end{tikzpicture}
+  \end{center}
 
   \slidegap
   \aside{Объединение, пересечение, разность --- тоже методы, не циклы с
@@ -480,12 +484,12 @@
       cell/.style={draw=hairline,line width=0.8pt,fill=codebg,
                    minimum width=1.0cm,minimum height=0.75cm,inner sep=0pt},
       ar/.style={-{Straight Barb[length=1.6mm]},line width=0.7pt}]
-      \foreach \i in {0,...,4} \node[cell] (s\i) at (\i*1.0,1.0) {};
+      \foreach \i in {0,...,4} \node[cell] (s\i) at (\i*1.0,1.5) {};
       \node[accent,font=\scriptsize,anchor=west] at (s4.east)
         {\texttt{Stack<T>}: push/pop с конца};
       \draw[ar,accent] (s4.north) -- ++(0,0.4);
 
-      \foreach \i in {0,...,4} \node[cell] (q\i) at (\i*1.0,-0.6) {};
+      \foreach \i in {0,...,4} \node[cell] (q\i) at (\i*1.0,-1.5) {};
       \draw[ar,alt] (q0.north) -- ++(0,0.4)
         node[above,font=\scriptsize,text=alt]{dequeue};
       \draw[ar,alt] ++(4.0,-0.2) -- (q4.north)
@@ -575,22 +579,6 @@
     незаметно изменил структуру, пока вы её читали.}
 \end{frame}
 
-\begin{frame}{\texttt{ImmutableList<T>} vs \texttt{ImmutableArray<T>}}
-  \slidetop
-  {\renewcommand{\arraystretch}{1.6}
-  \begin{tabular}{@{}p{4.2cm}>{\centering\arraybackslash}p{3.2cm}%
-    >{\centering\arraybackslash}p{3.2cm}@{}}
-    & \colhead{accent}{ImmutableList} & \colhead{alt}{ImmutableArray} \\
-    внутри       & дерево              & обёртка над массивом \\
-    добавление   & \hi{дешёвое}, делит структуру & копирует всё \\
-    доступ по индексу & $O(\log n)$    & \hi{O(1)} \\
-  \end{tabular}}
-
-  \slidegap
-  \aside{Первый --- для коллекций, которые растут по одному элементу.
-    Второй --- для тех, что построили один раз и читают по индексу.}
-\end{frame}
-
 \begin{frame}{\texttt{Frozen*}}
   \slidetop
   \claim{Собрали один раз --- читаем \hi{миллионы} раз быстрее обычного
@@ -669,28 +657,27 @@ using (var e = items.GetEnumerator())
     держать ресурс.}
 \end{frame}
 
-\begin{frame}[fragile]{\texttt{yield return}: описание, а не результат}
+\begin{frame}[fragile]{Построили запрос --- ничего не выполнили}
   \slidetop
-\begin{lstlisting}[style=csharp,basicstyle=\ttfamily\fontsize{7.4}{8.6}\selectfont]
-static IEnumerable<int> Evens(int limit)
+\begin{lstlisting}[style=csharp,basicstyle=\ttfamily\fontsize{7.6}{9.0}\selectfont]
+var calls = 0;
+IEnumerable<int> evens = Enumerable.Range(0, 7).Where(i =>
 {
-    Console.WriteLine("started");
-    for (var i = 0; i <= limit; i++)
-        if (i % 2 == 0) yield return i;
-    Console.WriteLine("finished");
-}
+    calls++;
+    return i % 2 == 0;
+});
 \end{lstlisting}
 
   \slidegap
 \begin{lstlisting}[style=term,basicstyle=\ttfamily\small]
-got sequence
-started
-0 2 4 6 finished
-started
-0 2 4 6 finished
+calls so far: 0
+0 2 4 6
+calls after first pass: 7
+0 2 4 6
+calls after second pass: 14
 \end{lstlisting}
-  \aside{Вызов \texttt{Evens} не выполнил \hi{ни строки} тела. Каждый
-    \texttt{foreach} запускает его с начала.}
+  \aside{Построение \texttt{evens} не вызвало условие \hi{ни разу}. Каждый
+    \texttt{foreach} по \texttt{evens} прогоняет условие заново, с нуля.}
 \end{frame}
 
 \begin{frame}{Две ловушки отложенного выполнения}
@@ -744,6 +731,308 @@ var top = orders
   \aside{Взять заказы. Оставить оплаченные. Сгруппировать. Посчитать.
     Отфильтровать. Отсортировать. Взять три. \hi{Материализовать}. Порядок
     слов --- порядок действий.}
+\end{frame}
+
+% ------------------------------------------------- filtration, one each --
+\begin{frame}[fragile]{\texttt{Where}}
+  \slidetop
+  \claim{Оставить подходящие.}
+\begin{lstlisting}[style=csharp,basicstyle=\ttfamily\small]
+IEnumerable<Order> paid = orders.Where(o => o.Status == OrderStatus.Paid);
+\end{lstlisting}
+\end{frame}
+
+\begin{frame}[fragile]{\texttt{OfType}}
+  \slidetop
+  \claim{Оставить элементы нужного типа.}
+\begin{lstlisting}[style=csharp,basicstyle=\ttfamily\small]
+IEnumerable<int> numbers = mixed.OfType<int>();
+\end{lstlisting}
+  \slidegap
+  \aside{Образец по типу из прошлой лекции, применённый к последовательности.}
+\end{frame}
+
+\begin{frame}[fragile]{\texttt{Distinct}}
+  \slidetop
+  \claim{Убрать повторы.}
+\begin{lstlisting}[style=csharp,basicstyle=\ttfamily\small]
+IEnumerable<OrderStatus> statuses = orders.Select(o => o.Status).Distinct();
+\end{lstlisting}
+  \slidegap
+  \aside{Внутри --- \texttt{GetHashCode} и \texttt{Equals}, как у словаря из
+    первого раздела.}
+\end{frame}
+
+\begin{frame}[fragile]{\texttt{Take}}
+  \slidetop
+  \claim{Первые n.}
+\begin{lstlisting}[style=csharp,basicstyle=\ttfamily\small]
+IEnumerable<Order> firstTwo = orders.Take(2);
+\end{lstlisting}
+\end{frame}
+
+\begin{frame}[fragile]{\texttt{Skip}}
+  \slidetop
+  \claim{Пропустить n.}
+\begin{lstlisting}[style=csharp,basicstyle=\ttfamily\small]
+IEnumerable<Order> rest = orders.Skip(2);
+\end{lstlisting}
+\end{frame}
+
+\begin{frame}[fragile]{\texttt{TakeWhile}}
+  \slidetop
+  \claim{Брать, пока условие истинно.}
+\begin{lstlisting}[style=csharp,basicstyle=\ttfamily\small]
+IEnumerable<int> prefix = evens.TakeWhile(n => n % 2 == 0);
+\end{lstlisting}
+\end{frame}
+
+\begin{frame}[fragile]{\texttt{SkipWhile}}
+  \slidetop
+  \claim{Пропускать, пока условие истинно.}
+\begin{lstlisting}[style=csharp,basicstyle=\ttfamily\small]
+IEnumerable<int> tail = evens.SkipWhile(n => n % 2 == 0);
+\end{lstlisting}
+\end{frame}
+
+% --------------------------------------------------- projection, one each --
+\begin{frame}[fragile]{\texttt{Select}}
+  \slidetop
+  \claim{Превратить каждый элемент.}
+\begin{lstlisting}[style=csharp,basicstyle=\ttfamily\small]
+IEnumerable<decimal> amounts = orders.Select(o => o.Amount);
+\end{lstlisting}
+\end{frame}
+
+\begin{frame}[fragile]{\texttt{SelectMany}}
+  \slidetop
+  \claim{Склеить списки списков в одну ленту.}
+\begin{lstlisting}[style=csharp,basicstyle=\ttfamily\small]
+IEnumerable<Order> allOrders = customers.SelectMany(c => c.Orders);
+\end{lstlisting}
+  \slidegap
+  \aside{Самый недооценённый оператор: без него --- вложенный \texttt{foreach}
+    с добавлением в список.}
+\end{frame}
+
+% -------------------------------------------------- aggregation, one each --
+\begin{frame}[fragile]{\texttt{Count}}
+  \slidetop
+  \claim{Сколько подходящих.}
+\begin{lstlisting}[style=csharp,basicstyle=\ttfamily\small]
+int count = orders.Count(o => o.Status == OrderStatus.Paid);
+\end{lstlisting}
+\end{frame}
+
+\begin{frame}[fragile]{\texttt{Sum}}
+  \slidetop
+  \claim{Сумма.}
+\begin{lstlisting}[style=csharp,basicstyle=\ttfamily\small]
+decimal total = orders.Sum(o => o.Amount);
+\end{lstlisting}
+\end{frame}
+
+\begin{frame}[fragile]{\texttt{Min}}
+  \slidetop
+  \claim{Наименьшее.}
+\begin{lstlisting}[style=csharp,basicstyle=\ttfamily\small]
+decimal cheapest = orders.Min(o => o.Amount);
+\end{lstlisting}
+\end{frame}
+
+\begin{frame}[fragile]{\texttt{Max}}
+  \slidetop
+  \claim{Наибольшее.}
+\begin{lstlisting}[style=csharp,basicstyle=\ttfamily\small]
+decimal priciest = orders.Max(o => o.Amount);
+\end{lstlisting}
+\end{frame}
+
+\begin{frame}[fragile]{\texttt{Average}}
+  \slidetop
+  \claim{Среднее.}
+\begin{lstlisting}[style=csharp,basicstyle=\ttfamily\small]
+decimal average = orders.Average(o => o.Amount);
+\end{lstlisting}
+\end{frame}
+
+\begin{frame}[fragile]{\texttt{Any}}
+  \slidetop
+  \claim{Есть ли хоть один подходящий.}
+\begin{lstlisting}[style=csharp,basicstyle=\ttfamily\small]
+bool hasPaid = orders.Any(o => o.Status == OrderStatus.Paid);
+\end{lstlisting}
+  \slidegap
+  \aside{Останавливается на \hi{первом} найденном --- в отличие от
+    \texttt{Count > 0}, который перебирает всё.}
+\end{frame}
+
+\begin{frame}[fragile]{\texttt{All}}
+  \slidetop
+  \claim{Все ли подходят.}
+\begin{lstlisting}[style=csharp,basicstyle=\ttfamily\small]
+bool allPaid = orders.All(o => o.Status == OrderStatus.Paid);
+\end{lstlisting}
+\end{frame}
+
+\begin{frame}[fragile]{\texttt{Aggregate}}
+  \slidetop
+  \claim{Свернуть по своему правилу.}
+\begin{lstlisting}[style=csharp,basicstyle=\ttfamily\small]
+decimal totalFold = orders.Aggregate(0m, (sum, o) => sum + o.Amount);
+\end{lstlisting}
+  \slidegap
+  \aside{Когда пяти готовых операторов не хватает.}
+\end{frame}
+
+\begin{frame}[fragile]{\texttt{First}}
+  \slidetop
+  \claim{Первый элемент, исключение если пусто.}
+\begin{lstlisting}[style=csharp,basicstyle=\ttfamily\small]
+Order first = orders.First(o => o.Status == OrderStatus.Paid);
+\end{lstlisting}
+\end{frame}
+
+\begin{frame}[fragile]{\texttt{FirstOrDefault}}
+  \slidetop
+  \claim{Первый или значение по умолчанию.}
+\begin{lstlisting}[style=csharp,basicstyle=\ttfamily\fontsize{8.2}{9.6}\selectfont]
+Order? firstOrNull = orders.FirstOrDefault(o => o.Status == OrderStatus.Shipped);
+\end{lstlisting}
+  \slidegap
+  \aside{Для ссылочного типа значение по умолчанию --- \texttt{null}.}
+\end{frame}
+
+\begin{frame}[fragile]{\texttt{Single}}
+  \slidetop
+  \claim{Ровно один элемент, исключение иначе.}
+\begin{lstlisting}[style=csharp,basicstyle=\ttfamily\small]
+Order theOne = orders.Single(o => o.CustomerId == 3);
+\end{lstlisting}
+  \slidegap
+  \aside{Утверждение о данных: «здесь по смыслу не может быть двух». Два
+    всё-таки есть --- лучше узнать \hi{исключением}, чем молча взять первый.}
+\end{frame}
+
+\begin{frame}[fragile]{\texttt{SingleOrDefault}}
+  \slidetop
+  \claim{Ноль или один.}
+\begin{lstlisting}[style=csharp,basicstyle=\ttfamily\small]
+Order? maybeOne = orders.SingleOrDefault(o => o.CustomerId == 99);
+\end{lstlisting}
+\end{frame}
+
+% ---------------------------------------------------- grouping, one each --
+\begin{frame}[fragile]{\texttt{GroupBy}}
+  \slidetop
+  \claim{Последовательность групп по ключу.}
+\begin{lstlisting}[style=csharp,basicstyle=\ttfamily\fontsize{8.2}{9.6}\selectfont]
+IEnumerable<IGrouping<int, Order>> byCustomer = orders.GroupBy(o => o.CustomerId);
+\end{lstlisting}
+  \slidegap
+  \aside{Ленивый: группирует \hi{при переборе}.}
+\end{frame}
+
+\begin{frame}[fragile]{\texttt{ToLookup}}
+  \slidetop
+  \claim{Словарь из ключа в список --- сразу.}
+\begin{lstlisting}[style=csharp,basicstyle=\ttfamily\fontsize{8.2}{9.6}\selectfont]
+ILookup<int, Order> byCustomerLookup = orders.ToLookup(o => o.CustomerId);
+\end{lstlisting}
+  \slidegap
+  \aside{Материализует сразу, в отличие от \texttt{GroupBy}, и безопасен для
+    отсутствующего ключа: пустая последовательность, не исключение.}
+\end{frame}
+
+% --------------------------------------------------------- join, one each --
+\begin{frame}[fragile]{\texttt{Join}}
+  \slidetop
+  \claim{Сопоставить два источника по ключу.}
+\begin{lstlisting}[style=csharp,basicstyle=\ttfamily\fontsize{8.2}{9.6}\selectfont]
+IEnumerable<(Order Order, Customer Customer)> pairs =
+    orders.Join(customers, o => o.CustomerId, c => c.Id, (o, c) => (o, c));
+\end{lstlisting}
+  \slidegap
+  \aside{Внутри --- словарь по правому источнику: линия, не квадрат.}
+\end{frame}
+
+\begin{frame}[fragile]{\texttt{GroupJoin}}
+  \slidetop
+  \claim{Для каждого слева --- группа справа.}
+\begin{lstlisting}[style=csharp,basicstyle=\ttfamily\fontsize{8.2}{9.6}\selectfont]
+IEnumerable<(Customer Customer, IEnumerable<Order> Orders)> grouped =
+    customers.GroupJoin(orders, c => c.Id, o => o.CustomerId, (c, os) => (c, os));
+\end{lstlisting}
+\end{frame}
+
+\begin{frame}[fragile]{\texttt{Zip}}
+  \slidetop
+  \claim{Склеить поэлементно.}
+\begin{lstlisting}[style=csharp,basicstyle=\ttfamily\fontsize{8.2}{9.6}\selectfont]
+IEnumerable<(string Name, decimal Total)> zipped = names.Zip(totals, (n, t) => (n, t));
+\end{lstlisting}
+\end{frame}
+
+% ---------------------------------------- sorting / materialization, each --
+\begin{frame}[fragile]{\texttt{OrderBy}}
+  \slidetop
+  \claim{Сортировка по возрастанию.}
+\begin{lstlisting}[style=csharp,basicstyle=\ttfamily\small]
+IEnumerable<Order> byAmount = orders.OrderBy(o => o.Amount);
+\end{lstlisting}
+\end{frame}
+
+\begin{frame}[fragile]{\texttt{OrderByDescending}}
+  \slidetop
+  \claim{Сортировка по убыванию.}
+\begin{lstlisting}[style=csharp,basicstyle=\ttfamily\small]
+IEnumerable<Order> byAmountDesc = orders.OrderByDescending(o => o.Amount);
+\end{lstlisting}
+\end{frame}
+
+\begin{frame}[fragile]{\texttt{ThenBy}}
+  \slidetop
+  \claim{Второй ключ сортировки.}
+\begin{lstlisting}[style=csharp,basicstyle=\ttfamily\fontsize{8.2}{9.6}\selectfont]
+IEnumerable<Order> sorted = orders.OrderBy(o => o.CustomerId).ThenBy(o => o.Amount);
+\end{lstlisting}
+\end{frame}
+
+\begin{frame}[fragile]{\texttt{ToList}}
+  \slidetop
+  \claim{Материализовать в список.}
+\begin{lstlisting}[style=csharp,basicstyle=\ttfamily\small]
+List<Order> list = orders.Where(o => o.Status == OrderStatus.Paid).ToList();
+\end{lstlisting}
+\end{frame}
+
+\begin{frame}[fragile]{\texttt{ToArray}}
+  \slidetop
+  \claim{Материализовать в массив.}
+\begin{lstlisting}[style=csharp,basicstyle=\ttfamily\small]
+Order[] array = orders.ToArray();
+\end{lstlisting}
+\end{frame}
+
+\begin{frame}[fragile]{\texttt{ToDictionary}}
+  \slidetop
+  \claim{Материализовать по ключу.}
+\begin{lstlisting}[style=csharp,basicstyle=\ttfamily\small]
+Dictionary<decimal, Order> byAmountKey = orders.ToDictionary(o => o.Amount);
+\end{lstlisting}
+  \slidegap
+  \aside{Ключ повторился --- \hi{исключение}, тот же принцип, что у
+    \texttt{Single}: лучше узнать о дубликате сразу.}
+\end{frame}
+
+\begin{frame}[fragile]{\texttt{ToHashSet}}
+  \slidetop
+  \claim{Материализовать в множество.}
+\begin{lstlisting}[style=csharp,basicstyle=\ttfamily\small]
+HashSet<OrderStatus> statusSet = orders.Select(o => o.Status).ToHashSet();
+\end{lstlisting}
+  \slidegap
+  \aside{Правильный конец конвейера, если дальше идут вопросы «есть ли».}
 \end{frame}
 
 \begin{frame}{Пять семейств операторов}
