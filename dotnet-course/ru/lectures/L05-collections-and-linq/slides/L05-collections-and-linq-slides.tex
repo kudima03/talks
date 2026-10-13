@@ -100,23 +100,6 @@
     постоянная.}
 \end{frame}
 
-\begin{frame}{Массив vs динамический массив}
-  \slidetop
-  {\renewcommand{\arraystretch}{1.6}
-  \begin{tabular}{@{}p{4.4cm}>{\centering\arraybackslash}p{3.6cm}%
-    >{\centering\arraybackslash}p{3.6cm}@{}}
-    & \colhead{alt}{массив} & \colhead{accent}{дин. массив} \\
-    доступ по индексу    & \hi{O(1)} & \hi{O(1)} \\
-    добавление в конец   & \lo{недоступно} & \hi{O(1)} амортиз. \\
-    вставка в середину   & $O(n)$ сдвиг    & $O(n)$ сдвиг \\
-    память                & без запаса      & с запасом \\
-  \end{tabular}}
-
-  \slidegap
-  \aside{Динамический массив снимает фиксированный размер, но не снимает
-    цену вставки не в конец.}
-\end{frame}
-
 \begin{frame}{Связный список}
   \slidetop
   \claim{Вставка и удаление рядом с \hi{известным} узлом --- одна операция;
@@ -301,37 +284,6 @@
     прошлых слайдов.}
 \end{frame}
 
-\begin{frame}{По строкам или по столбцам?}
-  \slidetop
-  \claim{Двумерный массив десять на десять, сложить каждую ячейку ровно
-    один раз: быстрее \hi{по строкам}, по столбцам или без разницы?}
-
-  \begin{center}
-    \begin{tikzpicture}[font=\scriptsize,
-      cell/.style={draw=hairline,line width=0.6pt,fill=codebg,
-                   minimum width=0.62cm,minimum height=0.62cm,inner sep=0pt}]
-      \begin{scope}
-        \foreach \r in {0,...,4}
-          \foreach \c in {0,...,4}
-            \node[cell] at (\c*0.62,-\r*0.62) {};
-        \draw[{Straight Barb[length=1.6mm]}-,accent,line width=1.1pt]
-          (2.8,0) -- (0,0) -- (0,-0.62) -- (2.8,-0.62);
-        \node[accent,font=\scriptsize\bfseries,below=0.4em] at (1.4,-2.48)
-          {по строкам};
-      \end{scope}
-      \begin{scope}[xshift=5.3cm]
-        \foreach \r in {0,...,4}
-          \foreach \c in {0,...,4}
-            \node[cell] at (\c*0.62,-\r*0.62) {};
-        \draw[{Straight Barb[length=1.6mm]}-,alt,line width=1.1pt]
-          (0,-2.48) -- (0,0) -- (0.62,0) -- (0.62,-2.48);
-        \node[alt,font=\scriptsize\bfseries,below=0.4em] at (1.4,-2.48)
-          {по столбцам};
-      \end{scope}
-    \end{tikzpicture}
-  \end{center}
-\end{frame}
-
 \begin{frame}[fragile]{Динамический массив → \texttt{List<T>}}
   \slidetop
   \claim{Та же пара чисел, теперь с именами: \hi{Count} и \hi{Capacity}.}
@@ -367,8 +319,8 @@
   \end{center}
 
   \slidegap
-  \aside{Вставка и удаление у \hi{известного} узла --- одна операция. Узел
-    нужно найти --- это уже линейно.}
+  \aside{Нужен \lo{редко}: когда вы держите ссылки на узлы и часто удаляете
+    по ним из середины --- например, кэш с вытеснением. Иначе --- \hi{List}.}
 \end{frame}
 
 \begin{frame}[plain]
@@ -398,6 +350,45 @@
   \slidegap
   \aside{Оба \hi{$O(n)$}. Массив читается блоками процессора; переход по
     ссылке --- чтение из случайного места памяти, мимо кэша.}
+\end{frame}
+
+\begin{frame}{По строкам или по столбцам?}
+  \slidetop
+  \claim{Двумерный массив десять на десять, сложить каждую ячейку ровно
+    один раз: быстрее \hi{по строкам}, \lo{по столбцам} или без разницы?}
+
+  \begin{center}
+    \begin{tikzpicture}[font=\scriptsize,
+      cell/.style={draw=hairline,line width=0.6pt,fill=codebg,
+                   minimum width=0.62cm,minimum height=0.62cm,inner sep=0pt},
+      run/.style={-{Straight Barb[length=1.4mm]},line width=1.0pt},
+      back/.style={dotted,line width=0.6pt}]
+      % Cell (r,c) is centred at (c*0.62, -r*0.62). Solid arrows are the
+      % reads in order, dotted lines the jump to the start of the next run.
+      \begin{scope}
+        \foreach \r in {0,...,4}
+          \foreach \c in {0,...,4}
+            \node[cell] at (\c*0.62,-\r*0.62) {};
+        \foreach \r in {0,...,4}
+          \draw[run,accent] (-0.15,-\r*0.62) -- (2.63,-\r*0.62);
+        \foreach \r in {0,...,3}
+          \draw[back,accent] (2.63,-\r*0.62) -- (-0.15,-\r*0.62-0.62);
+        \node[accent,font=\scriptsize\bfseries,below=0.4em] at (1.24,-2.79)
+          {по строкам};
+      \end{scope}
+      \begin{scope}[xshift=5.3cm]
+        \foreach \r in {0,...,4}
+          \foreach \c in {0,...,4}
+            \node[cell] at (\c*0.62,-\r*0.62) {};
+        \foreach \c in {0,...,4}
+          \draw[run,alt] (\c*0.62,0.15) -- (\c*0.62,-2.63);
+        \foreach \c in {0,...,3}
+          \draw[back,alt] (\c*0.62,-2.63) -- (\c*0.62+0.62,0.15);
+        \node[alt,font=\scriptsize\bfseries,below=0.4em] at (1.24,-2.79)
+          {по столбцам};
+      \end{scope}
+    \end{tikzpicture}
+  \end{center}
 \end{frame}
 
 \begin{frame}{Хеш-таблица → \texttt{Dictionary<TKey, TValue>}}
@@ -614,47 +605,12 @@
     \texttt{await}.}
 \end{frame}
 
-\begin{frame}[plain]
-  \keyline{Всё в стандартной библиотеке построено поверх массива:\\ каждая
-    структура --- выбор, за что платить.}
-\end{frame}
-
 % ========================================================= 2. IENUMERABLE ==
 \section{2. IEnumerable как контракт}
 
 \begin{frame}[plain]
   \sectionopener{2}{IEnumerable как контракт}{\hi{Обещание}, что перебрать
     можно; когда и сколько раз --- не сказано.}
-\end{frame}
-
-\begin{frame}[fragile]{\texttt{foreach}: вы пишете / компилятор делает}
-  \slidetop
-  \begin{minipage}[t]{0.42\textwidth}
-    \colhead{alt}{вы пишете}\par\vspace{0.5em}
-\begin{lstlisting}[style=csharp,basicstyle=\ttfamily\small]
-foreach (var item in items)
-    Console.WriteLine(item);
-\end{lstlisting}
-  \end{minipage}\hfill
-  \begin{minipage}[t]{0.55\textwidth}
-    \colhead{accent}{компилятор делает}\par\vspace{0.5em}
-\begin{lstlisting}[style=csharp,basicstyle=\ttfamily\fontsize{7.6}{9.0}\selectfont]
-using (var e = items.GetEnumerator())
-{
-    while (e.MoveNext())
-    {
-        var item = e.Current;
-        Console.WriteLine(item);
-    }
-}
-\end{lstlisting}
-  \end{minipage}
-
-  \slidegap
-  \aside{\texttt{GetEnumerator} --- курсор перед первым элементом.
-    \texttt{MoveNext} сдвигает и говорит, есть ли дальше. \texttt{Current}
-    --- элемент под курсором. \texttt{using} --- перечислитель может
-    держать ресурс.}
 \end{frame}
 
 \begin{frame}[fragile]{Построили запрос --- ничего не выполнили}
@@ -695,8 +651,8 @@ calls after second pass: 14
   \slidegap
   \hrulethin{0.42}
   \rulegap
-  {\large Нужен результат --- материализуйте \hi{один раз}: \texttt{ToList}
-    или \texttt{ToArray}.}
+  {\large Граница должна быть видна в коде: \hi{query} --- описание,
+    \hi{items} --- результат.}
 \end{frame}
 
 \begin{frame}[plain]
@@ -740,16 +696,6 @@ var top = orders
 \begin{lstlisting}[style=csharp,basicstyle=\ttfamily\small]
 IEnumerable<Order> paid = orders.Where(o => o.Status == OrderStatus.Paid);
 \end{lstlisting}
-\end{frame}
-
-\begin{frame}[fragile]{\texttt{OfType}}
-  \slidetop
-  \claim{Оставить элементы нужного типа.}
-\begin{lstlisting}[style=csharp,basicstyle=\ttfamily\small]
-IEnumerable<int> numbers = mixed.OfType<int>();
-\end{lstlisting}
-  \slidegap
-  \aside{Образец по типу из прошлой лекции, применённый к последовательности.}
 \end{frame}
 
 \begin{frame}[fragile]{\texttt{Distinct}}
@@ -1035,23 +981,6 @@ HashSet<OrderStatus> statusSet = orders.Select(o => o.Status).ToHashSet();
   \aside{Правильный конец конвейера, если дальше идут вопросы «есть ли».}
 \end{frame}
 
-\begin{frame}{Пять семейств операторов}
-  \slidetop
-  {\renewcommand{\arraystretch}{1.6}
-  \begin{tabular}{@{}p{3.0cm}p{2.6cm}p{6.6cm}@{}}
-    фильтрация   & \texttt{\hi{Where}}   & оставить подходящие \\
-    проекция     & \texttt{\hi{Select}}  & превратить каждый элемент \\
-    агрегация    & \texttt{\hi{Sum}}     & свернуть в одно значение \\
-    группировка  & \texttt{\hi{GroupBy}} & разложить по ключу \\
-    соединение   & \texttt{\hi{Join}}    & сопоставить два источника \\
-  \end{tabular}}
-
-  \slidegap
-  \aside{\texttt{SelectMany} --- склеить списки списков в одну ленту;
-    \texttt{Any} вместо \texttt{Count > 0}; \texttt{Single} --- утверждение,
-    что дубликата быть не может.}
-\end{frame}
-
 \begin{frame}[fragile]{Запрос --- значение: композиция}
   \slidetop
 \begin{lstlisting}[style=csharp,basicstyle=\ttfamily\small]
@@ -1073,8 +1002,7 @@ var result = query.OrderBy(o => o.Amount).ToList();
 \end{frame}
 
 \begin{frame}[plain]
-  \keyline{Запрос говорит, что вы хотите; цикл говорит, как.\\ Переходите
-    на «как» только там, где измерили.}
+  \keyline{Запрос говорит, что вы хотите;\\ цикл говорит, как.}
 \end{frame}
 
 % =========================================================== 4. IQUERYABLE =
@@ -1157,8 +1085,7 @@ nothing.IsBlank();                 // True, no exception on null
 \end{frame}
 
 \begin{frame}[plain]
-  \keyline{Расширение --- функция от своих аргументов и ничего больше.\\
-    Если нужно больше --- это класс с зависимостями.}
+  \keyline{Расширение --- функция от своих аргументов\\ и ничего больше.}
 \end{frame}
 
 \end{document}
