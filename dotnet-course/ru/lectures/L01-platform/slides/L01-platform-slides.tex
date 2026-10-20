@@ -1,0 +1,728 @@
+% Л1 -- the .NET platform and the dotnet CLI. Slides.
+%
+% Companion to the spoken script in ../L01-platform.md, which is the source of
+% truth: the slides carry code, diagrams and short claims, and the delivery
+% lives in \note{}. Slide text and speaker notes are in Russian because that is
+% the content; everything else in this file is English.
+%
+% Build:  make          (latexmk -pdf; engine: pdflatex)
+%         make notes    (same deck plus speaker notes on a second screen)
+%
+% Every terminal listing here is real output captured on the speaker's machine
+% (dotnet 10.0.110). One exception, marked below: the .NET 8 lines in the
+% dotnet --info output take their version from apt (8.0.31), but that runtime
+% was not installed when the output was captured. Install it and recapture.
+%
+% House rules: ../CLAUDE.md and ../../../CLAUDE.md. Theme: ../../../../theme/.
+
+\documentclass[aspectratio=169,10pt,t]{beamer}
+
+\usetheme{dotnet}
+\usetikzlibrary{arrows.meta,positioning,calc}
+
+\dotnetlecture{Л1}
+
+\ifdefined\shownotes
+  \setbeameroption{show notes on second screen=right}
+\fi
+
+\title[Л1. Платформа .NET]{Платформа .NET и dotnet CLI}
+\author{Дмитрий Курочкин}
+\date{}
+
+% QR codes go in img/ next to this file. While a file is missing the slide
+% shows a placeholder frame, so the deck still builds.
+% A QR is fitted into a fixed 2.6cm box rather than scaled by width alone:
+% the supplied codes are not all square, and scaling by width lets a taller
+% one push its caption out of line with the others.
+% Fit inside a 2.6cm square rather than scaling by width alone: the supplied
+% codes are not all square, and width-only scaling makes a taller one overrun
+% the row. An image sits on the baseline, so constraining both dimensions
+% keeps all three bottoms -- and therefore all three captions -- in line.
+\newcommand{\qrbox}[1]{%
+  \IfFileExists{img/#1.png}%
+    {\includegraphics[width=2.6cm,height=2.6cm,keepaspectratio]{img/#1.png}}%
+    {\fcolorbox{hairline}{paper}{\parbox[c][2.5cm][c]{2.5cm}%
+       {\centering\color{muted}\scriptsize QR}}}}
+
+\begin{document}
+
+% ------------------------------------------------------------------ title --
+\begin{frame}[plain]
+  \titlepagednc{Лекция 1}{Платформа .NET и dotnet CLI}{}{Дмитрий Курочкин}
+\end{frame}
+\note{80 минут. Сразу знакомство, потом вопрос в зал.}
+
+% ================================================= 0. INTRODUCTION =========
+\section{0. Знакомство и структура}
+
+\begin{frame}{Контакты}
+  \slidetop
+  \begin{center}
+    \begin{tabular}{@{}c@{\hspace{1.6cm}}c@{\hspace{1.6cm}}c@{}}
+      \qrbox{github-qr} & \qrbox{telegram-qr} & \qrbox{nuget-qr} \\[0.8em]
+      {\color{accent}\bfseries GitHub} &
+      {\color{accent}\bfseries Telegram} &
+      {\color{accent}\bfseries NuGet} \\
+    \end{tabular}
+  \end{center}
+
+  \slidegap
+  \begin{center}
+    {\large\texttt{dmitry.kurochkin0@gmail.com}}
+  \end{center}
+\end{frame}
+\note{Все ссылки здесь, на одном слайде. Регалии -- голосом, одной фразой:
+  топ-1 на commiters.top, автор и maintainer экосистемы Pure. Дальше сразу
+  вопрос: есть ли в зале дотнетчики.}
+
+\begin{frame}[plain]
+  \shout{КРИТИКУЙ!}
+\end{frame}
+\note{Курс в первую очередь для дотнетчиков в зале, и обратная связь нужна
+  прежде всего от них. Поправлять -- прямо посреди лекции. Это единственное
+  слово во весь экран за всю лекцию.}
+
+\begin{frame}{Структура курса}
+  \slidetop
+  \claim{15 лекций по 80 минут и 15 лабораторных, \hi{след в след}.}
+
+  \begin{center}
+    \begin{tikzpicture}[font=\small]
+      \node[anchor=west,muted,font=\scriptsize] at (-0.05,0.62)
+        {КУРС «.NET: от установки до веб-сервиса»};
+      \draw[muted,line width=0.8pt] (0,0.30) -- (0,-2.24);
+      \foreach \i/\name/\lec/\mn/\c in {%
+        0/Платформа и модель выполнения/Л1--Л2/160/accent,
+        1/Язык C\#/Л3--Л6/320/ink,
+        2/Веб и ASP.NET Core/Л7--Л12/480/ink,
+        3/Данные/Л13--Л14/160/ink,
+        4/Тестирование и качество/Л15/80/ink} {
+        \draw[muted,line width=0.8pt] (0,-\i*0.56) -- (0.42,-\i*0.56);
+        \node[anchor=west,\c] at (0.58,-\i*0.56) {\name};
+        \node[anchor=west,muted] at (6.5,-\i*0.56) {\lec};
+        \node[anchor=east,muted] at (10.4,-\i*0.56) {\mn{} мин};
+      }
+    \end{tikzpicture}
+  \end{center}
+
+  \vspace{0.7em}
+  \aside{С \hi{лекции 8} будем строить веб-сервис пошагово: контракт $\rightarrow$ настройки
+    $\rightarrow$ безопасность $\rightarrow$ кэш и логи $\rightarrow$ база
+    $\rightarrow$ тесты.}
+\end{frame}
+\note{Мы в первой строке. Обещание: не рассказывать то, что вы и так знаете.
+  Просьба: спрашивайте, особенно неправильное.}
+
+\begin{frame}{.NET многое взял из Java --- и хорошего, и плохого}
+  \slidetop
+  \versus{взято как референс}{%
+    \begin{cbul}{accent}
+      \item управляемый рантайм и сборщик мусора
+      \item байт-код и компиляция во время выполнения
+      \item система типов с единым корнем
+      \item большая библиотека <<всё в коробке>>
+    \end{cbul}}{сделано иначе}{%
+    \begin{cbul}{alt}
+      \item свойства, события и делегаты в самом языке
+      \item \texttt{struct} как настоящий значимый тип
+      \item \lo{LINQ}: запросы к данным прямо в языке
+      \item заметно менее многословно
+    \end{cbul}}
+
+  \slidegap
+  \hrulethin{0.42}
+  \rulegap
+  \aside{Андерс Хейлсберг вёл в Microsoft \hi{Visual J++} до того, как
+    спроектировал C\#.}
+\end{frame}
+\note{Фраза товарища про запах -- голосом, не на слайде. Реификация дженериков
+  -- тот пункт, ради которого дотнетчики в зале проснутся.}
+
+% ================================================= 1. WHAT .NET IS =========
+\section{1. Что такое .NET}
+
+\begin{frame}[plain]
+  \sectionopener{1}{Что такое .NET}{Четыре части платформы, четыре
+    аббревиатуры, версии и разница между SDK и Runtime.}
+\end{frame}
+\note{Бюджет: 13 минут.}
+
+\begin{frame}[plain]
+  \vote{.NET --- это язык программирования?}
+\end{frame}
+\note{Разогрев. Большинство скажет <<нет>> и будет право. Дальше -- почему
+  вопрос вообще стоит задавать.}
+
+\begin{frame}{Платформа, а не язык}
+  \slidetop
+  \claim{В .NET четыре части. Слова \hi{<<C\#>>} среди них нет.}
+
+  \begin{center}
+    \begin{tikzpicture}[font=\small]
+      \node[muted,font=\scriptsize] at (0,2.55)
+        {C\#\quad F\#\quad VB\quad C++ via CLR\quad\ldots{} порядка 70 языков};
+      \draw[hairline,line width=0.8pt] (-5.0,2.2) -- (5.0,2.2);
+      \foreach \x/\t in {-3.6/рантайм, -1.2/{стандартная\\библиотека},
+                         1.2/инструменты, 3.6/{экосистема\\пакетов}} {
+        \node[draw=hairline,line width=0.8pt,fill=codebg,
+              minimum width=2.15cm,minimum height=1.3cm,align=center,
+              font=\small] at (\x,1.25) {\t};
+      }
+      \node[accent,font=\bfseries] at (0,0.05)
+        {свой язык? напиши компилятор};
+    \end{tikzpicture}
+  \end{center}
+\end{frame}
+\note{Рантайму всё равно, на чём вы написали. Ему важно, во что это
+  скомпилировалось.}
+
+\begin{frame}{Четыре аббревиатуры}
+  \slidetop
+  \claim{Расшифруем.}
+
+  \begin{tabular}{@{}p{1.9cm}p{9.3cm}@{}}
+    \textbf{\hi{CLR}} & Common Language Runtime --- \hi{исполняет}: загружает
+                        код, компилирует, управляет памятью \\[0.7em]
+    \textbf{\hi{CTS}} & Common Type System --- \hi{определяет, что такое тип};
+                        поэтому класс из F\# виден из C\# \\[0.7em]
+    \textbf{\hi{CLS}} & Common Language Specification --- \hi{договор}
+                        о совместимости между языками \\[0.7em]
+    \textbf{\hi{BCL}} & Base Class Library --- \hi{базовый набор}
+                        компонентов, включая примитивы \\
+  \end{tabular}
+\end{frame}
+\note{Момент запомнить. CLS на практике почти не всплывает -- одной фразой.}
+
+\begin{frame}{Версии: раз в год, каждый ноябрь}
+  \slidetop
+  \claim{Чётные номера --- \hi{LTS}, поддержка три года.
+    Нечётные --- \lo{STS}.}
+
+  \begin{center}
+    \begin{tikzpicture}[x=3.15cm,font=\small]
+      \draw[hairline,line width=0.8pt] (-0.25,0) -- (3.45,0);
+      \foreach \i/\v/\k/\y/\c in {0/.NET 8/LTS/2023/accent,
+                                  1/.NET 9/STS/2024/alt,
+                                  2/.NET 10/LTS/2025/accent,
+                                  3/.NET 11/STS/2026/alt} {
+        \fill[\c] (\i,0) circle (2.2pt);
+        \node[above=0.45em] at (\i,0) {\v};
+        \node[below=0.5em,\c,font=\scriptsize\bfseries] at (\i,0) {\k};
+        \node[below=1.5em,muted,font=\scriptsize] at (\i,0) {\y};
+      }
+      \node[accent,font=\bfseries,above=1.6em] at (2,0) {мы здесь};
+    \end{tikzpicture}
+  \end{center}
+
+  \slidegap
+  \aside{Новый проект --- на последней \hi{LTS}. Bump до новой версии ---
+    через месяц-два после выхода.}
+\end{frame}
+\note{Держите проект так, чтобы переезд был сменой одной версии, без
+  переписывания кода.}
+
+\begin{frame}{SDK и Runtime: что ставить}
+  \slidetop
+  \claim{\hi{SDK} себе, \lo{Runtime} туда, где живёт приложение.}
+
+  \versus{SDK --- ставит разработчик}{%
+    \begin{cbul}{accent}
+      \item компилятор
+      \item \texttt{dotnet} CLI и шаблоны проектов
+      \item MSBuild
+      \item рантайм внутри --- чтобы запускать у себя
+    \end{cbul}}{Runtime --- стоит на сервере}{%
+    \begin{cbul}{alt}
+      \item всё, что нужно, чтобы запустить готовое
+      \item компилятора нет
+      \item шаблонов проектов нет
+      \item заметно меньше по размеру
+    \end{cbul}}
+\end{frame}
+\note{Что стоит на сервере -- вы обязаны понимать. Модели поставки -- большой
+  кусок следующей лекции.}
+
+\begin{frame}[fragile]{Пример установленного SDK}
+  \slidetop
+\begin{lstlisting}[style=term]
+$ dotnet --info
+
+.NET SDKs installed:
+  10.0.110 [/usr/lib/dotnet/sdk]
+
+.NET runtimes installed:
+  Microsoft.AspNetCore.App 8.0.31  [/usr/lib/dotnet/shared/Microsoft.AspNetCore.App]
+  Microsoft.AspNetCore.App 10.0.10 [/usr/lib/dotnet/shared/Microsoft.AspNetCore.App]
+  Microsoft.NETCore.App    8.0.31  [/usr/lib/dotnet/shared/Microsoft.NETCore.App]
+  Microsoft.NETCore.App    10.0.10 [/usr/lib/dotnet/shared/Microsoft.NETCore.App]
+\end{lstlisting}
+  \vspace{0.9em}
+  \aside{\hi{Восьмёрка и десятка стоят рядом}, и рантайм бывает двух видов:
+    базовый и тот, что для веба. Какой из них возьмёт приложение --- решает
+    \lo{манифест сборки}.}
+\end{frame}
+\note{Это и есть связка с последним разделом: рантаймов несколько, выбор
+  делает runtimeconfig.json. Если у кого-то команда не выводит ничего
+  похожего -- SDK нет, до лабы поставить.}
+
+% ================================================== 2. PATH OF THE CODE ====
+\section{2. Путь кода}
+
+\begin{frame}[plain]
+  \sectionopener{2}{Путь кода}{Исходник $\rightarrow$ IL $\rightarrow$ машинный
+    код: два компилятора, два этапа и всё, что из этого следует.}
+\end{frame}
+\note{Бюджет: 20 минут. Главный раздел лекции.}
+
+\begin{frame}[plain]
+  \vote{.NET компилируется или интерпретируется?}
+\end{frame}
+\note{Голосование в три руки. Правы все трое -- но пойдём по порядку.}
+
+\begin{frame}[fragile]{Что на самом деле лежит в dll}
+  \slidetop
+  \begin{minipage}[t]{0.36\textwidth}
+    \colhead{accent}{исходник}\par\vspace{0.7em}
+\begin{lstlisting}[style=csharp]
+static int Add(int a, int b)
+    => a + b;
+\end{lstlisting}
+  \end{minipage}\hfill
+  \begin{minipage}[t]{0.60\textwidth}
+    \colhead{alt}{то же самое в IL}\par\vspace{0.7em}
+\begin{lstlisting}[style=term]
+.method static int32 Add(int32 a, int32 b) cil managed
+{
+    .maxstack 8
+    IL_0000: ldarg.0
+    IL_0001: ldarg.1
+    IL_0002: add
+    IL_0003: ret
+}
+\end{lstlisting}
+  \end{minipage}
+
+  \vspace{1.0em}
+  \aside{\hi{Ни слова о процессоре} \textperiodcentered{} \hi{сохранены имена
+    и типы} --- это метаданные \textperiodcentered{} читается глазами,
+    поэтому \lo{секретов там быть не должно}.}
+\end{frame}
+\note{Не учить IL. Увидеть три вещи. На метаданных держится половина
+  платформы: отладчик, рефлексия, сериализация.}
+
+\begin{frame}{Компилируется дважды}
+  \slidetop
+  \claim{Спор <<компилируется или интерпретируется>> бессмысленный.
+    Правильный ответ --- \hi{компилируется дважды}.}
+
+  \begin{center}
+    \begin{tikzpicture}[font=\small,
+      box/.style={draw=hairline,line width=0.8pt,fill=codebg,
+                  minimum height=1.0cm,align=center,inner sep=0.5em},
+      ar/.style={-{Straight Barb[length=1.8mm]},ink,line width=0.7pt}]
+      \node[box] (src) {Program.cs};
+      \node[box,right=2.1cm of src] (il) {dll с IL};
+      \node[box,right=2.1cm of il] (mc) {машинный код\\в памяти};
+      \draw[ar] (src) -- node[above,font=\scriptsize\bfseries,text=accent]{Roslyn} (il);
+      \draw[ar] (il) -- node[above,font=\scriptsize\bfseries,text=alt]{JIT} (mc);
+      \node[muted,font=\scriptsize,below=0.6em,align=center] at (src.south)
+        {ваша машина,\\один раз};
+      \node[muted,font=\scriptsize,below=0.6em,align=center] at (mc.south)
+        {машина пользователя,\\при первом вызове метода};
+    \end{tikzpicture}
+  \end{center}
+
+  \slidegap
+  \aside{Артефакт на диске \hi{один}: dll с IL. Машинный код рождается заново
+    на каждом запуске и умирает вместе с процессом.}
+\end{frame}
+\note{Те, кто голосовал за <<интерпретируется>>, почувствовали правильно, что
+  что-то происходит в рантайме.}
+
+\begin{frame}{Чем мы за это платим}
+  \slidetop
+  \claim{Два больших плюса и один минус.}
+
+  \begin{itemize}\itemsep0.9em
+    \item[\textcolor{accent}{\textbf{+}}] Артефакт \hi{не зависит от
+          платформы}: одна dll работает везде, где есть рантайм.
+    \item[\textcolor{accent}{\textbf{+}}] JIT знает \hi{конкретную машину}
+          и её набор инструкций --- то, чего не знает компилятор C++ на вашем
+          ноутбуке.
+    \item[\textcolor{alt}{\textbf{--}}] \lo{Прогрев на старте}: каждый метод
+          при первом вызове надо скомпилировать.
+  \end{itemize}
+\end{frame}
+\note{Здесь я упрощаю -- дотнетчики, поправьте: JIT не <<подстраивается под
+  всё>>, речь про набор инструкций. И у C++ есть -march=native.}
+
+\begin{frame}{Многоуровневая компиляция}
+  \slidetop
+  \claim{Рантайм не выбирает между <<быстро и плохо>> и <<медленно и
+    хорошо>>. Он делает \hi{и то и другое}, по очереди.}
+
+  \begin{center}
+    \begin{tikzpicture}[font=\small,
+      box/.style={draw=hairline,line width=0.8pt,fill=codebg,
+                  minimum height=1.1cm,minimum width=3.7cm,align=center,
+                  inner sep=0.5em},
+      ar/.style={-{Straight Barb[length=1.8mm]},ink,line width=0.7pt}]
+      \node[box] (t0) {уровень 0\\быстро и грубо};
+      \node[box,right=5.0cm of t0] (t1) {уровень 1\\полная оптимизация};
+      \draw[ar] (t0) -- (t1);
+      \node[accent,font=\scriptsize\bfseries,above=0.35em]
+        at ($(t0.east)!0.5!(t1.west)$) {счётчик вызовов};
+      \node[muted,font=\scriptsize,below=0.35em]
+        at ($(t0.east)!0.5!(t1.west)$) {в фоне, с подменой кода};
+      \node[muted,font=\scriptsize,below=0.6em] at (t0.south)
+        {при первом вызове};
+      \node[muted,font=\scriptsize,below=0.6em] at (t1.south)
+        {когда метод стал горячим};
+    \end{tikzpicture}
+  \end{center}
+
+  \slidegap
+  \aside{Первый запрос после старта медленнее второго --- \hi{это не баг}.
+    Прогрев --- свойство процесса: перезапустили, и всё начинается заново.}
+\end{frame}
+\note{Длинный цикл тоже горячий, хотя счётчик вызовов равен единице.}
+
+\begin{frame}{Debug и Release: отличия}
+  \slidetop
+  \begin{tabular}{@{}p{5.2cm}p{3.0cm}p{3.0cm}@{}}
+     & \colhead{accent}{debug} & \colhead{alt}{release} \\[0.8em]
+    Оптимизации компилятора   & \hi{нет}        & \lo{да} \\[0.7em]
+    Оптимизации JIT           & \hi{запрещены}  & \lo{разрешены} \\[0.7em]
+    Файл \texttt{pdb}         & есть            & есть \\[0.7em]
+    Назначение                & отладка         & измерение и поставка \\
+  \end{tabular}
+\end{frame}
+\note{В Debug в сборку кладётся прямая пометка для JIT: не оптимизируй тоже.
+  pdb есть в обеих -- Release это про оптимизации, а не про символы.}
+
+\begin{frame}[plain]
+  \keyline{Ваш код компилируется дважды:\\ в IL на вашей машине, в машинный
+    код --- на той, где он запускается.}
+\end{frame}
+\note{Всё остальное, от прогрева до Release, следует из этого.}
+
+% ============================================ 3. PROJECT AND SOLUTION ======
+\section{3. Проект и решение}
+
+\begin{frame}[plain]
+  \sectionopener{3}{Проект и решение}{csproj --- это манифест для MSBuild,
+    а не файл настроек.}
+\end{frame}
+\note{Бюджет: 15 минут.}
+
+\begin{frame}[fragile]{Файл проекта целиком}
+  \slidetop
+\begin{lstlisting}[style=xml]
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+
+</Project>
+\end{lstlisting}
+  \vspace{0.9em}
+  \aside{Девять строк, и это всё, что создал \texttt{dotnet new console}.
+    Файл короткий потому, что правила лежат в \hi{SDK}, а здесь только
+    отклонения от умолчаний.}
+\end{frame}
+\note{Разбирать строку за строкой. Лет десять назад каждый файл надо было
+  перечислять руками.}
+
+\begin{frame}[fragile]{Два способа подключить чужой код}
+  \slidetop
+\begin{lstlisting}[style=xml]
+<ItemGroup>
+  <PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
+  <ProjectReference Include="../Shared/Shared.csproj" />
+</ItemGroup>
+\end{lstlisting}
+  \vspace{1.1em}
+  \versus{Package Reference}{%
+    \begin{cbul}{accent}
+      \item из реестра NuGet
+      \item \hi{замороженная} версия
+      \item чтобы получить изменения --- нужен новый пакет
+    \end{cbul}}{Project Reference}{%
+    \begin{cbul}{alt}
+      \item соседний проект в том же репозитории
+      \item собирается вместе
+      \item \lo{подхватывает} изменения сразу
+    \end{cbul}}
+\end{frame}
+\note{Версия должна быть зафиксирована -- здесь или централизованно. Здесь
+  я упрощаю: без Version тоже соберётся.}
+
+\begin{frame}{Решение --- это список, а не контейнер}
+  \slidetop
+  \claim{Проект живёт сам по себе. Решение просто \hi{перечисляет} проекты.}
+
+  \begin{center}
+    \begin{tikzpicture}[font=\small,
+      box/.style={draw=hairline,line width=0.8pt,fill=codebg,
+                  minimum height=0.85cm,minimum width=2.9cm,align=center,
+                  inner sep=0.4em},
+      ar/.style={-{Straight Barb[length=1.8mm]},ink,line width=0.7pt}]
+      \node[box] (sln) {\texttt{Product.sln}};
+      \node[box,right=2.8cm of sln,yshift=1.2cm]  (p1) {\texttt{Api.csproj}};
+      \node[box,right=2.8cm of sln]               (p2) {\texttt{Domain.csproj}};
+      \node[box,right=2.8cm of sln,yshift=-1.2cm] (p3) {\texttt{Tests.csproj}};
+      \draw[ar] (sln.east) -- (p1.west);
+      \draw[ar] (sln.east) -- (p2.west);
+      \draw[ar] (sln.east) -- (p3.west);
+    \end{tikzpicture}
+  \end{center}
+
+  \slidegap
+  \aside{Что это даёт: \hi{группировку} и \hi{правильный порядок сборки}.
+    Нужно, как только проектов стало больше одного.}
+\end{frame}
+\note{IDE старательно поддерживает недоразумение, что проекты живут внутри
+  решения. Сегодня соберём проект вообще без решения.}
+
+\begin{frame}{Что появляется после сборки}
+  \slidetop
+  \versus{obj --- черновики}{%
+    \begin{cbul}{accent}
+      \item \texttt{project.assets.json}
+      \item промежуточные файлы компилятора
+      \item сгенерированные \texttt{using}
+    \end{cbul}}{bin/Debug/net10.0 --- результат}{%
+    \begin{cbul}{alt}
+      \item готовая dll
+      \item всё, что нужно рядом для запуска
+      \item подпапка на конфигурацию и версию
+    \end{cbul}}
+
+  \slidegap
+  \hrulethin{0.42}
+  \rulegap
+  {\color{alt}\large\bfseries bin и obj не коммитятся в репозиторий.
+    Никогда.}
+
+  \slidegap
+  \aside{Это производное от исходников: всё получается заново одной командой.}
+\end{frame}
+\note{obj -- кухня, bin -- окно выдачи. В obj лежат пути с вашей машины,
+  и у коллеги они не совпадут.}
+
+% ================================================== 4. DOTNET CLI =========
+\section{4. dotnet CLI}
+
+\begin{frame}[plain]
+  \sectionopener{4}{dotnet CLI}{Единственный интерфейс к платформе, который
+    существует везде, где живёт ваше приложение.}
+\end{frame}
+\note{Бюджет: 18 минут.}
+
+\begin{frame}{Почему терминал, а не кнопка}
+  \slidetop
+  \claim{Объяснение не про <<так правильно>>, а про конкретную выгоду.}
+
+  \begin{enumerate}\itemsep0.9em
+    \item На сервере сборки, в CI и в контейнере \hi{IDE нет}. Там есть
+          ровно эти команды.
+    \item IDE --- \hi{надстройка} над ними же. Терминал показывает ошибку
+          целиком, а не её сокращённую версию в окошке.
+    \item Команду можно \hi{записать и передать}: в файл, в скрипт, в задачу.
+          Последовательность кликов --- нельзя.
+  \end{enumerate}
+
+  \slidegap
+  \aside{За кнопкой <<запустить>> прячется \lo{пять действий}. Вы видите
+    одно.}
+\end{frame}
+\note{Аналогия с механикой и автоматом. LLM, кстати, запускает ровно эти же
+  команды -- ничего другого у неё нет.}
+
+\begin{frame}[fragile]{Всё начинается с шаблона}
+  \slidetop
+\begin{lstlisting}[style=term]
+$ dotnet new list
+
+Template Name                            Short Name     Language    Tags
+---------------------------------------  -------------  ----------  --------------------
+ASP.NET Core Web API                     webapi         [C#],F#     Web/Web API/Service
+Blazor Web App                           blazor         [C#]        Web/Blazor
+Class Library                            classlib       [C#],F#,VB  Common/Library
+Console App                              console        [C#],F#,VB  Common/Console
+dotnet gitignore file                    gitignore                  Config
+Dotnet local tool manifest file          tool-manifest              Config
+global.json file                         globaljson                 Config
+MSBuild Directory.Packages.props file    packagesprops              MSBuild/packages/CPM
+Solution File                            sln                        Solution
+xUnit Test Project                       xunit          [C#],F#,VB  Test/xUnit
+\end{lstlisting}
+  \vspace{0.7em}
+  \aside{Не только проекты: \hi{gitignore}, файл решения и манифест
+    инструментов создаются отсюда же. Список сокращён --- шаблонов больше.}
+\end{frame}
+\note{Показать, что часть шаблонов создаёт один файл, а не проект.}
+
+\begin{frame}{Жизненный цикл проекта}
+  \slidetop
+  \claim{От рождения до поставки. Запомним \hi{в формате истории}.}
+
+  \begin{center}
+    \begin{tikzpicture}[font=\small,x=2.25cm]
+      \draw[hairline,line width=0.8pt] (-0.38,0) -- (5.38,0);
+      \foreach \i/\c/\k in {0/new/{-n}, 1/restore/{}, 2/build/{-c},
+                            3/run/{--project}, 4/test/{}, 5/publish/{-c -o}} {
+        \fill[ink] (\i,0) circle (2.2pt);
+        \node[above=0.45em,font=\small\ttfamily] at (\i,0) {\c};
+        \node[below=0.5em,accent,font=\scriptsize\ttfamily] at (\i,0) {\k};
+      }
+    \end{tikzpicture}
+  \end{center}
+
+  \slidegap
+  \aside{Проект рождается, обрастает зависимостями, собирается, запускается,
+    проверяется и уезжает на сервер. \hi{\texttt{restore}} --- единственный
+    шаг, которому нужна сеть.}
+\end{frame}
+\note{restore вызывают явно редко: build и run делают его сами.}
+
+\begin{frame}[fragile]{Вся цепочка, три экрана}
+  \slidetop
+\begin{lstlisting}[style=term]
+$ dotnet new console -n HelloWorld
+The template "Console App" was created successfully.
+
+$ dotnet run
+Hello, World!
+
+$ dotnet run -c Release
+Hello, World!
+
+$ dotnet publish -c Release -o ./out
+  HelloWorld -> /home/user/HelloWorld/bin/Release/net10.0/HelloWorld.dll
+  HelloWorld -> /home/user/HelloWorld/out/
+
+$ ls out
+HelloWorld            HelloWorld.dll  HelloWorld.runtimeconfig.json
+HelloWorld.deps.json  HelloWorld.pdb
+\end{lstlisting}
+  \vspace{0.6em}
+  \aside{Вторая сборка прошла заново: другая конфигурация --- \hi{другая
+    папка} в \texttt{bin}. А в \texttt{out} --- никаких исходников, никакого
+    \texttt{obj}, только результат.}
+\end{frame}
+\note{publish по умолчанию собирает в Release, в отличие от build и run.
+  Ключ всё равно пишу явно, чтобы читающий скрипт не гадал.}
+
+\begin{frame}{Инструменты: глобальные и локальные}
+  \slidetop
+  \claim{Нужен \hi{вам} --- глобальный. Нужен \lo{проекту} --- локальный.}
+
+  \versus{глобальный, ключ -g}{%
+    \begin{cbul}{accent}
+      \item ставится для вашего пользователя
+      \item доступен из любой папки
+      \item версии \hi{разъезжаются} между машинами
+    \end{cbul}}{локальный, манифест в репозитории}{%
+    \begin{cbul}{alt}
+      \item перечислен в манифесте вместе с версией
+      \item \texttt{dotnet tool restore} после клонирования
+      \item у всех \lo{одна и та же} версия
+      \item манифест коммитится --- это исходник
+    \end{cbul}}
+\end{frame}
+\note{Я это проходил с инструментом миграций: час на выяснение, что версии
+  разные.}
+
+\begin{frame}[plain]
+  \keyline{CLI --- не <<сложный способ>>.\\ Это единственный способ, который
+    существует везде, где живёт ваше приложение.}
+\end{frame}
+\note{Сначала команды, потом кнопки. К концу курса кнопки разрешу.}
+
+% ============================================ 5. FIRST APPLICATION =========
+\section{5. Первое приложение}
+
+\begin{frame}[plain]
+  \sectionopener{5}{Первое приложение}{Пять файлов, два этапа компиляции,
+    ноль магии.}
+\end{frame}
+\note{Бюджет: 5 минут. Собираем всё в одну картинку.}
+
+\begin{frame}[fragile]{Пять файлов в bin}
+  \slidetop
+  \begin{minipage}[t]{0.33\textwidth}
+    \colhead{accent}{после new console}\par\vspace{0.8em}
+\begin{lstlisting}[style=plain]
+HelloWorld/
+  HelloWorld.csproj
+  Program.cs
+\end{lstlisting}
+    \vspace{0.8em}
+\begin{lstlisting}[style=plain]
+Console.WriteLine(
+    "Hello, World!");
+\end{lstlisting}
+  \end{minipage}\hfill
+  \begin{minipage}[t]{0.62\textwidth}
+    \colhead{alt}{после run: bin/Debug/net10.0}\par\vspace{0.8em}
+    {\footnotesize
+    \begin{tabular}{@{}p{4.8cm}p{2.9cm}@{}}
+      \texttt{HelloWorld.dll}                & наш код в IL \\[0.55em]
+      \texttt{HelloWorld}                    & запускатель, нативный \\[0.55em]
+      \texttt{HelloWorld.pdb}                & отладочные символы \\[0.55em]
+      \texttt{HelloWorld.deps.json}          & от чего зависим \\[0.55em]
+      \texttt{HelloWorld.runtimeconfig.json} & \hi{какой рантайм нужен} \\
+    \end{tabular}}
+  \end{minipage}
+\end{frame}
+\note{В лабораторной попросят объяснить именно эти файлы.}
+
+\begin{frame}{Вся цепочка целиком}
+  \slidetop
+  \begin{center}
+    \begin{tikzpicture}[font=\small,
+      box/.style={draw=hairline,line width=0.8pt,fill=codebg,
+                  minimum height=1.2cm,minimum width=2.3cm,align=center,
+                  inner sep=0.35em},
+      ar/.style={-{Straight Barb[length=1.8mm]},ink,line width=0.7pt}]
+      \node[box] (src) {Program.cs};
+      \node[box,right=0.72cm of src] (dll) {dll с IL};
+      \node[box,right=0.72cm of dll] (host) {запускатель\\читает конфиг};
+      \node[box,right=0.72cm of host] (rt) {рантайм\\загружает dll};
+      \node[box,right=0.72cm of rt] (out) {JIT\\строка на экране};
+      \draw[ar] (src) -- (dll);
+      \draw[ar] (dll) -- (host);
+      \draw[ar] (host) -- (rt);
+      \draw[ar] (rt) -- (out);
+      \node[accent,font=\scriptsize\bfseries,below=0.6em] at (src.south)
+        {компиляция};
+      \node[alt,font=\scriptsize\bfseries,below=0.6em] at (rt.south)
+        {запуск};
+    \end{tikzpicture}
+  \end{center}
+
+  \slidegap
+  \aside{Вернёмся к вопросу, с которого начали: что происходит между вашим
+    текстом и процессом в операционной системе. Теперь вы можете назвать
+    \hi{каждый шаг}.}
+\end{frame}
+\note{На первой лабораторной проделаете это сами, целиком из терминала.}
+
+\begin{frame}[plain]
+  \statement{Пять файлов, два этапа компиляции, \hi{ноль магии}.}
+\end{frame}
+\note{Держать слайд, пока не осядет.}
+
+\begin{frame}[plain]
+  \shout{Задавайте вопросы}
+\end{frame}
+\note{Здесь можно стоять сколько угодно. Если вопросов нет -- назвать одно
+  из трёх мест, где я сегодня упрощал, и спросить, кто заметил.}
+
+\end{document}
