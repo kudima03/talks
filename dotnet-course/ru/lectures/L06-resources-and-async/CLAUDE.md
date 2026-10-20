@@ -44,6 +44,9 @@ end of the script.
 - **Comparison order:** the side to follow is on the left in teal — `Task.Delay`
   before `Thread.Sleep` (34), absolute before relative path (19), «создали
   сами» before «получили снаружи» (13).
+- **Frame 46 is four numbered blocks**, each a bold step plus one muted line, on three lanes (поток 3, база, поток 7) — the earlier version's inline labels were unclear in review.
+- **Frame 50 is three chained methods passing `ct`**, not the earlier diagram of the source→endpoint→…→driver chain.
+- **Frame 54 is titled «Три опасности»**, not «Три грабли».
 - **Frame 47** closes the «how await works» block; frames 23 and 55 close the
   two sections. Everything else ends on content.
 
@@ -56,7 +59,7 @@ dotnet SDK **10.0.112** (Linux); the project is not in the repo.
 |---|---|
 | 7, 8 (`FindHello`) | Compiled and run on a four-line file; both forms return the line with `Hello!`. |
 | 10 | Compiled and run; `writer` and `stream` disposed in reverse order, the file is written in full. |
-| 11 (forgotten `using`) | Two `File.Create(path)` calls: the second throws `System.IO.IOException: The process cannot access the file '…' because it is being used by another process.` The text on the slide is that output with the temp directory replaced by `/home/user`. **`new FileStream(path, FileMode.Create)` twice did not throw on Linux** (default `FileShare.Read`), so the demo uses `File.Create`, which opens with `FileShare.None`. |
+| 11 (forgotten `using`) | `File.OpenWrite(path)` left open, then `File.ReadAllText(path)`: the read throws `System.IO.IOException: The process cannot access the file '…' because it is being used by another process.` The text on the slide is that output with the temp directory replaced by `/home/user`. **Two `new FileStream(path, FileMode.Create)` in a row did not throw on Linux** (default `FileShare.Read`), and `StreamWriter` + `File.ReadAllText` does not throw either (it returns an empty string, the buffer was never flushed) — so the demo uses `File.OpenWrite`, which opens with `FileShare.None` and fails the same way on every OS. |
 | 12 (`LogWriter`) | Compiled and run: second `Dispose` is a no-op, `Write` after `Dispose` throws `ObjectDisposedException`. |
 | 17, 18 | `Path.Combine`/`Join` print `data/logs/app.txt` on Linux; the five signatures are the real ones, read by reflection. The Windows column of frame 17 is the documented behaviour, not run here. |
 | 21 | Compiled; the finalizer is never invoked by the slide, it only shows syntax. |
@@ -64,11 +67,12 @@ dotnet SDK **10.0.112** (Linux); the project is not in the repo.
 | 36 | Compiled and run against stub `LoadUserAsync`/…/`NotifyAsync` returning completed tasks. |
 | 38 | Compiled and run: the `catch` prints `boom`. |
 | 49 | Compiled and run with two reads of the same file. |
+| 50 | Compiled and run: three chained methods return `orders: 3`; with an already-cancelled token the call throws `OperationCanceledException`. |
 | 51 | Compiled and run on a three-element array: returns 6. |
 | 52, 53 | Compiled and run: empty lines are dropped; the two `ERROR` lines come out of the `await foreach`. `token` on frame 53 is any `CancellationToken`. |
 
 Listings are ASCII only, including comments, same as every other lecture.
-Frames 12, 38 and 51 set the listing at 6.6–6.8pt to fit above the footer —
+Frames 12, 38, 50 and 51 set the listing at 6.6–6.8pt to fit above the footer —
 if a line is added there, check the built PDF, not just the `.tex`.
 
 ## Open items

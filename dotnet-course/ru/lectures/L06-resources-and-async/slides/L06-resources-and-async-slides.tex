@@ -218,8 +218,9 @@ writer.WriteLine("Hello!");
   \claim{Незакрытый файл мешает вам \lo{самим}.}
 
 \begin{lstlisting}[style=csharp,basicstyle=\codesm]
-FileStream first = File.Create(path);
-FileStream second = File.Create(path);   // throws
+FileStream output = File.OpenWrite(path);
+output.WriteByte(1);
+string text = File.ReadAllText(path);   // throws
 \end{lstlisting}
 
   \slidegap
@@ -229,7 +230,7 @@ System.IO.IOException: The process cannot access the file
 \end{lstlisting}
 
   \slidegap
-  \aside{«Другой процесс» --- это ваш дескриптор строкой выше. С \texttt{using}
+  \aside{«Другой процесс» --- это ваш дескриптор двумя строками выше. С \texttt{using}
     он освобождён \hi{детерминированно}, в \texttt{finally}.}
 \end{frame}
 
@@ -894,19 +895,25 @@ catch (InvalidOperationException ex)
   \begin{center}
     \begin{tikzpicture}[font=\footnotesize,
       bx/.style={draw=hairline,line width=0.8pt,fill=codebg,
-                 minimum height=0.8cm,inner sep=3pt,align=center},
+                 minimum height=1.05cm,inner sep=4pt,align=center},
       ar/.style={-{Straight Barb[length=1.6mm]},line width=0.7pt}]
-      \foreach \y/\n in {1.4/{поток 3}, 0/{база}, -1.4/{поток 7}} {
+      \foreach \y/\n in {1.5/{поток 3}, 0/{база}, -1.5/{поток 7}} {
         \node[muted,font=\scriptsize,anchor=east] at (0.9,\y) {\n};
         \draw[hairline,line width=0.5pt] (1.0,\y) -- (13.0,\y);
       }
-      \node[bx,minimum width=3.9cm,draw=accent] (a1) at (3.2,1.4)
-        {А: вниз до драйвера,\\ 3 × «зарегистрировать и вернуться»};
-      \node[bx,minimum width=2.4cm] (b) at (6.9,1.4) {Б: поток 3\\ берёт запрос};
-      \node[bx,minimum width=4.6cm,draw=alt,dashed,fill=paper] (db) at (7.9,0)
-        {ответ через 40 мс: потока нет};
-      \node[bx,minimum width=4.1cm,draw=accent] (a2) at (10.9,-1.4)
-        {А: вверх, 3 × «продолжить»,\\ ответ клиенту};
+      \node[bx,minimum width=4.5cm,draw=accent] (a1) at (3.4,1.5)
+        {\textbf{1. Запрос А идёт вниз}\\
+         \textcolor{muted}{\scriptsize до драйвера БД; на каждом \texttt{await}}\\
+         \textcolor{muted}{\scriptsize возвращается вверх}};
+      \node[bx,minimum width=3.3cm] (b) at (7.7,1.5)
+        {\textbf{2. Поток 3 свободен}\\
+         \textcolor{muted}{\scriptsize берёт запрос Б}};
+      \node[bx,minimum width=4.2cm,draw=alt,dashed,fill=paper] (db) at (8.3,0)
+        {\textbf{3. База отвечает через 40 мс}\\
+         \textcolor{muted}{\scriptsize ни один поток не занят}};
+      \node[bx,minimum width=4.5cm,draw=accent] (a2) at (10.5,-1.5)
+        {\textbf{4. Запрос А идёт вверх}\\
+         \textcolor{muted}{\scriptsize на потоке 7, до ответа клиенту}};
       \draw[ar,muted] (a1.south) |- (db.west);
       \draw[ar,accent] (db.east) -| (a2.north);
     \end{tikzpicture}
@@ -952,32 +959,31 @@ async Task<int> TotalLengthAsync(string first, string second, CancellationToken 
 \end{frame}
 
 % 50
-\begin{frame}{\texttt{CancellationToken}}
-  \slidetop
-  \claim{Один параметр --- сквозь весь стек.}
+\begin{frame}[fragile]{\texttt{CancellationToken}}
+  \vspace{0.3em}
+  \claim{Последний параметр каждого метода --- и передаётся \hi{дальше}.}
 
-  \begin{center}
-    \begin{tikzpicture}[font=\footnotesize,
-      bx/.style={draw=hairline,line width=0.8pt,fill=codebg,
-                 minimum width=1.7cm,minimum height=0.9cm,inner sep=2pt,
-                 align=center},
-      ar/.style={-{Straight Barb[length=1.6mm]},accent,line width=0.8pt}]
-      \node[bx,draw=accent,minimum width=2.5cm] (s) at (0,0)
-        {\texttt{Cancellation-}\\ \texttt{TokenSource}};
-      \node[bx] (t) at (2.8,0) {токен};
-      \node[bx] (e) at (4.9,0) {эндпоинт};
-      \node[bx] (v) at (7.0,0) {сервис};
-      \node[bx] (r) at (9.1,0) {репозиторий};
-      \node[bx] (d) at (11.2,0) {драйвер БД};
-      \draw[ar] (s) -- (t); \draw[ar] (t) -- (e); \draw[ar] (e) -- (v);
-      \draw[ar] (v) -- (r); \draw[ar] (r) -- (d);
-    \end{tikzpicture}
-  \end{center}
+\begin{lstlisting}[style=csharp,basicstyle=\ttfamily\fontsize{6.6}{7.6}\selectfont]
+async Task<string> HandleAsync(string path, CancellationToken ct)
+{
+    int count = await CountOrdersAsync(path, ct);
+    return "orders: " + count;
+}
 
-  \slidegap
-  \aside{Клиент закрыл вкладку --- через долю секунды остановлены все операции
-    по его запросу, включая запрос к базе. Асинхронный метод принимает токен
-    \hi{всегда}.}
+async Task<int> CountOrdersAsync(string path, CancellationToken ct)
+{
+    string[] lines = await ReadLinesAsync(path, ct);
+    return lines.Length;
+}
+
+Task<string[]> ReadLinesAsync(string path, CancellationToken ct)
+{
+    return File.ReadAllLinesAsync(path, ct);
+}
+\end{lstlisting}
+
+  \vspace{-0.3em}
+  \aside{Клиент закрыл вкладку --- отмена доходит до самого нижнего вызова.}
 \end{frame}
 
 % 51
@@ -1070,7 +1076,7 @@ await foreach (string error in ErrorsAsync("app.log", token))
 \end{frame}
 
 % 54
-\begin{frame}{Три грабли}
+\begin{frame}{Три опасности}
   \slidetop
   {\renewcommand{\arraystretch}{1.9}
   \begin{tabular}{@{}p{4.0cm}p{8.8cm}@{}}
