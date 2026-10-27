@@ -1,0 +1,1528 @@
+% Л7 -- Веб-фундамент: HTTP и стили взаимодействия. Slides.
+%
+% Companion to the spoken script in ../L07-web-fundamentals.md, which is the
+% source of truth: the slides carry diagrams, raw messages and short claims,
+% and the delivery lives in the script only -- this deck carries no speaker
+% notes. Slide text is in Russian because that is the content; everything
+% else in this file is English.
+%
+% Build:  make          (latexmk -pdf; engine: pdflatex)
+%
+% The deck has no C# listings. Raw HTTP messages, the SOAP envelope, the
+% GraphQL query and the proto file are illustrations; how each was checked is
+% in ../CLAUDE.md.
+%
+% House rules: ../CLAUDE.md and ../../../CLAUDE.md. Theme: ../../../../theme/.
+
+\documentclass[aspectratio=169,10pt,t]{beamer}
+
+\usetheme{dotnet}
+\usetikzlibrary{arrows.meta,positioning,calc,decorations.pathreplacing}
+\usepackage{array}   % ragged-right table columns
+
+% A ragged-right paragraph column: justified cells in narrow columns hyphenate
+% badly, and a split word is the one thing the back row cannot read.
+\newcolumntype{L}[1]{>{\raggedright\arraybackslash}p{#1}}
+% The same for text inside a diagram box.
+\newcommand{\nohyph}{\hyphenpenalty=10000\exhyphenpenalty=10000\relax}
+
+\dotnetlecture{Л7}
+
+\title[Л7. Веб-фундамент]{Веб-фундамент: HTTP и стили взаимодействия}
+\author{Дмитрий Курочкин}
+\date{}
+
+% Code sizes, one step down from \footnotesize. Smaller than 7pt does not
+% carry to the back of the room.
+\newcommand{\codesm}{\ttfamily\fontsize{7.6}{9.0}\selectfont}
+\newcommand{\codexs}{\ttfamily\fontsize{7.0}{8.3}\selectfont}
+\newcommand{\rawfont}{\ttfamily\fontsize{8.4}{10.6}\selectfont}
+
+% A mark at the start of a listing line, for labels set beside a raw HTTP
+% message. Used through the listing's escapechar; the labels are drawn by an
+% overlay picture after the listing, so the build needs two passes (latexmk
+% does that by itself).
+\newcommand{\mk}[1]{\tikz[remember picture,overlay]\coordinate (#1) at (0,0.55ex);}
+
+% Labels beside a raw message take one x offset from the line marks, so every
+% label of one message lines up; a run of lines gets a brace.
+\tikzset{
+  rawbrace/.style={decorate,decoration={brace,amplitude=4pt},hairline,
+                   line width=0.8pt},
+  rawlab/.style={anchor=west,font=\footnotesize,inner sep=0pt},
+  seqar/.style={-{Straight Barb[length=1.8mm]},line width=0.8pt},
+  seqlab/.style={font=\scriptsize\ttfamily,fill=paper,inner sep=1.5pt},
+}
+
+\begin{document}
+% Babel's Russian makes " a shorthand; diagrams quote ETag values and JSON in
+% TikZ nodes, where it has to be a plain character.
+\shorthandoff{"}
+
+% ------------------------------------------------------------------ title --
+\begin{frame}[plain]
+  \titlepagednc{Лекция 7}{Веб-фундамент: HTTP и стили взаимодействия}{}{Дмитрий
+    Курочкин}
+\end{frame}
+
+% ===================================================== 1. HOW DATA ARRIVES ==
+\section{1. Как данные доходят}
+
+% 2
+\begin{frame}[plain]
+  \sectionopener{1}{Как данные доходят}{Что происходит между Enter и первым
+    байтом в \hi{вашем} коде.}
+\end{frame}
+
+% 3
+\begin{frame}[plain]
+  \vote{Вы набрали в браузере адрес сервиса и нажали Enter. Что первым делом
+    сделает браузер?}
+\end{frame}
+
+% 4
+\begin{frame}{Четыре слоя до вашего кода}
+  \slidetop
+  \begin{center}
+    \begin{tikzpicture}[font=\small,
+      ly/.style={draw=hairline,line width=0.8pt,fill=codebg,
+                 minimum width=7.6cm,minimum height=0.85cm,inner sep=4pt},
+      rt/.style={font=\footnotesize,text=muted,anchor=west}]
+      \node[ly] (dns)  at (0,0)    {};
+      \node[ly] (tcp)  at (0,1.05) {};
+      \node[ly] (tls)  at (0,2.10) {};
+      \node[ly,draw=accent,line width=1.0pt] (http) at (0,3.15) {};
+      \foreach \n/\a/\b in {dns/DNS/{имя $\to$ адрес},
+                            tcp/TCP/{соединение и порядок},
+                            tls/TLS/{шифрование и подлинность},
+                            http/HTTP/{запрос и ответ}} {
+        \node[anchor=west,font=\small\bfseries] at ([xshift=0.35cm]\n.west) {\a};
+        \node[anchor=west] at ([xshift=2.0cm]\n.west) {\b};
+        \node[rt] at ([xshift=0.4cm]\n.east) {+1 обмен};
+      }
+      \node[anchor=east,font=\scriptsize,text=muted] at ([xshift=-0.3cm]dns.west)
+        {сначала};
+      \node[anchor=east,font=\scriptsize,text=accent] at ([xshift=-0.3cm]http.west)
+        {ваш код};
+    \end{tikzpicture}
+  \end{center}
+
+  \slidegap
+  \aside{Каждый слой --- ещё один обмен туда-обратно. HTTP начинается
+    \hi{последним}.}
+\end{frame}
+
+% 5
+\begin{frame}{Слой 1: DNS}
+  \slidetop
+  \claim{Имя $\to$ \hi{адрес}: сеть понимает числа, а не буквы.}
+
+  \begin{center}
+    \begin{tikzpicture}[font=\footnotesize,
+      bx/.style={draw=hairline,line width=0.8pt,fill=codebg,
+                 minimum width=2.3cm,minimum height=0.9cm,inner sep=3pt,
+                 align=center},
+      ar/.style={-{Straight Barb[length=1.6mm]},muted,line width=0.7pt}]
+      \node[bx,draw=accent] (b) at (0,0)   {браузер};
+      \node[bx] (r) at (3.0,0)  {резолвер ОС};
+      \node[bx] (d) at (6.0,0)  {DNS-сервер};
+      \node[bx] (z) at (10.1,0) {серверы зоны};
+      \draw[ar] ([yshift=2pt]b.east) -- ([yshift=2pt]r.west);
+      \draw[ar] ([yshift=2pt]r.east) -- ([yshift=2pt]d.west);
+      \draw[ar] ([yshift=2pt]d.east) -- node[above,font=\scriptsize,text=muted]
+        {если не знает} ([yshift=2pt]z.west);
+      \draw[ar,accent] (r.south) -- ++(0,-0.55) -| node[pos=0.25,below,
+        font=\scriptsize\ttfamily,text=accent] {203.0.113.10} (b.south);
+    \end{tikzpicture}
+  \end{center}
+
+  \slidegap
+  {\renewcommand{\arraystretch}{1.45}\small
+  \begin{tabular}{@{}L{3.4cm}L{9.4cm}@{}}
+    \hi{UDP, порт 53}  & один вопрос, один ответ --- соединение дороже пакетов \\
+    \hi{TTL}           & сколько хранить ответ; после переезда часть клиентов
+                         ходит по старому адресу \\
+    \hi{несколько адресов} & клиенты берут по очереди --- простейший балансировщик \\
+  \end{tabular}}
+\end{frame}
+
+% 6
+\begin{frame}{Слой 2: TCP}
+  \slidetop
+  \claim{Надёжный упорядоченный поток байтов поверх \lo{ненадёжной} сети.}
+
+  \begin{minipage}[t]{0.50\textwidth}
+    \begin{tikzpicture}[font=\footnotesize,baseline=(current bounding box.north)]
+      \node[font=\footnotesize\bfseries] (c) at (0,0)   {клиент};
+      \node[font=\footnotesize\bfseries] (s) at (4.6,0) {сервер};
+      \draw[hairline,line width=0.6pt] (0,-0.3) -- (0,-3.5);
+      \draw[hairline,line width=0.6pt] (4.6,-0.3) -- (4.6,-3.5);
+      \draw[seqar,muted]  (0,-0.55) -- node[seqlab,sloped] {SYN}     (4.6,-1.05);
+      \draw[seqar,muted]  (4.6,-1.25) -- node[seqlab,sloped] {SYN-ACK} (0,-1.75);
+      \draw[seqar,muted]  (0,-1.95) -- node[seqlab,sloped] {ACK}     (4.6,-2.45);
+      \draw[seqar,accent] (0,-2.75) -- node[seqlab,sloped,text=accent] {данные}
+        (4.6,-3.25);
+      \draw[rawbrace] (-0.25,-1.95) -- (-0.25,-0.55)
+        node[midway,left=5pt,font=\scriptsize,text=muted,align=right]
+        {1 обмен\\до первого\\байта};
+    \end{tikzpicture}
+  \end{minipage}\hfill
+  \begin{minipage}[t]{0.44\textwidth}
+    \vspace{0pt}
+    \begin{cbul}{accent}
+      \item рукопожатие: \hi{три пакета}
+      \item каждый кусок подтверждается
+      \item потерянный --- отправляется заново
+      \item пришедший не по порядку ждёт предыдущие
+    \end{cbul}
+  \end{minipage}
+
+  \slidegap
+  \aside{Цена: один потерянный пакет задерживает \lo{всё}, что идёт за ним.}
+\end{frame}
+
+% 7
+\begin{frame}{TCP на сервере: порт и сокет}
+  \slidetop
+  \begin{center}
+    \begin{tikzpicture}[font=\footnotesize,
+      bx/.style={draw=hairline,line width=0.8pt,fill=codebg,
+                 minimum height=0.95cm,inner sep=4pt,align=center},
+      ar/.style={-{Straight Barb[length=1.6mm]},muted,line width=0.7pt}]
+      \node[bx,minimum width=2.0cm] (cl) at (0,0) {клиенты};
+      \node[bx,minimum width=3.4cm] (q) at (3.6,0)
+        {очередь ОС\\{\scriptsize рукопожатие завершено}};
+      \node[bx,minimum width=2.2cm,draw=accent] (ac) at (7.2,0) {accept};
+      \node[bx,minimum width=2.6cm,draw=accent] (so) at (10.3,0)
+        {сокет\\{\scriptsize дескриптор: закрыть}};
+      \draw[ar] (cl) -- (q);
+      \draw[ar] (q) -- (ac);
+      \draw[ar,accent] (ac) -- (so);
+      \node[font=\scriptsize,text=accent,above=0.25em] at (q.north)
+        {«слушаю порт 8080»};
+    \end{tikzpicture}
+  \end{center}
+
+  \slidegap
+  \begin{minipage}[t]{0.50\textwidth}
+    \eyebrow{соединение --- четвёрка}\par\vspace{0.5em}
+    {\small\ttfamily 203.0.113.7:51234\par
+     $\leftrightarrow$ 198.51.100.10:443\par}
+    \vspace{0.3em}
+    {\scriptsize\color{muted} адрес и порт клиента, адрес и порт сервера\par}
+  \end{minipage}\hfill
+  \begin{minipage}[t]{0.46\textwidth}
+    \eyebrow{порты}\par\vspace{0.3em}
+    {\renewcommand{\arraystretch}{1.25}\small
+    \begin{tabular}{@{}L{1.6cm}L{4.4cm}@{}}
+      \hi{80}    & HTTP \\
+      \hi{443}   & HTTPS \\
+      \lo{< 1024} & только привилегированный процесс \\
+    \end{tabular}}
+  \end{minipage}
+
+  \slidegap
+  \aside{Очередь переполнена --- отказ ещё до HTTP. «Address already in use» ---
+    порт занят другим процессом.}
+\end{frame}
+
+% 8
+\begin{frame}{Слой 3: TLS}
+  \slidetop
+  \claim{Шифрование и \hi{подлинность}: вы говорите с тем, с кем собирались.}
+
+  \begin{minipage}[t]{0.50\textwidth}
+    \begin{tikzpicture}[font=\footnotesize,baseline=(current bounding box.north)]
+      \node[font=\footnotesize\bfseries] at (0,0)   {клиент};
+      \node[font=\footnotesize\bfseries] at (4.6,0) {сервер};
+      \draw[hairline,line width=0.6pt] (0,-0.3) -- (0,-3.0);
+      \draw[hairline,line width=0.6pt] (4.6,-0.3) -- (4.6,-3.0);
+      \draw[seqar,muted]  (0,-0.55) -- node[seqlab,sloped] {ClientHello} (4.6,-1.05);
+      \draw[seqar,accent] (4.6,-1.25) -- node[seqlab,sloped,text=accent]
+        {ServerHello + cert} (0,-1.75);
+      \draw[seqar,muted]  (0,-1.95) -- node[seqlab,sloped] {Finished} (4.6,-2.45);
+      \draw[rawbrace] (-0.25,-1.75) -- (-0.25,-0.55)
+        node[midway,left=5pt,font=\scriptsize,text=muted,align=right]
+        {1 обмен\\в TLS 1.3};
+    \end{tikzpicture}
+  \end{minipage}\hfill
+  \begin{minipage}[t]{0.44\textwidth}
+    \vspace{0pt}
+    \begin{cbul}{accent}
+      \item всё дальше зашифровано
+      \item сертификат: \hi{имя сервера}, подписанное центром
+      \item не совпало --- клиент рвёт соединение
+      \item в старых версиях --- два обмена
+    \end{cbul}
+  \end{minipage}
+
+  \slidegap
+  \aside{HTTPS --- это HTTP \hi{внутри} TLS. Тот же HTTP, только снаружи его не
+    видно.}
+\end{frame}
+
+% 9
+\begin{frame}{Что клиент проверяет в сертификате}
+  \slidetop
+  \claim{Каждая проверка --- отдельный способ \lo{упасть}.}
+
+  {\renewcommand{\arraystretch}{1.65}
+  \begin{tabular}{@{}L{3.0cm}L{9.8cm}@{}}
+    \hi{\textbf{имя}}     & совпадает с именем, к которому обратились \\
+    \hi{\textbf{цепочка}} & подписи ведут к корневому центру, которому доверяет
+                            ОС или браузер \\
+    \hi{\textbf{срок}}    & не истёк \\
+    \hi{\textbf{отзыв}}   & сертификат не отозван \\
+  \end{tabular}}
+
+  \slidegap
+  \aside{Сертификат для разработки подписан сам собой: цепочка никуда не
+    ведёт. Истёкший сертификат --- одна из самых частых причин «сервис лежит».}
+\end{frame}
+
+% 10
+\begin{frame}{Слой 4: HTTP}
+  \slidetop
+  \claim{Запрос и ответ поверх \hi{готового} канала.}
+
+  \begin{center}
+    \begin{tikzpicture}[font=\small,
+      bx/.style={draw=hairline,line width=0.8pt,fill=codebg,
+                 minimum width=2.6cm,minimum height=1.6cm,inner sep=4pt,
+                 align=center}]
+      \node[bx] (c) at (0,0) {клиент};
+      \node[bx,draw=accent] (s) at (8.4,0) {сервер};
+      \draw[seqar,accent] ([yshift=0.45cm]c.east) -- node[above,font=\footnotesize]
+        {1. запрос: что хочу} ([yshift=0.45cm]s.west);
+      \draw[seqar,accent] ([yshift=0cm]s.west) -- node[above,font=\footnotesize]
+        {2. ответ: что получилось} ([yshift=0cm]c.east);
+      \draw[seqar,alt,dashed] ([yshift=-0.5cm]s.west) -- node[below,
+        font=\footnotesize,text=alt] {сам, без запроса --- нельзя}
+        ([yshift=-0.5cm]c.east);
+    \end{tikzpicture}
+  \end{center}
+
+  \slidegap
+  \hrulethin{0.42}
+  \rulegap
+  {\large Сервер \lo{не может} начать разговор первым.}
+
+  \vspace{0.6em}
+  \aside{Надёжность, шифрование и адреса --- не его забота: это три слоя под
+    ним. Порт по умолчанию: 80 для HTTP, 443 для HTTPS.}
+\end{frame}
+
+% 11
+\begin{frame}{Сколько стоит соединение}
+  \slidetop
+  \claim{Четыре обмена туда-обратно до первого байта \hi{данных}.}
+
+  \begin{center}
+    \begin{tikzpicture}[font=\footnotesize,
+      seg/.style={draw=hairline,line width=0.8pt,fill=codebg,
+                  minimum width=2.6cm,minimum height=0.8cm,inner sep=0pt}]
+      \node[seg] (a) at (0,0)   {DNS};
+      \node[seg] (b) at (2.7,0) {TCP};
+      \node[seg] (c) at (5.4,0) {TLS};
+      \node[seg,draw=accent,line width=1.0pt] (d) at (8.1,0) {запрос и ответ};
+      \foreach \n in {a,b,c,d}
+        \node[font=\scriptsize,text=muted,below=0.2em] at (\n.south) {200 мс};
+      \draw[rawbrace] ([yshift=0.15cm]a.north west) -- ([yshift=0.15cm]d.north east)
+        node[midway,above=5pt,font=\scriptsize,text=muted]
+        {100 мс в одну сторону: около 800 мс до ответа};
+    \end{tikzpicture}
+  \end{center}
+
+  \slidegap
+  \begin{center}
+    {\LARGE\bfseries\hi{Переиспользуй соединения!}}
+  \end{center}
+
+  \aside{Новое соединение --- три обмена впустую. По одному соединению идут
+    десятки запросов, библиотеки держат пул готовых.}
+\end{frame}
+
+% 12
+\begin{frame}{UDP и TCP}
+  \slidetop
+  \versus{UDP}{%
+    \begin{cbul}{accent}
+      \item без соединения
+      \item без подтверждений и повторов
+      \item без порядка
+    \end{cbul}}{TCP}{%
+    \begin{cbul}{alt}
+      \item соединение и рукопожатие
+      \item подтверждения и повторы
+      \item строгий порядок
+    \end{cbul}}
+
+  \slidegap
+  \hrulethin{0.42}
+  \rulegap
+  {\large UDP --- там, где \hi{свежесть} важнее полноты: DNS, видеозвонки,
+    игры.}
+\end{frame}
+
+% 13
+\begin{frame}[plain]
+  \vote{HTTP нужны все гарантии TCP. Почему он тоже захотел уйти с TCP?}
+\end{frame}
+
+% 14
+\begin{frame}{Блокировка головы очереди}
+  \slidetop
+  \claim{Один потерянный пакет задерживает \lo{всех}.}
+
+  \begin{center}
+    \begin{tikzpicture}[font=\footnotesize,
+      pk/.style={draw=hairline,line width=0.8pt,fill=codebg,
+                 minimum width=0.85cm,minimum height=0.8cm,inner sep=0pt}]
+      \draw[hairline,line width=0.6pt,rounded corners=2pt]
+        (-0.6,-0.65) rectangle (10.4,0.65);
+      \node[font=\scriptsize,text=muted,anchor=south west] at (-0.6,0.7)
+        {одно TCP-соединение, десять картинок};
+      \node[pk,draw=alt,dashed,fill=paper,line width=1.0pt] (p1) at (0,0)
+        {\textcolor{alt}{1}};
+      \foreach \i in {2,...,10}
+        \node[pk] (p\i) at ({(\i-1)*1.05},0) {\i};
+      \node[font=\scriptsize,text=alt,below=0.75em] at (p1.south) {потерян};
+      \draw[rawbrace] ([yshift=-0.75cm]p10.south east) -- ([yshift=-0.75cm]p2.south west)
+        node[midway,below=5pt,font=\scriptsize,text=muted]
+        {пришли и лежат в буфере --- браузер их не получит};
+    \end{tikzpicture}
+  \end{center}
+
+  \slidegap
+  \aside{TCP отдаёт байты \lo{строго по порядку}. На плохой мобильной сети это
+    превращает быстрый сайт в медленный.}
+\end{frame}
+
+% 15
+\begin{frame}{QUIC}
+  \slidetop
+  \claim{Транспорт поверх \hi{UDP} со своими потоками, шифрованием и порядком.}
+
+  {\renewcommand{\arraystretch}{1.6}
+  \begin{tabular}{@{}L{4.3cm}L{8.5cm}@{}}
+    \hi{\textbf{независимые потоки}} & порядок внутри потока, а не между ---
+      потеря тормозит одну картинку \\
+    \hi{\textbf{TLS внутри}}         & одно рукопожатие вместо двух --- минус
+      обмен \\
+    \hi{\textbf{смена сети}}         & соединение привязано к идентификатору,
+      а не к адресу: Wi-Fi $\to$ мобильная сеть --- продолжается \\
+    \hi{\textbf{HTTP/3}}             & это HTTP поверх QUIC \\
+  \end{tabular}}
+
+  \slidegap
+  \aside{Третья версия HTTP пришла не из HTTP, а из транспорта. Ваш код не
+    меняется ни на строку.}
+\end{frame}
+
+% 16
+\begin{frame}{Медленно --- где именно?}
+  \slidetop
+  \claim{Вкладка сети в браузере раскладывает запрос на \hi{пять} отрезков.}
+
+  \begin{center}
+    \begin{tikzpicture}[font=\scriptsize,
+      seg/.style={draw=hairline,line width=0.8pt,fill=codebg,
+                  minimum height=0.7cm,inner sep=0pt,anchor=west}]
+      \node[seg,minimum width=1.2cm] (a) at (0,0) {};
+      \node[seg,minimum width=1.8cm] (b) at (a.east) {};
+      \node[seg,minimum width=1.8cm] (c) at (b.east) {};
+      \node[seg,minimum width=4.4cm,draw=accent,line width=1.0pt,
+            fill=accent!12!paper] (d) at (c.east) {};
+      \node[seg,minimum width=2.4cm] (e) at (d.east) {};
+      \node[below=0.25em,text=muted] at (a.south) {DNS};
+      \node[below=0.25em,text=muted] at (b.south) {соединение};
+      \node[below=0.25em,text=muted] at (c.south) {TLS};
+      \node[below=0.25em,text=accent] at (d.south) {ожидание ответа сервера};
+      \node[below=0.25em,text=muted] at (e.south) {загрузка тела};
+      \node[above=0.25em,text=accent] at (d.north) {здесь ваш код};
+    \end{tikzpicture}
+  \end{center}
+
+  \slidegap
+  \aside{Медленно может быть в DNS, в сети, в TLS, в коде или в размере ответа ---
+    и лечится это в пяти \hi{разных} местах.}
+\end{frame}
+
+% 17
+\begin{frame}{Кто стоит между клиентом и вами}
+  \slidetop
+  \begin{center}
+    \begin{tikzpicture}[font=\footnotesize,
+      bx/.style={draw=hairline,line width=0.8pt,fill=codebg,
+                 minimum width=2.0cm,minimum height=0.9cm,inner sep=3pt,
+                 align=center},
+      ar/.style={-{Straight Barb[length=1.6mm]},muted,line width=0.7pt},
+      ch/.style={font=\scriptsize,text=alt,above=0.35em,align=center}]
+      \node[bx] (c) at (0,0)   {клиент};
+      \node[bx] (n) at (2.75,0) {CDN};
+      \node[bx] (l) at (5.5,0)  {балансировщик};
+      \node[bx] (p) at (8.25,0) {реверс-\\прокси};
+      \foreach \y in {0.95,0,-0.95}
+        \node[bx,draw=accent,minimum width=1.7cm,minimum height=0.7cm]
+          at (11.0,\y) {сервис};
+      \draw[ar] (c) -- (n);
+      \draw[ar] (n) -- (l);
+      \draw[ar] (l) -- (p);
+      \draw[ar,accent] (p.east) -- (10.15,0.95);
+      \draw[ar,accent] (p.east) -- (10.15,0);
+      \draw[ar,accent] (p.east) -- (10.15,-0.95);
+      \foreach \n in {n,l,p} \node[ch] at (\n.north) {может изменить\\запрос};
+    \end{tikzpicture}
+  \end{center}
+
+  \slidegap
+  {\renewcommand{\arraystretch}{1.35}\small
+  \begin{tabular}{@{}L{3.2cm}L{9.6cm}@{}}
+    \hi{балансировщик}   & раздаёт соединения экземплярам; спрашивает «ты жив?» \\
+    \hi{реверс-прокси}   & терминирует TLS, сжимает, ограничивает частоту \\
+    \hi{CDN}             & кэширует ответы ближе к клиенту, принимает атаки \\
+  \end{tabular}}
+\end{frame}
+
+% 18
+\begin{frame}{Что видит сервис за прокси}
+  \slidetop
+  \versus{на самом деле}{%
+    \begin{cbul}{accent}
+      \item схема \texttt{https}
+      \item адрес клиента \texttt{203.0.113.7}
+    \end{cbul}}{видит сервис}{%
+    \begin{cbul}{alt}
+      \item схема \texttt{http}
+      \item адрес балансировщика \texttt{10.0.0.5}
+    \end{cbul}}
+
+  \slidegap
+  \hrulethin{0.42}
+  \rulegap
+  {\large Правду прокси дописывает в заголовки --- но дописать их может
+    \lo{кто угодно}.}
+
+  \vspace{0.6em}
+  \aside{\texttt{X-Forwarded-Proto}, \texttt{X-Forwarded-For}. У каждого узла
+    ещё и свой таймаут: прокси не дождался --- клиент получил ошибку от прокси.}
+\end{frame}
+
+% 19
+\begin{frame}[plain]
+  \keyline{До вашего кода отрабатывают четыре слоя и несколько чужих машин.\\
+    Каждый стоит времени и может изменить запрос.}
+\end{frame}
+
+% ============================================================== 2. HTTP ==
+\section{2. HTTP как протокол}
+
+% 20
+\begin{frame}[plain]
+  \sectionopener{2}{HTTP как протокол}{Структура \hi{HTTP}.}
+\end{frame}
+
+% 21
+\begin{frame}[fragile]{Сырой запрос}
+  \slidetop
+  \claim{Это \hi{текст}: его можно напечатать в сокет руками.}
+
+  \begin{minipage}{0.62\textwidth}
+\begin{lstlisting}[style=plain,basicstyle=\rawfont,escapechar=|]
+|\mk{q1}|GET /orders/42?fields=status HTTP/1.1
+|\mk{q2}|Host: api.example.com
+|\mk{q3}|Accept: application/json
+|\mk{q4}|Authorization: Bearer eyJhbGciOi...
+|\mk{q5}|User-Agent: curl/8.5.0
+|\mk{q6}|
+\end{lstlisting}
+  \end{minipage}
+  \begin{tikzpicture}[remember picture,overlay]
+    \node[rawlab,text=accent] at ([xshift=9.0cm]q1) {стартовая строка};
+    \draw[rawbrace] ([xshift=8.8cm,yshift=0.3em]q2) -- ([xshift=8.8cm,yshift=-0.3em]q5);
+    \node[rawlab] at ([xshift=9.15cm]$(q2)!0.5!(q5)$) {заголовки};
+    \node[rawlab,text=muted] at ([xshift=9.0cm]q6) {пустая строка; тела нет};
+  \end{tikzpicture}
+
+  \slidegap
+  \aside{Метод, путь с параметрами, версия. Заголовки --- «имя: значение» по
+    одному на строку. Пустая строка --- заголовки кончились.}
+\end{frame}
+
+% 22
+\begin{frame}{Адрес по частям}
+  \slidetop
+  {\ttfamily\fontsize{11}{13}\selectfont \lo{https}://\hi{api.example.com}:\lo{443}\hi{/orders/42?fields=status}\lo{\#top}\par}
+
+  \slidegap
+  {\renewcommand{\arraystretch}{1.3}\small
+  \begin{tabular}{@{}L{2.4cm}L{4.1cm}L{6.2cm}@{}}
+    \colhead{muted}{часть} & \colhead{muted}{пример} & \colhead{muted}{куда уходит} \\
+    схема     & \texttt{https}            & чтобы соединиться: порт и TLS \\
+    хост      & \texttt{api.example.com}  & \hi{заголовок Host} \\
+    порт      & \texttt{443}              & чтобы соединиться \\
+    путь      & \texttt{/orders/42}       & \hi{стартовая строка} \\
+    параметры & \texttt{?fields=status}   & \hi{стартовая строка} \\
+    фрагмент  & \texttt{\#top}            & \lo{не отправляется}: живёт в браузере \\
+  \end{tabular}}
+
+  \slidegap
+  \aside{Всё вне разрешённого набора кодируется процентом и кодом байта:
+    пробел --- \texttt{\%20}. Странные проценты в логах --- это оно.}
+\end{frame}
+
+% 23
+\begin{frame}[fragile]{Сырой ответ}
+  \slidetop
+  \claim{Длина в заголовке --- \hi{ровно} столько байт, сколько в теле.}
+
+  \begin{minipage}{0.62\textwidth}
+\begin{lstlisting}[style=plain,basicstyle=\rawfont,escapechar=|]
+|\mk{r1}|HTTP/1.1 200 OK
+|\mk{r2}|Content-Type: application/json; charset=utf-8
+|\mk{r3}|Content-Length: 25
+|\mk{r4}|Cache-Control: private, max-age=0
+|\mk{r5}|
+|\mk{r6}|{"id":42,"status":"paid"}
+\end{lstlisting}
+  \end{minipage}
+  \begin{tikzpicture}[remember picture,overlay]
+    \node[rawlab,text=accent] at ([xshift=9.0cm]r1) {строка статуса};
+    \draw[rawbrace] ([xshift=8.8cm,yshift=0.3em]r2) -- ([xshift=8.8cm,yshift=-0.3em]r4);
+    \node[rawlab] at ([xshift=9.15cm]r3) {заголовки};
+    \node[rawlab,text=muted] at ([xshift=9.0cm]r5) {пустая строка};
+    \node[rawlab,text=accent] at ([xshift=9.0cm]r6) {тело: 25 байт};
+  \end{tikzpicture}
+
+  \slidegap
+  \aside{Сервер написал 26 --- клиент ждёт байт, который \lo{не придёт}, и
+    висит до таймаута.}
+\end{frame}
+
+% 24
+\begin{frame}{Три части сообщения}
+  \slidetop
+  {\renewcommand{\arraystretch}{1.4}
+  \begin{tabular}{@{}L{3.6cm}L{9.2cm}@{}}
+    \hi{\textbf{стартовая строка}} & \textbf{что и с чем}: метод, путь, версия
+      или статус \\
+    \hi{\textbf{заголовки}}        & \textbf{как}: формат, длина, кэш,
+      авторизация, идентификатор запроса \\
+    \hi{\textbf{тело}}             & \textbf{данные}: сумма заказа, а не
+      метаданные о ней \\
+  \end{tabular}}
+
+  \slidegap
+  \eyebrow{тело по Content-Type}\par\vspace{0.5em}
+  {\renewcommand{\arraystretch}{1.1}\small
+  \begin{tabular}{@{}L{6.8cm}L{6.0cm}@{}}
+    \texttt{application/json}                  & чаще всего \\
+    \texttt{application/x-www-form-urlencoded} & обычная HTML-форма \\
+    \texttt{multipart/form-data}               & файл вместе с полями \\
+    \texttt{application/octet-stream}          & байты как есть \\
+  \end{tabular}}
+
+  \slidegap
+  \aside{Без правильного Content-Type сервер не знает, как читать тело, и
+    отвечает \lo{ошибкой}.}
+\end{frame}
+
+% 25
+\begin{frame}{Методы}
+  \slidetop
+  {\renewcommand{\arraystretch}{1.28}\small
+  \begin{tabular}{@{}p{1.8cm}>{\centering\arraybackslash}p{2.0cm}%
+      >{\centering\arraybackslash}p{2.4cm}>{\centering\arraybackslash}p{1.1cm}L{5.0cm}@{}}
+    & \colhead{muted}{безопасный} & \colhead{muted}{идемпотентный}
+      & \colhead{muted}{тело} & \colhead{muted}{что делает} \\
+    \texttt{\textbf{GET}}     & \hi{да} & \hi{да} & ---     & получить ресурс \\
+    \texttt{\textbf{HEAD}}    & \hi{да} & \hi{да} & ---     & то же, только заголовки \\
+    \texttt{\textbf{POST}}    & ---     & ---     & \hi{да} & создать или выполнить действие \\
+    \texttt{\textbf{PUT}}     & ---     & \hi{да} & \hi{да} & заменить ресурс целиком \\
+    \texttt{\textbf{PATCH}}   & ---     & ---     & \hi{да} & изменить часть ресурса \\
+    \texttt{\textbf{DELETE}}  & ---     & \hi{да} & ---     & удалить \\
+    \texttt{\textbf{OPTIONS}} & \hi{да} & \hi{да} & ---     & спросить, что можно с адресом \\
+    \texttt{\textbf{QUERY}}   & \hi{да} & \hi{да} & \hi{да} & прочитать по запросу в теле \\
+  \end{tabular}}
+
+  \slidegap
+  \aside{Метод --- семантика протокола, а не обязанность сервера: остальные ---
+    \texttt{405}.}
+\end{frame}
+
+% 26
+\begin{frame}{Повтор запроса}
+  \slidetop
+  \claim{Сеть ненадёжна: клиент без ответа хочет \hi{повторить}.}
+
+  \versus{повторять можно}{%
+    \begin{cbul}{accent}
+      \item \texttt{GET}, \texttt{HEAD}: ничего не меняют
+      \item \texttt{PUT}: положить дважды --- как один раз
+      \item \texttt{DELETE}: удалить удалённое --- ничего
+    \end{cbul}}{повторять нельзя}{%
+    \begin{cbul}{alt}
+      \item \texttt{POST}: два запроса --- два заказа
+      \item только с ключом идемпотентности
+    \end{cbul}}
+
+  \slidegap
+  \aside{Если \texttt{GET} удаляет запись, поисковый робот пройдёт по ссылке и
+    удалит вам базу.}
+\end{frame}
+
+% 27
+\begin{frame}[plain]
+  \vote{Может ли у \texttt{GET} быть тело?}
+\end{frame}
+
+% 28
+\begin{frame}[fragile]{\texttt{QUERY}}
+  \slidetop
+  \claim{Читает, как \texttt{GET}, но \hi{с телом}: безопасный и
+    идемпотентный.}
+
+\begin{lstlisting}[style=plain,basicstyle=\rawfont]
+QUERY /orders HTTP/1.1
+Host: api.example.com
+Content-Type: application/json
+
+{"status":"paid","from":"2026-09-01","customer":7}
+\end{lstlisting}
+
+  \slidegap
+  \aside{Тело у \texttt{GET} есть на бумаге и нет в жизни: прокси его
+    выбрасывают, кэши не учитывают. Пока \texttt{QUERY} нельзя ---
+    \texttt{POST} на \texttt{/orders/search} и пометка, что он ничего не меняет.}
+\end{frame}
+
+% 29
+\begin{frame}{Статусы: пять групп}
+  \slidetop
+  {\renewcommand{\arraystretch}{1.5}\small
+  \begin{tabular}{@{}L{1.0cm}L{2.3cm}L{9.5cm}@{}}
+    \textbf{1xx} & продолжаем     & \texttt{100} шли тело дальше,
+      \texttt{101} меняем протокол \\
+    \hi{\textbf{2xx}} & \hi{получилось} & \texttt{200} успех с телом,
+      \texttt{201} создано (адрес в \texttt{Location}), \texttt{204} успех без тела \\
+    \textbf{3xx} & иди туда        & \texttt{301}/\texttt{302} переехал навсегда
+      или временно, \texttt{304} не изменилось --- бери из кэша \\
+    \lo{\textbf{4xx}} & \lo{ты ошибся} & прислал не то: повторять без изменений
+      бессмысленно \\
+    \lo{\textbf{5xx}} & \lo{я ошибся}  & \texttt{500} необработанное исключение,
+      \texttt{502}/\texttt{504} прокси не достучался или не дождался,
+      \texttt{503} временно недоступен \\
+  \end{tabular}}
+
+  \slidegap
+  \aside{Кодов несколько десятков, групп пять. Группа \hi{важнее} номера.}
+\end{frame}
+
+% 30
+\begin{frame}{Ошибки клиента: 4xx}
+  \slidetop
+  \begin{minipage}[t]{0.47\textwidth}
+    {\renewcommand{\arraystretch}{1.6}\small
+    \begin{tabular}[t]{@{}L{1.0cm}L{4.9cm}@{}}
+      \lo{\texttt{400}} & не разобрать запрос \\
+      \lo{\texttt{401}} & не знаем, \textbf{кто ты} \\
+      \lo{\texttt{403}} & знаем, кто ты, и \textbf{тебе нельзя} \\
+      \lo{\texttt{404}} & нет такого \\
+    \end{tabular}}
+  \end{minipage}\hfill
+  \begin{minipage}[t]{0.49\textwidth}
+    {\renewcommand{\arraystretch}{1.6}\small
+    \begin{tabular}[t]{@{}L{1.0cm}L{5.2cm}@{}}
+      \lo{\texttt{405}} & метод не поддерживается для адреса \\
+      \lo{\texttt{409}} & конфликт: версия устарела, такой уже есть \\
+      \lo{\texttt{422}} & разобрали, но по смыслу невалидно \\
+      \lo{\texttt{429}} & слишком часто, приходи позже \\
+    \end{tabular}}
+  \end{minipage}
+
+  \slidegap
+  \aside{\texttt{401} и \texttt{403} путают постоянно. \texttt{401} сообщает в
+    заголовке, каким способом аутентифицироваться.}
+\end{frame}
+
+% 31
+\begin{frame}[plain]
+  \vote{Клиент запросил заказ, которого нет. Какой статус?}
+\end{frame}
+
+% 32
+\begin{frame}[fragile]{Ошибка --- это код}
+  \slidetop
+  \claim{Ошибка выражается \hi{кодом}, тело её уточняет.}
+
+  \begin{minipage}[t]{0.47\textwidth}
+    \colhead{accent}{так}\par\vspace{0.5em}
+\begin{lstlisting}[style=plain,basicstyle=\codesm]
+HTTP/1.1 404 Not Found
+Content-Type: application/json
+
+{"error":"not_found","id":42}
+\end{lstlisting}
+  \end{minipage}\hfill
+  \begin{minipage}[t]{0.47\textwidth}
+    \colhead{alt}{не так}\par\vspace{0.5em}
+\begin{lstlisting}[style=plain,basicstyle=\codesm]
+HTTP/1.1 200 OK
+Content-Type: application/json
+
+{"error":"not_found","id":42}
+\end{lstlisting}
+  \end{minipage}
+
+  \slidegap
+  \aside{Клиент, прокси, кэш и мониторинг смотрят на код, а не в тело. С
+    \lo{200} мониторинг покажет сто процентов успеха, пока пользователи ничего
+    не находят.}
+\end{frame}
+
+% 33
+\begin{frame}{Что возвращать}
+  \slidetop
+  {\renewcommand{\arraystretch}{1.75}
+  \begin{tabular}{@{}L{3.6cm}L{9.2cm}@{}}
+    \hi{\textbf{успех}}          & \texttt{2xx}, разный: создано, нечего
+      вернуть, данные \\
+    \hi{\textbf{ошибка клиента}} & \texttt{4xx}, разный: не разобрано, не
+      найдено, не разрешено, невалидно \\
+    \hi{\textbf{ошибка сервера}} & \texttt{500} --- только из одного места на
+      границе, никогда руками \\
+    \lo{\textbf{ошибка}}         & \lo{никогда \texttt{200}} \\
+  \end{tabular}}
+
+  \slidegap
+  \aside{Формат тела ошибки --- \hi{один} на весь сервис: получив \texttt{4xx},
+    клиент знает, где искать подробности.}
+\end{frame}
+
+% 34
+\begin{frame}{Заголовки: три темы}
+  \slidetop
+  \claim{Их сотни; знать нужно \hi{десяток}.}
+
+  \begin{minipage}[t]{0.31\textwidth}
+    \eyebrow{согласование}\par\vspace{0.6em}
+    {\small\ttfamily Content-Type\par Accept\par}
+    \vspace{0.6em}
+    {\scriptsize\color{muted} что в теле и что клиент готов принять\par}
+  \end{minipage}\hfill
+  \begin{minipage}[t]{0.31\textwidth}
+    \eyebrow{кэширование}\par\vspace{0.6em}
+    {\small\ttfamily Cache-Control\par ETag\par If-None-Match\par}
+    \vspace{0.6em}
+    {\scriptsize\color{muted} можно ли хранить и изменилось ли\par}
+  \end{minipage}\hfill
+  \begin{minipage}[t]{0.31\textwidth}
+    \eyebrow{состояние}\par\vspace{0.6em}
+    {\small\ttfamily Cookie\par Set-Cookie\par Authorization\par}
+    \vspace{0.6em}
+    {\scriptsize\color{muted} что клиент носит с собой\par}
+  \end{minipage}
+
+  \slidegap
+  \aside{\texttt{Content-Type} в ответе обязателен \hi{всегда}: тело без типа
+    клиент будет угадывать --- и угадает неправильно.}
+\end{frame}
+
+% 35
+\begin{frame}{Условный запрос}
+  \slidetop
+  \claim{Не изменилось --- \hi{304} без тела.}
+
+  \begin{center}
+    \begin{tikzpicture}[font=\footnotesize]
+      \node[font=\footnotesize\bfseries] at (0,0)   {клиент};
+      \node[font=\footnotesize\bfseries] at (9.0,0) {сервер};
+      \draw[hairline,line width=0.6pt] (0,-0.3) -- (0,-2.9);
+      \draw[hairline,line width=0.6pt] (9.0,-0.3) -- (9.0,-2.9);
+      \draw[seqar,muted]  (0,-0.6) -- node[seqlab,above=1pt]
+        {GET /orders/42} (9.0,-0.6);
+      \draw[seqar,muted]  (9.0,-1.15) -- node[seqlab,above=1pt]
+        {200 OK, ETag: "v7", body} (0,-1.15);
+      \draw[seqar,accent] (0,-2.0) -- node[seqlab,above=1pt,text=accent]
+        {GET /orders/42, If-None-Match: "v7"} (9.0,-2.0);
+      \draw[seqar,accent] (9.0,-2.55) -- node[seqlab,above=1pt,text=accent]
+        {304 Not Modified, no body} (0,-2.55);
+    \end{tikzpicture}
+  \end{center}
+
+  \slidegap
+  \aside{\texttt{ETag} --- отпечаток версии. \texttt{Cache-Control} --- можно ли
+    хранить, сколько и кому. Механика встроена в браузеры и прокси: нужно только
+    выставить заголовки.}
+\end{frame}
+
+% 36
+\begin{frame}{Cookie и чужие домены}
+  \slidetop
+  \claim{Флаги cookie --- про \hi{безопасность}.}
+
+  {\renewcommand{\arraystretch}{1.55}
+  \begin{tabular}{@{}L{2.8cm}L{10cm}@{}}
+    \hi{\texttt{HttpOnly}} & скрипт на странице cookie не прочитает \\
+    \hi{\texttt{Secure}}   & только по HTTPS \\
+    \hi{\texttt{SameSite}} & не отправлять с чужих сайтов: против подделки
+      запросов \\
+  \end{tabular}}
+
+  \slidegap
+  \hrulethin{0.42}
+  \rulegap
+  {\large «В curl работает, в браузере нет» --- почти всегда \lo{CORS}.}
+
+  \vspace{0.6em}
+  \aside{Запрос к API на другом домене браузер сначала согласует через
+    \texttt{OPTIONS}. Сервер явно говорит, каким доменам отвечает.}
+\end{frame}
+
+% 37
+\begin{frame}{Ещё пять заголовков}
+  \slidetop
+  {\renewcommand{\arraystretch}{1.55}
+  \begin{tabular}{@{}L{6.0cm}L{6.8cm}@{}}
+    \hi{\texttt{Host}}                       & имя сервера: на одном адресе много
+      сайтов \\
+    \hi{\texttt{Content-Length}}             & точная длина тела в байтах \\
+    \hi{\texttt{Transfer-Encoding: chunked}} & тело кусками, общая длина
+      заранее неизвестна \\
+    \hi{\texttt{Location}}                   & куда идти или где созданный
+      ресурс \\
+    \hi{\texttt{Accept-Encoding}}            & сжатие: JSON сжимается в разы \\
+  \end{tabular}}
+
+  \slidegap
+  \aside{Без \texttt{Host} и длины тела сырой запрос не работает. Сжатие
+    бесплатно, и его \lo{забывают}.}
+\end{frame}
+
+% 38
+\begin{frame}{Три версии}
+  \slidetop
+  \begin{center}
+    \begin{tikzpicture}[font=\footnotesize,
+      vb/.style={draw=hairline,line width=0.8pt,fill=codebg,
+                 text width=3.5cm,minimum height=2.3cm,inner sep=6pt,
+                 align=left,anchor=north,font=\small,
+                 execute at begin node=\nohyph},
+      ar/.style={-{Straight Barb[length=1.6mm]},muted,line width=0.7pt}]
+      \node[vb] (a) at (0,0)
+        {\textbf{HTTP/1.1}\\[0.3em] текст\\ один запрос за раз\\ шесть
+         соединений --- костыль};
+      \node[vb] (b) at (4.55,0)
+        {\textbf{HTTP/2}\\[0.3em] двоичный\\ много потоков в одном
+         соединении\\ сжатые заголовки};
+      \node[vb,draw=accent] (c) at (9.1,0)
+        {\textbf{HTTP/3}\\[0.3em] то же поверх QUIC\\ потеря тормозит один
+         поток\\ переживает смену сети};
+      \draw[ar] (a.east) -- (b.west);
+      \draw[ar] (b.east) -- (c.west);
+    \end{tikzpicture}
+  \end{center}
+
+  \slidegap
+  \hrulethin{0.42}
+  \rulegap
+  {\large Семантика одна --- ваш код \hi{не меняется}.}
+
+  \vspace{0.6em}
+  \aside{Учите семантику: транспорт под ней поменялся дважды за десять лет.
+    Сервер по умолчанию говорит на 1.1 и 2, третью включают явно.}
+\end{frame}
+
+% 39
+\begin{frame}[plain]
+  \keyline{HTTP --- текст из трёх частей и договор о смысле.\\ Договор читают не
+    люди, а инфраструктура.}
+\end{frame}
+
+% ========================================================== 3. STATELESS ==
+\section{3. Stateless}
+
+% 40
+\begin{frame}[plain]
+  \sectionopener{3}{Почему сервис обязан быть stateless}{\hi{Любой} экземпляр
+    отвечает на любой запрос.}
+\end{frame}
+
+% 41
+\begin{frame}[plain]
+  \vote{Два экземпляра за балансировщиком. Пользователь вошёл на первом,
+    следующий его запрос попал на второй. Что он увидит?}
+\end{frame}
+
+% 42
+\begin{frame}{Stateless}
+  \slidetop
+  \claim{Между запросами сервис \hi{не хранит} в памяти ничего о клиенте.}
+
+  \versus{stateless}{%
+    \begin{cbul}{accent}
+      \item запрос несёт всё, что нужно
+      \item после ответа сервис о нём забыл
+      \item ответит любой экземпляр
+    \end{cbul}}{сессия в памяти}{%
+    \begin{cbul}{alt}
+      \item место в памяти под клиента
+      \item клиенту --- cookie с идентификатором
+      \item работает \lo{до второго} экземпляра
+    \end{cbul}}
+
+  \slidegap
+  \aside{Сессия --- так веб делал исторически; это стоит знать, чтобы понимать
+    старый код.}
+\end{frame}
+
+% 43
+\begin{frame}{Где живёт состояние}
+  \slidetop
+  \begin{center}
+    \begin{tikzpicture}[font=\footnotesize,
+      lb/.style={draw=hairline,line width=0.8pt,fill=codebg,
+                 minimum width=2.4cm,minimum height=0.7cm,inner sep=2pt},
+      inst/.style={draw=hairline,line width=0.8pt,fill=codebg,
+                 minimum width=1.5cm,minimum height=1.2cm,inner sep=2pt,
+                 align=center},
+      ar/.style={-{Straight Barb[length=1.4mm]},muted,line width=0.6pt}]
+      % left: stateless
+      \node[font=\footnotesize\bfseries,text=accent] at (2.0,2.2) {STATELESS};
+      \node[lb] (l1) at (2.0,1.4) {балансировщик};
+      \foreach \x/\n in {0.3/a,2.0/b,3.7/c} {
+        \node[inst,draw=accent] (\n) at (\x,-0.1) {экземпляр};
+        \draw[ar] (l1.south) -- (\n.north);
+      }
+      \node[lb,draw=accent,minimum width=5.0cm] (db) at (2.0,-1.6)
+        {общее хранилище};
+      \foreach \n in {a,b,c} \draw[ar,accent] (\n.south) -- (\n.south |- db.north);
+      % right: sessions in memory
+      \node[font=\footnotesize\bfseries,text=alt] at (9.4,2.2)
+        {СЕССИИ В ПАМЯТИ};
+      \node[lb] (l2) at (9.4,1.4) {балансировщик\,?};
+      \foreach \x/\n/\s in {7.7/d/{А, Б},9.4/e/{В},11.1/f/{Г, Д}} {
+        \node[inst] (\n) at (\x,-0.1) {экземпляр\\
+          {\scriptsize\color{alt} сессии \s}};
+        \draw[ar] (l2.south) -- (\n.north);
+      }
+    \end{tikzpicture}
+  \end{center}
+
+  \vspace{0.2em}
+  \aside{Справа балансировщику приходится помнить, кого куда отправлять ---
+    \lo{липкие сессии}.}
+\end{frame}
+
+% 44
+\begin{frame}{Четыре причины}
+  \slidetop
+  {\renewcommand{\arraystretch}{1.7}
+  \begin{tabular}{@{}L{3.4cm}L{9.4cm}@{}}
+    \hi{\textbf{масштабирование}} & добавили экземпляры --- они сразу работают,
+      липкие сессии не нужны \\
+    \hi{\textbf{перезапуск}}      & выкатка по одному экземпляру, никто не
+      заметил \\
+    \hi{\textbf{отказ}}           & упал экземпляр --- остальные приняли его
+      долю \\
+    \hi{\textbf{тестируемость}}   & запрос зависит только от себя:
+      воспроизводится и проверяется \\
+  \end{tabular}}
+
+  \slidegap
+  \aside{The Twelve-Factor App, пункт VI: процессы не хранят состояния и ничего
+    не разделяют; всё, что должно сохраниться, --- во внешнем хранилище.}
+\end{frame}
+
+% 45
+\begin{frame}{Четыре места для состояния}
+  \slidetop
+  \begin{center}
+    \begin{tikzpicture}[font=\footnotesize,
+      pl/.style={draw=hairline,line width=0.8pt,fill=codebg,
+                 text width=2.75cm,minimum height=2.4cm,inner sep=6pt,
+                 align=left,anchor=north,
+                 execute at begin node=\nohyph}]
+      \node[pl] at (0,0)
+        {\textbf{\hi{клиент}}\\[0.4em] что открыто, что введено,
+         какая вкладка};
+      \node[pl] at (3.4,0)
+        {\textbf{\hi{токен}}\\[0.4em] кто вошёл и что ему можно;
+         приходит с каждым запросом};
+      \node[pl] at (6.8,0)
+        {\textbf{\hi{кэш}}\\[0.4em] общий для всех экземпляров; то, что можно
+         пересчитать};
+      \node[pl,draw=accent,line width=1.0pt] at (10.2,0)
+        {\textbf{\hi{база}}\\[0.4em] заказы, пользователи, история:
+         всё, что переживёт всё};
+    \end{tikzpicture}
+  \end{center}
+
+  \slidegap
+  \aside{Состояние есть, и его много. Ни одно из четырёх мест --- \lo{не память
+    экземпляра}.}
+\end{frame}
+
+% 46
+\begin{frame}{Состояние --- только данные в базе}
+  \slidetop
+  \claim{Всё, что принадлежит сервису и переживает запрос, --- в \hi{базе}.}
+
+  \begin{center}
+    \begin{tikzpicture}[font=\footnotesize,
+      bx/.style={draw=hairline,line width=0.8pt,fill=codebg,
+                 minimum width=2.9cm,minimum height=1.1cm,inner sep=4pt,
+                 align=center},
+      ar/.style={-{Straight Barb[length=1.6mm]},line width=0.7pt}]
+      \node[bx] (rq) at (0,0) {запрос\\{\scriptsize токен, данные клиента}};
+      \node[bx] (in) at (4.4,0) {экземпляр\\{\scriptsize не помнит ничего}};
+      \node[bx,draw=accent,line width=1.0pt] (db) at (8.8,0)
+        {база\\{\scriptsize\color{accent} состояние}};
+      \node[bx,dashed,fill=paper] (ca) at (4.4,-1.7)
+        {кэш\\{\scriptsize ускоритель}};
+      \draw[ar,muted] (rq) -- (in);
+      \draw[ar,accent] (in) -- (db);
+      \draw[ar,muted,dashed] (in) -- (ca);
+      \node[font=\scriptsize,text=muted,anchor=west] at ([xshift=0.3cm]ca.east)
+        {потеряли --- ничего не сломалось, только медленнее};
+    \end{tikzpicture}
+  \end{center}
+
+  \slidegap
+  \aside{Потеря кэша что-то ломает --- значит, в кэше лежит то, чему место
+    \lo{в базе}.}
+\end{frame}
+
+% 47
+\begin{frame}{Что можно держать в памяти}
+  \slidetop
+  \versus{состояние процесса}{%
+    \begin{cbul}{accent}
+      \item конфигурация, пул соединений
+      \item справочники, замороженный словарь
+      \item локальный кэш поверх общего
+    \end{cbul}}{состояние клиента}{%
+    \begin{cbul}{alt}
+      \item кто вошёл
+      \item корзина, черновик
+      \item незавершённая операция
+    \end{cbul}}
+
+  \slidegap
+  \hrulethin{0.42}
+  \rulegap
+  {\large Исчезнет экземпляр --- потеряет ли что-то \hi{клиент}?}
+
+  \vspace{0.6em}
+  \aside{Фоновая задача по расписанию у двух экземпляров запустится дважды ---
+    и должна быть к этому готова.}
+\end{frame}
+
+% 48
+\begin{frame}[plain]
+  \keyline{Экземпляр сервиса не должен быть особенным.\\ Особенное --- то, что
+    вы потеряете при первом же перезапуске.}
+\end{frame}
+
+% ======================================================== 4. INTERACTION ==
+\section{4. Технологии взаимодействия}
+
+% 49
+\begin{frame}[plain]
+  \sectionopener{4}{Технологии взаимодействия}{Договор о смысле \hi{поверх}
+    HTTP.}
+\end{frame}
+
+% 50
+\begin{frame}[plain]
+  \vote{Кто из вас вызывал чужой API? Что это было?}
+\end{frame}
+
+% 51
+\begin{frame}{REST}
+  \slidetop
+  \claim{Ресурс --- \hi{адрес}, действие --- \hi{метод} HTTP.}
+
+  {\renewcommand{\arraystretch}{1.45}
+  \begin{tabular}{@{}L{1.9cm}L{4.6cm}L{6.2cm}@{}}
+    \texttt{\hi{GET}}    & \texttt{/orders/42}        & получить заказ \\
+    \texttt{\hi{PUT}}    & \texttt{/orders/42}        & заменить целиком \\
+    \texttt{\hi{DELETE}} & \texttt{/orders/42}        & удалить \\
+    \texttt{\hi{POST}}   & \texttt{/orders}           & создать новый \\
+    \texttt{\hi{POST}}   & \texttt{/orders/42/cancel} & действие: отменить заказ \\
+  \end{tabular}}
+
+  \slidegap
+  \aside{Статусы говорят, что вышло; формат тела --- заголовками, почти всегда
+    JSON. Не изобретать протокол поверх HTTP, а пользоваться им, как задуман.}
+\end{frame}
+
+% 52
+\begin{frame}{REST: сильные и слабые стороны}
+  \slidetop
+  \versus{почему прижился}{%
+    \begin{cbul}{accent}
+      \item нужен только HTTP
+      \item инфраструктура понимает без настройки
+      \item читается глазами
+    \end{cbul}}{чего нет}{%
+    \begin{cbul}{alt}
+      \item строгого контракта
+      \item стриминга
+      \item типов
+    \end{cbul}}
+
+  \slidegap
+  \hrulethin{0.42}
+  \rulegap
+  {\large Для публичного API --- выбор \hi{по умолчанию}.}
+\end{frame}
+
+% 53
+\begin{frame}{Хороший REST-API}
+  \slidetop
+  {\renewcommand{\arraystretch}{1.55}
+  \begin{tabular}{@{}L{5.6cm}L{7.2cm}@{}}
+    существительные во множественном & \hi{\texttt{/orders}}, не
+      \lo{\texttt{/getOrder}} \\
+    вложенность --- принадлежность   & \texttt{/customers/7/orders} \\
+    фильтры и страницы --- параметрами & \texttt{/orders?status=paid\&page=2} \\
+    версия --- в адресе или заголовке  & \texttt{/v1/orders} \\
+  \end{tabular}}
+
+  \slidegap
+  \aside{В JSON нет дат и точных десятичных чисел: о формате даты договариваются,
+    деньги передают строкой или с явной точностью --- иначе \lo{теряется
+    копейка}.}
+\end{frame}
+
+% 54
+\begin{frame}[fragile]{SOAP}
+  \slidetop
+  \begin{minipage}[t]{0.64\textwidth}
+\begin{lstlisting}[style=xml,basicstyle=\codexs]
+<soap:Envelope
+    xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/">
+  <soap:Header/>
+  <soap:Body>
+    <GetOrder xmlns="http://example.com/orders">
+      <Id>42</Id>
+    </GetOrder>
+  </soap:Body>
+</soap:Envelope>
+\end{lstlisting}
+  \end{minipage}\hfill
+  \begin{minipage}[t]{0.32\textwidth}
+    \eyebrow{как устроен}\par\vspace{0.6em}
+    \small
+    \begin{cbul}{accent}
+      \item всегда \texttt{POST}, адрес один
+      \item статус почти всегда \texttt{200}
+      \item смысл --- \hi{внутри конверта}
+      \item \hi{WSDL} --- контракт
+    \end{cbul}
+  \end{minipage}
+
+  \slidegap
+  \aside{HTTP умеет говорить методами и статусами; SOAP этим не пользуется и
+    везёт свой смысл внутри тела.}
+\end{frame}
+
+% 55
+\begin{frame}{SOAP: зачем и почему ушли}
+  \slidetop
+  \versus{что даёт}{%
+    \begin{cbul}{accent}
+      \item строгий контракт: WSDL
+      \item кодогенерация клиента
+      \item подписи, шифрование, транзакции
+    \end{cbul}}{почему ушли}{%
+    \begin{cbul}{alt}
+      \item многословно: XML
+      \item не кэшируется HTTP
+      \item не читается глазами
+    \end{cbul}}
+
+  \slidegap
+  \hrulethin{0.42}
+  \rulegap
+  {\large Придётся работать --- логируйте \hi{сырой XML} с первого дня.}
+
+  \vspace{0.6em}
+  \aside{Банки, госорганы, страховые: системы двухтысячных работают и
+    переписываться не собираются.}
+\end{frame}
+
+% 56
+\begin{frame}[plain]
+  \vote{Мобильному приложению нужны номер и статус заказа, вебу --- заказ с
+    покупателем, адресом и составом. Адрес у вас один. Что отдавать?}
+\end{frame}
+
+% 57
+\begin{frame}[fragile]{GraphQL}
+  \slidetop
+  \claim{Клиент описывает \hi{форму} ответа --- сервер отдаёт ровно её.}
+
+  \begin{minipage}[t]{0.40\textwidth}
+    \eyebrow{запрос}\par\vspace{0.4em}
+\begin{lstlisting}[style=plain,basicstyle=\codesm]
+query {
+  order(id: 42) {
+    status
+    customer {
+      name
+    }
+  }
+}
+\end{lstlisting}
+  \end{minipage}\hfill
+  \begin{minipage}[t]{0.55\textwidth}
+    \eyebrow{ответ той же формы}\par\vspace{0.4em}
+\begin{lstlisting}[style=json,basicstyle=\codesm]
+{
+  "data": {
+    "order": {
+      "status": "paid",
+      "customer": { "name": "Anna" }
+    }
+  }
+}
+\end{lstlisting}
+  \end{minipage}
+
+  \slidegap
+  \aside{Один адрес, один метод, обычно \texttt{POST}. Схема проверяет запрос до
+    выполнения.}
+\end{frame}
+
+% 58
+\begin{frame}{GraphQL: цена на сервере}
+  \slidetop
+  {\renewcommand{\arraystretch}{1.75}
+  \begin{tabular}{@{}L{3.6cm}L{9.2cm}@{}}
+    \lo{\textbf{глубина}}         & клиент может обойти граф как угодно ---
+      ограничивайте \\
+    \lo{\textbf{запросы в базу}}  & наивно --- по запросу на каждое поле каждого
+      элемента \\
+    \lo{\textbf{HTTP-кэш}}        & всё \texttt{POST} на один адрес --- не
+      работает \\
+    \lo{\textbf{авторизация}}     & по полю, а не по адресу \\
+  \end{tabular}}
+
+  \slidegap
+  \aside{Операции: запрос, мутация, подписка (обычно через WebSocket). Оправдан,
+    когда клиентов \hi{много} и они \hi{разные}.}
+\end{frame}
+
+% 59
+\begin{frame}[fragile]{gRPC}
+  \slidetop
+  \claim{Контракт \hi{сначала}: из одного файла --- клиент и сервер.}
+
+  \begin{minipage}[t]{0.66\textwidth}
+\begin{lstlisting}[style=plain,basicstyle=\codesm]
+syntax = "proto3";
+
+service Orders {
+  rpc GetOrder (GetOrderRequest) returns (Order);
+  rpc WatchOrders (WatchRequest) returns (stream Order);
+}
+
+message GetOrderRequest { int32 id = 1; }
+message WatchRequest { string customer_id = 1; }
+message Order { int32 id = 1; string status = 2; }
+\end{lstlisting}
+  \end{minipage}\hfill
+  \begin{minipage}[t]{0.31\textwidth}
+    \vspace{0.6em}
+    \begin{tikzpicture}[font=\footnotesize,
+      bx/.style={draw=hairline,line width=0.8pt,fill=codebg,
+                 minimum width=3.6cm,minimum height=0.8cm,inner sep=3pt,
+                 align=center},
+      ar/.style={-{Straight Barb[length=1.6mm]},accent,line width=0.7pt}]
+      \node[bx] (p) at (0,0) {\texttt{orders.proto}};
+      \node[bx,draw=accent] (c) at (0,-1.5) {клиент: класс с методами};
+      \node[bx,draw=accent] (s) at (0,-2.6) {заготовка сервера};
+      \draw[ar] (p.west) -- ++(-0.3,0) |- (c.west);
+      \draw[ar] (p.west) -- ++(-0.3,0) |- (s.west);
+    \end{tikzpicture}
+  \end{minipage}
+
+  \slidegap
+  \aside{На любом языке. Типы проверяет компилятор, а не JSON в рантайме.}
+\end{frame}
+
+% 60
+\begin{frame}{gRPC: четыре вида вызовов}
+  \slidetop
+  \claim{Транспорт --- HTTP/2, поэтому вызов не обязан быть «запрос --- ответ».}
+
+  {\renewcommand{\arraystretch}{1.55}
+  \begin{tabular}{@{}L{4.2cm}L{8.6cm}@{}}
+    \hi{\textbf{обычный}}             & запрос $\to$ ответ \\
+    \hi{\textbf{серверный стриминг}}  & запрос $\to$ поток ответов
+      (\texttt{stream} в ответе) \\
+    \hi{\textbf{клиентский стриминг}} & поток запросов $\to$ ответ \\
+    \hi{\textbf{двунаправленный}}     & оба потока одновременно, независимо \\
+  \end{tabular}}
+
+  \slidegap
+  \aside{Цена: двоичный формат \lo{не читается} глазами, браузеру нужна
+    прослойка. Окупается между своими сервисами.}
+\end{frame}
+
+% 61
+\begin{frame}{gRPC: версионирование}
+  \slidetop
+  \claim{Номер поля --- \hi{контракт} навсегда.}
+
+  \versus{можно}{%
+    \begin{cbul}{accent}
+      \item добавить поле с новым номером: старый клиент его пропустит
+      \item удалить поле
+    \end{cbul}}{нельзя}{%
+    \begin{cbul}{alt}
+      \item переиспользовать номер удалённого поля: старый клиент прочитает
+        новое поле как старое
+    \end{cbul}}
+
+  \slidegap
+  \aside{Обратная совместимость встроена в формат: разные версии клиента и
+    сервера разговаривают, пока правила соблюдены.}
+\end{frame}
+
+% 62
+\begin{frame}[fragile]{Server-Sent Events}
+  \slidetop
+  \begin{minipage}{0.55\textwidth}
+\begin{lstlisting}[style=plain,basicstyle=\codesm,escapechar=|]
+|\mk{e1}|HTTP/1.1 200 OK
+|\mk{e2}|Content-Type: text/event-stream
+|\mk{e3}|Cache-Control: no-cache
+|\mk{e4}|
+|\mk{e5}|data: {"progress":10}
+|\mk{e6}|
+|\mk{e7}|data: {"progress":20}
+|\mk{e8}|
+|\mk{e9}|data: {"progress":100,"done":true}
+|\mk{e10}|
+\end{lstlisting}
+  \end{minipage}
+  \begin{tikzpicture}[remember picture,overlay]
+    \node[rawlab,text=accent] at ([xshift=8.2cm]e2) {поток событий};
+    \node[rawlab,text=muted]  at ([xshift=8.2cm]e3) {длины нет: соединение не
+      закрывается};
+    \draw[rawbrace] ([xshift=8.0cm,yshift=0.3em]e5) -- ([xshift=8.0cm,yshift=-0.3em]e6);
+    \node[rawlab] at ([xshift=8.35cm]$(e5)!0.5!(e6)$) {событие: \texttt{data} и
+      пустая строка};
+  \end{tikzpicture}
+
+  \slidegap
+  \aside{Обычный HTTP-ответ, который \hi{долго идёт}. Одно направление: от
+    сервера к клиенту. Так приходят ответы языковых моделей по словам.}
+\end{frame}
+
+% 63
+\begin{frame}{WebSocket}
+  \slidetop
+  \claim{HTTP только \hi{устанавливает} соединение --- дальше другой протокол.}
+
+  \begin{center}
+    \begin{tikzpicture}[font=\footnotesize]
+      \node[font=\footnotesize\bfseries] at (0,0)   {клиент};
+      \node[font=\footnotesize\bfseries] at (9.0,0) {сервер};
+      \draw[hairline,line width=0.6pt] (0,-0.3) -- (0,-3.0);
+      \draw[hairline,line width=0.6pt] (9.0,-0.3) -- (9.0,-3.0);
+      \draw[seqar,muted] (0,-0.6) -- node[seqlab,above=1pt]
+        {GET /chat, Upgrade: websocket} (9.0,-0.6);
+      \draw[seqar,muted] (9.0,-1.15) -- node[seqlab,above=1pt]
+        {101 Switching Protocols} (0,-1.15);
+      \draw[alt,dashed,line width=0.6pt] (-0.3,-1.45) -- (9.3,-1.45);
+      \node[font=\scriptsize,text=alt,fill=paper,inner sep=2pt] at (4.5,-1.45)
+        {HTTP закончился};
+      \draw[seqar,accent] (0,-1.95) -- node[seqlab,above=1pt,text=accent] {frame} (9.0,-1.95);
+      \draw[seqar,accent] (9.0,-2.35) -- node[seqlab,above=1pt,text=accent] {frame} (0,-2.35);
+      \draw[seqar,accent] (9.0,-2.75) -- node[seqlab,above=1pt,text=accent] {frame} (0,-2.75);
+    \end{tikzpicture}
+  \end{center}
+
+  \slidegap
+  \aside{Кадры в любую сторону, в любой момент, без методов, статусов и
+    заголовков. Прокси и балансировщики должны отдельно уметь его пропускать.}
+\end{frame}
+
+% 64
+\begin{frame}{SSE или WebSocket}
+  \slidetop
+  \versus{SSE}{%
+    \begin{cbul}{accent}
+      \item одно направление: от сервера
+      \item обычный HTTP
+      \item переподключение из коробки
+    \end{cbul}}{WebSocket}{%
+    \begin{cbul}{alt}
+      \item обе стороны, в любой момент
+      \item другой протокол
+      \item соединение --- это \lo{состояние}
+    \end{cbul}}
+
+  \slidegap
+  \hrulethin{0.42}
+  \rulegap
+  {\large Достаточно одного направления --- берите \hi{SSE}.}
+
+  \vspace{0.6em}
+  \aside{WebSocket: клиент на первом экземпляре, событие на втором --- нужна
+    шина между экземплярами, проверка «жив ли», переподключение и нумерация
+    сообщений.}
+\end{frame}
+
+% 65
+\begin{frame}{Сравнение}
+  \slidetop
+  {\renewcommand{\arraystretch}{1.45}\setlength{\tabcolsep}{4pt}\footnotesize
+  \begin{tabular}{@{}L{1.6cm}L{2.9cm}L{1.35cm}L{1.85cm}L{1.6cm}L{0.9cm}L{2.0cm}@{}}
+    & \colhead{muted}{контракт} & \colhead{muted}{формат} & \colhead{muted}{стриминг}
+      & \colhead{muted}{браузер} & \colhead{muted}{кэш} & \colhead{muted}{вход} \\
+    \hi{\textbf{REST}}    & договорённость; OpenAPI по желанию & JSON & нет & да
+      & \hi{да} & \hi{низкий} \\
+    \textbf{SOAP}         & WSDL, кодогенерация & XML & нет & нет & нет
+      & \lo{высокий} \\
+    \textbf{GraphQL}      & схема, проверка запроса & JSON & подписки & да
+      & плохо & высокий на сервере \\
+    \textbf{gRPC}         & proto, кодогенерация & двоичный & в обе стороны
+      & через прослойку & нет & средний \\
+    \textbf{SSE}          & нет & текст & от сервера & да & нет & \hi{низкий} \\
+    \textbf{WebSocket}    & нет & любой & в обе стороны & да & нет & средний +
+      состояние \\
+  \end{tabular}}
+\end{frame}
+
+% 66
+\begin{frame}{Выбор по задаче}
+  \slidetop
+  \claim{Читайте по строке своей задачи, а не по колонке любимой технологии.}
+
+  {\renewcommand{\arraystretch}{1.45}
+  \begin{tabular}{@{}L{8.6cm}L{4.2cm}@{}}
+    публичный API для чужих клиентов        & \hi{\textbf{REST}} \\
+    между своими сервисами, много вызовов   & \hi{\textbf{gRPC}} \\
+    много разных клиентов, есть команда сервера & \hi{\textbf{GraphQL}} \\
+    система, которой двадцать лет           & \hi{\textbf{SOAP}} \\
+    данные текут от сервера                 & \hi{\textbf{SSE}} \\
+    в обе стороны и часто                   & \hi{\textbf{WebSocket}} \\
+  \end{tabular}}
+
+  \slidegap
+  \aside{В одной системе стили сочетаются: снаружи REST, внутри gRPC, SSE для
+    прогресса. Сервис курса --- REST.}
+\end{frame}
+
+% 67
+\begin{frame}[plain]
+  \keyline{Стиль --- договор о смысле поверх HTTP.\\ Выбирают по задаче, и
+    протокол под ним не отменяется.}
+\end{frame}
+
+\end{document}
