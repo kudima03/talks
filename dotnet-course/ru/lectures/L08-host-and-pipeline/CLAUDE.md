@@ -22,10 +22,23 @@ end of the script.
 
 ## Shape specific to Л8
 
-- **98 frames**: §1 2–26, §2 27–34, §3 35–64, §4 65–76, §5 77–96, then the
-  summary (97) and the lab (98). Five `\vote` frames (3, 17, 52, 71, 89) —
-  one per `[ВОПРОС В ЗАЛ]`, the question alone. Section timings
-  20 + 10 + 25 + 10 + 15 = 80.
+- **55 frames**: §1 2–14, §2 15–18, §3 19–35, §4 36–42, §5 43–54, then the
+  lab (55). Five `\vote` frames (3, 10, 29, 38, 50) — one per `[ВОПРОС В
+  ЗАЛ]`, the question alone. Section timings 20 + 10 + 25 + 10 + 15 = 80.
+- **50–60 frames is the agreed size.** A first version had 98; the author
+  asked to bring it to 50–60 («сейчас слишком много»). Material without a
+  frame stays in the script as voice and is `[—]` in `README.md`. Do not grow
+  the deck back by splitting frames.
+- **Cut on request, do not bring back:** the configuration-sources frame and
+  the «`Build` проверяет» frame (ValidateOnBuild) — both removed by name.
+  Frame 6 carries a custom registration (`AddScoped<IOrderService,
+  OrderService>()`, `AddSingleton(TimeProvider.System)`) next to the
+  framework modules, with the three lifetimes — asked for in review.
+- **Merged frames:** 8 is the two phases plus what `Build` does; 11 is the
+  shutdown sequence plus the timeout and `Dispose`; 37 is `HttpContext` as a
+  table of its properties (no separate Request/Response/Items frames); 44 is
+  `IHostedService` plus the start trap; 46 is the four loop decisions plus
+  «exception stops the host, exit code 0».
 - **The deck is what the lecturer reads from.** Slides carry short marks on
   the important things (tables, asides, labels beside listings) rather than
   bare titles — that was the request. Keep marks short; delivery lives in the
@@ -35,33 +48,30 @@ end of the script.
   block (`X-Forwarded-*`, `UseForwardedHeaders`, `KnownProxies`, the HTTPS
   redirect/HSTS paragraph and the §2 closing line about proxies) — «Про
   заголовки и прокси не будем говорить»; the dev-certificate expiry
-  paragraph — «Не будем разбирать сертификаты детально» (frame 30 is one
-  command and three marks); the liveness/readiness paragraph and the
-  orchestrator-in-shutdown paragraph — «Меньше говорим про прокси и
-  оркестраторы». Shutdown talks about «тот, кто запустил процесс», not an
-  orchestrator.
-- **Frame 39 is the explicit pipeline in `Program.cs`**, asked for in review
+  paragraph — «Не будем разбирать сертификаты детально»; the
+  liveness/readiness paragraph and the orchestrator-in-shutdown paragraph —
+  «Меньше говорим про прокси и оркестраторы». Shutdown talks about «тот, кто
+  запустил процесс», not an orchestrator.
+- **Frame 22 is the explicit pipeline in `Program.cs`**, asked for in review
   («Добавить листинг как это выглядит в Program.cs, явный пайплайн»). Its
-  order matches the chain on frame 37 and the short-circuit on frame 59:
+  order matches the chain on frame 20 and the short-circuit on frame 33:
   ошибки → логирование → маршрутизация → аутентификация → авторизация →
   обработчик.
-- **The three order examples (44)** are authentication before authorization,
+- **The three order examples (24)** are authentication before authorization,
   errors outside everything, routing before authorization. The proxy example
   went with the forwarded-headers block.
-- **Frame 38 is the deck's one `\statement`** (the middleware definition).
+- **Frame 21 is the deck's one `\statement`** (the middleware definition).
   There is no `\shout`.
-- **Numbers beside long listings (53, 80, 86) key into the table on the next
-  frame (54, 81) or the aside** — the lines are too long for text labels.
+- **Numbers beside long listings (30, 45, 49) key into the table on the next
+  frame (31, 46) or the aside** — the lines are too long for text labels.
 - **Real output is never re-wrapped.** A line too long for the slide is cut
-  with `...` or quoted in prose (9, 13, 51, 82, 83); listings may be
-  reformatted, output may not.
+  with `...` or quoted in prose (8, 28, 47); listings may be reformatted,
+  output may not.
 - **Comparison order:** the side to follow is on the left in teal — «на
-  старте» before «на первом запросе» (12), «корректно» before «в обход» (21),
-  Kestrel before the socket server (28), `InvokeAsync` parameters before the
-  constructor (51), one middleware before `try/catch` everywhere (57), a typed
-  service before `Items` (69), copied values before a captured context (75),
-  same process before a separate worker (94).
-- Frames 26, 34, 64, 76, 96 close the five sections with `\keyline`.
+  старте» before «на первом запросе» (7), Kestrel before the socket server
+  (16), `InvokeAsync` parameters before the constructor (28).
+- Frames 14, 35, 42, 54 close four sections with `\keyline`; §2 ends on
+  content (18).
 
 ## What is on the slides — how it was checked
 
@@ -73,31 +83,28 @@ project directory is shown as `/home/user/HelloWorld`.
 
 | Frames | How it was checked |
 |---|---|
-| 4, 10, 23 | Six-line app run with `dotnet run`; `curl -i` on `/` and `/order` — `text/plain` for a string, `application/json` for an object. Log is the real start and Ctrl+C. |
-| 9, 13 | `AddScoped<OrderService>()` with an unregistered `IClock`: `Build` throws in Development, passes in Production. A registration after `Build` throws `The service collection cannot be modified because it is read-only.` Frame 9 shows the first line of the message cut with `...`, and quotes the rest in prose. |
-| 19 | `new HostOptions().ShutdownTimeout` is `00:00:30`. |
-| 22 | Run; `POST /shutdown` → `202`, log `Started` … `Stopping`. |
-| 25 | Files as generated by `dotnet new web` (the `http` profile only). |
-| 29 | `dotnet HelloWorld.dll` run from `bin/Debug/net10.0` with no settings, `ASPNETCORE_URLS`, both env and `--urls`, `ASPNETCORE_HTTP_PORTS`; lines are the real `Now listening on`. The Kestrel-section override was seen in a separate run (it logs `Overriding address(es)`). |
-| 31 | `ListenOptions.Protocols` default is `Http1AndHttp2`; over HTTPS `curl --http2` gets HTTP/2, plain HTTP with prior knowledge gets nothing. HTTP/3 was not tried. |
-| 32, 33 | `new KestrelServerLimits()` printed. 31 MB to a default `MapPost` → `413` on the first body read (`BadHttpRequestException: Request body too large`); both ways of raising the limit return 200. Frame 33 shows the first three lines of the response. |
-| 39, 53, 56 | Explicit pipeline run; `curl` on `/orders/404` and `/orders/500` — output on 56 is real, log lines are the first three of the record. |
-| 42, 43, 62 | Inline middleware needs `using System.Diagnostics;`. Setting the status after `next` logs `StatusCode cannot be set because the response has already started.` A middleware that never calls `next` → empty `200` (the lambda needs explicit parameter types, or the call is ambiguous). |
-| 44 | `UseAuthorization` before `UseRouting`: no build warning; a `RequireAuthorization()` endpoint fails on the first request with the message quoted. |
-| 45 | `/admin/y` is taken by the `Map` branch and never reaches the main pipeline; `/api/x` gets the `UseWhen` header and the main one. |
-| 47 | Logged `GetEndpoint()` before and after explicit `UseRouting`; without it the first `app.Use` already sees the endpoint. |
-| 51 | Scoped service in a middleware constructor: Development fails at startup with the quoted message; Production gives every request the same instance. |
-| 69 | `HttpContext.Items` is `IDictionary<object, object?>`. |
-| 79 | `IHostedService.StartAsync` with a 5 s delay holds `Now listening on` for 5 s (log is real). A `BackgroundService` with `Thread.Sleep(5000)` before its first `await` does not delay startup on .NET 10. |
-| 80, 83 | Run: `CleanupService` stops on SIGTERM in ~60 ms; `ReportService` gets a new `ReportBuilder` each iteration. A scoped dependency in its constructor fails in Development with the quoted message. |
-| 82 | A `BackgroundService` throwing `boom`; log excerpt (stack lines dropped, the long `StopHost` line cut with `...`). The process exits with code 0. |
-| 86, 87 | Quartz 4.7.1: the 3.x form (`AddJob<T>(key)`, `Task Execute(context)`) does not compile; the listing is the 4.x form. Fired every two seconds with a test cron; the `Europe/Minsk` trigger compiles and schedules. |
+| 4, 12 | Six-line app run with `dotnet run`; the log is the real start and Ctrl+C. |
+| 6 | Compiled: framework modules, `AddScoped<IOrderService, OrderService>()`, `AddSingleton(TimeProvider.System)`. |
+| 8 | A registration after `Build` throws `The service collection cannot be modified because it is read-only.` |
+| 11 | `new HostOptions().ShutdownTimeout` is `00:00:30`. |
+| 17 | `dotnet HelloWorld.dll` run from `bin/Debug/net10.0` with no settings, `ASPNETCORE_URLS`, both env and `--urls`, `ASPNETCORE_HTTP_PORTS`; lines are the real `Now listening on`. The Kestrel-section override was seen in a separate run (it logs `Overriding address(es)`). |
+| 16 | `ListenOptions.Protocols` default is `Http1AndHttp2`; HTTP/3 was not tried. |
+| 18 | `new KestrelServerLimits()` printed. 31 MB to a default `MapPost` → `413` on the first body read (`BadHttpRequestException: Request body too large`). |
+| 22, 30, 32 | Explicit pipeline run; `curl` on `/orders/404` and `/orders/500` — output on 32 is real, log lines are the first three of the record. |
+| 23, 34 | Inline middleware needs `using System.Diagnostics;`. A middleware that never calls `next` → empty `200` (the lambda needs explicit parameter types, or the call is ambiguous). |
+| 24 | `UseAuthorization` before `UseRouting`: no build warning; a `RequireAuthorization()` endpoint fails on the first request with the message quoted. |
+| 28 | Scoped service in a middleware constructor: Development fails at startup with the quoted message; Production gives every request the same instance. |
+| 37 | `HttpContext.Items` is `IDictionary<object, object?>`. |
+| 44 | `IHostedService.StartAsync` with a 5 s delay holds `Now listening on` for 5 s. A `BackgroundService` with `Thread.Sleep(5000)` before its first `await` does not delay startup on .NET 10. |
+| 45, 47 | Run: `CleanupService` stops on SIGTERM in ~60 ms; `ReportService` gets a new `ReportBuilder` each iteration. A scoped dependency in its constructor fails in Development with the quoted message. |
+| 46 | A `BackgroundService` throwing out of `ExecuteAsync` stops the host; the process exits with code 0. |
+| 49 | Quartz 4.7.1: the 3.x form (`AddJob<T>(key)`, `Task Execute(context)`) does not compile; the listing is the 4.x form. Fired every two seconds with a test cron. |
 
 Listings are ASCII only, including comments, same as every other lecture.
-Labels and numbers beside listings (4, 39, 42, 49, 53, 80, 86) are positioned with
-`remember picture` marks inside the listing, so the deck needs two pdflatex
-passes — `latexmk` does that. After editing such a listing, check the labels
-still sit on their lines in the built PDF.
+Labels and numbers beside listings (4, 6, 22, 23, 27, 30, 45, 49) are
+positioned with `remember picture` marks inside the listing, so the deck needs
+two pdflatex passes — `latexmk` does that. After editing such a listing, check
+the labels still sit on their lines in the built PDF.
 
 ## Open items
 
@@ -107,5 +114,4 @@ See «Открытые вопросы» in `README.md` — the same list, in Rus
 
 1. Logging inside error handling never logs failed requests (verified).
 2. `ErrorHandlingMiddleware` turns Kestrel's 413 into 500 (verified).
-3. 98 frames for 80 minutes is dense.
-4. The Latin Modern fallback has not been checked; the deck builds with PT Sans.
+3. The Latin Modern fallback has not been checked; the deck builds with PT Sans.
