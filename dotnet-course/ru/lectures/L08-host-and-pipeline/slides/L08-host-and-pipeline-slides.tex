@@ -162,27 +162,6 @@
 \end{frame}
 
 % 7
-\begin{frame}{Где ломаться}
-  \slidetop
-  \versus{на старте}{%
-    \begin{cbul}{accent}
-      \item процесс не встал --- видно сразу
-      \item старая версия продолжает работать
-      \item клиенты ничего не заметили
-    \end{cbul}}{на первом запросе}{%
-    \begin{cbul}{alt}
-      \item новая версия уже под нагрузкой
-      \item падает она --- при клиентах
-      \item через неделю, в три часа ночи
-    \end{cbul}}
-
-  \slidegap
-  \hrulethin{0.42}
-  \rulegap
-  {\large Всё, что может быть настроено неправильно, ломается \hi{до Run}.}
-\end{frame}
-
-% 8
 \begin{frame}[fragile]{Две фазы}
   \slidetop
   \begin{center}
@@ -213,7 +192,7 @@
   \aside{Две фазы \hi{не смешиваются}.}
 \end{frame}
 
-% 9
+% 8
 \begin{frame}{Хост}
   \slidetop
   \claim{Хост --- контейнер для всего, что живёт в \hi{процессе}.}
@@ -241,12 +220,12 @@
   \end{cbul}
 \end{frame}
 
-% 10
+% 9
 \begin{frame}[plain]
   \vote{Откуда приходит сигнал остановки?}
 \end{frame}
 
-% 11
+% 10
 \begin{frame}{Корректная остановка}
   \slidetop
   \begin{minipage}[t]{0.47\textwidth}
@@ -275,7 +254,7 @@
   \end{minipage}
 \end{frame}
 
-% 12
+% 11
 \begin{frame}[fragile]{Первые строки лога}
   \slidetop
   \claim{Половина «почему не открывается» --- \hi{здесь}.}
@@ -302,7 +281,7 @@ info: Microsoft.Hosting.Lifetime[0]
     четырёх строках.}
 \end{frame}
 
-% 13
+% 12
 \begin{frame}{Окружение}
   \slidetop
   \versus{Development}{%
@@ -327,72 +306,62 @@ info: Microsoft.Hosting.Lifetime[0]
     придётся поддерживать.}
 \end{frame}
 
-% 14
+% 13
 \begin{frame}[plain]
-  \keyline{Приложение --- это хост плюс конвейер.\\ До \texttt{Build}
-    описываем, после --- собираем конвейер, \texttt{Run} запускает и корректно
-    останавливает.}
+  \keyline{До \texttt{Build} описываем, после --- собираем конвейер.\\
+    \texttt{Run} запускает и корректно останавливает.}
 \end{frame}
 
 % ======================================================== 2. KESTREL ==
-\section{2. Kestrel и адрес}
+\section{2. Kestrel}
 
-% 15
+% 14
 \begin{frame}[plain]
-  \sectionopener{2}{Kestrel и адрес}{Kestrel --- это ваш сервер на сокетах,
+  \sectionopener{2}{Kestrel}{Kestrel --- это ваш сервер на сокетах,
     только \hi{правильный}.}
 \end{frame}
 
-% 16
-\begin{frame}{Kestrel и сервер из лабораторной}
+% 15
+\begin{frame}{Kestrel}
   \slidetop
-  \versus{Kestrel}{%
-    \begin{cbul}{accent}
-      \item HTTP/1.1, HTTP/2 и HTTP/3
-      \item TLS
-      \item пулы буферов
-      \item лимиты на размер и время
-    \end{cbul}}{сервер на сокетах}{%
-    \begin{cbul}{alt}
-      \item только HTTP/1.1
-      \item без TLS
-      \item буфер на каждый запрос
-      \item без лимитов
-    \end{cbul}}
+  \claim{Принимает, разбирает, отвечает --- вы к нему \hi{не прикасаетесь}.}
 
-  \slidegap
-  \hrulethin{0.42}
-  \rulegap
-  {\large Делает то же самое: принимает, разбирает, отвечает. Вы к нему
-    \hi{не прикасаетесь}.}
+  \begin{cbul}{accent}
+    \item HTTP/1.1, HTTP/2 и HTTP/3
+    \item TLS
+    \item пулы буферов
+    \item лимиты на размер и время
+  \end{cbul}
 \end{frame}
 
-% 17
+% 16
 \begin{frame}[fragile]{Где слушать}
   \slidetop
   \claim{Адрес --- свойство \hi{окружения}, а не приложения.}
 
-  \begin{lstlisting}[style=term,basicstyle=\termsm]
-$ dotnet HelloWorld.dll
-      Now listening on: http://localhost:5000
-$ ASPNETCORE_URLS=http://localhost:8092 dotnet HelloWorld.dll
-      Now listening on: http://localhost:8092
-$ ASPNETCORE_URLS=http://localhost:8092 dotnet HelloWorld.dll --urls=http://localhost:8091
-      Now listening on: http://localhost:8091
-$ ASPNETCORE_HTTP_PORTS=8093 dotnet HelloWorld.dll
-      Now listening on: http://[::]:8093
-\end{lstlisting}
+  {\renewcommand{\arraystretch}{1.3}\footnotesize
+  \begin{tabular}{@{}L{3.5cm}L{6.4cm}L{2.9cm}@{}}
+    \colhead{muted}{где} & \colhead{muted}{как} & \colhead{muted}{когда} \\
+    \texttt{launchSettings.json} & профиль: \texttt{applicationUrl} & \texttt{dotnet run}
+      локально \\
+    переменная окружения & \texttt{ASPNETCORE\_URLS=http://localhost:8092} & сервер \\
+    \hi{аргумент}        & \texttt{-{}-urls=http://localhost:8091} & \hi{побеждает}
+      переменную \\
+    образ контейнера     & \texttt{ASPNETCORE\_HTTP\_PORTS=8080} & все интерфейсы \\
+  \end{tabular}}
 
   \slidegap
-  {\renewcommand{\arraystretch}{1.3}\small
-  \begin{tabular}{@{}L{3.2cm}L{9.6cm}@{}}
-    \hi{в контейнере}   & все интерфейсы, порт 8080 --- его задаёт образ \\
-    \lo{секция Kestrel} & в \texttt{appsettings.json} перекрывает \texttt{-{}-urls} и
-      \texttt{ASPNETCORE\_URLS} --- выбирайте \lo{один} способ \\
-  \end{tabular}}
+\begin{lstlisting}[style=term,basicstyle=\termsm]
+$ ASPNETCORE_URLS=http://localhost:8092 dotnet HelloWorld.dll --urls=http://localhost:8091
+      Now listening on: http://localhost:8091
+\end{lstlisting}
+
+  \rulegap
+  \aside{Секция \texttt{Kestrel} в \texttt{appsettings.json} перекрывает и
+    переменную, и аргумент --- выбирайте \lo{один} способ.}
 \end{frame}
 
-% 18
+% 17
 \begin{frame}{Лимиты по умолчанию}
   \slidetop
   \claim{Лишнее отсекает \hi{сервер}, а не ваш код.}
@@ -423,13 +392,13 @@ $ ASPNETCORE_HTTP_PORTS=8093 dotnet HelloWorld.dll
         inner sep=1pt,font=\scriptsize\bfseries] (m6) at (11.6,0) {обработчик};
 }
 
-% 19
+% 18
 \begin{frame}[plain]
   \sectionopener{3}{Конвейер запроса}{Middleware --- это делегат, который
     \hi{знает следующего}.}
 \end{frame}
 
-% 20
+% 19
 \begin{frame}{Конвейер}
   \slidetop
   \claim{Каждый компонент видит запрос \hi{до} обработчика и ответ \hi{после}.}
@@ -456,14 +425,14 @@ $ ASPNETCORE_HTTP_PORTS=8093 dotnet HelloWorld.dll
   \end{cbul}
 \end{frame}
 
-% 21
+% 20
 \begin{frame}[plain]
   \statement{\hi{Middleware} --- делегат, который получает контекст и
     следующего и сам решает: вызвать ли следующего, что сделать до и что
     после.}
 \end{frame}
 
-% 22
+% 21
 \begin{frame}[fragile]{Явный конвейер в \texttt{Program.cs}}
   \vspace{0.3em}
 \begin{lstlisting}[style=csharp,basicstyle=\ttfamily\fontsize{7.0}{7.9}\selectfont,escapechar=|]
@@ -500,7 +469,7 @@ app.Run();
   \aside{Сверху вниз идёт \hi{запрос}, снизу вверх --- ответ.}
 \end{frame}
 
-% 23
+% 22
 \begin{frame}[fragile]{Middleware одной лямбдой}
   \vspace{0.3em}
 \begin{lstlisting}[style=csharp,basicstyle=\codesm,escapechar=|]
@@ -529,7 +498,7 @@ app.Use(async (context, next) =>
     интерполяция.}
 \end{frame}
 
-% 24
+% 23
 \begin{frame}{Порядок --- это семантика}
   \slidetop
   \claim{Первый видит запрос \hi{первым}, а ответ --- \hi{последним}.}
@@ -550,106 +519,7 @@ app.Use(async (context, next) =>
     supports authorization}.}
 \end{frame}
 
-% 25
-\begin{frame}{Конвейер по умолчанию}
-  \slidetop
-  \claim{До вашего первого \texttt{Use} там \hi{уже} есть компоненты.}
-
-  {\renewcommand{\arraystretch}{1.3}
-  \begin{tabular}{@{}L{0.5cm}L{5.4cm}L{6.9cm}@{}}
-    \textcolor{muted}{1} & страница ошибок разработчика & \lo{только в Development}:
-      трассировка наружу --- утечка \\
-    \textcolor{muted}{2} & фильтрация хостов & чужой заголовок \texttt{Host} --- отказ \\
-    \textcolor{muted}{3} & маршрутизация & выбирает обработчик, но \hi{не вызывает} \\
-    \textcolor{muted}{4} & аутентификация и авторизация & если зарегистрированы ---
-      после маршрутизации \\
-    \textcolor{accent}{5} & \hi{\textbf{ваши middleware}} & там, где вы их написали \\
-    \textcolor{muted}{6} & конечные точки & вызывают выбранный обработчик \\
-  \end{tabular}}
-
-  \rulegap
-  \aside{Стандартные компоненты фреймворк ставит \hi{сам} и в правильном
-    порядке.}
-\end{frame}
-
-% 26
-\begin{frame}{Свой middleware: три способа}
-  \slidetop
-  {\renewcommand{\arraystretch}{1.55}\small
-  \begin{tabular}{@{}L{3.3cm}L{3.0cm}L{3.0cm}L{3.5cm}@{}}
-    & \colhead{muted}{создаётся} & \colhead{muted}{зависимости} & \colhead{muted}{когда брать} \\
-    \textbf{лямбда в \texttt{Use}}  & один раз & то, что видно в файле & две-три
-      строки \\
-    \hi{\textbf{класс с \texttt{InvokeAsync}}} & \hi{один раз} при старте &
-      параметры \texttt{InvokeAsync} & \hi{всё остальное} \\
-    \textbf{\texttt{IMiddleware}}   & на каждый запрос & конструктор & когда точно
-      знаете, зачем \\
-  \end{tabular}}
-
-  \slidegap
-  \aside{\texttt{IMiddleware} --- объект на каждый запрос. Это цена, и она нужна
-    редко.}
-\end{frame}
-
-% 27
-\begin{frame}[fragile]{Класс с \texttt{InvokeAsync}}
-  \vspace{0.3em}
-\begin{lstlisting}[style=csharp,basicstyle=\codesm,escapechar=|]
-sealed class RequestTimingMiddleware(
-|\mk{c1}|    RequestDelegate next,
-|\mk{c2}|    ILogger<RequestTimingMiddleware> logger)
-{
-    public async Task InvokeAsync(
-|\mk{c3}|        HttpContext context,
-|\mk{c4}|        RequestStamp stamp)
-    {
-        var started = Stopwatch.GetTimestamp();
-        await next(context);
-        logger.LogInformation("{Path} [{Stamp}] in {Elapsed} ms",
-            context.Request.Path, stamp.Value,
-            Stopwatch.GetElapsedTime(started).TotalMilliseconds);
-    }
-}
-
-// builder.Services.AddScoped<RequestStamp>();
-\end{lstlisting}
-  \begin{tikzpicture}[remember picture,overlay,every node/.style={rawlab}]
-    \node at ([xshift=7.4cm]c1) {\hi{конструктор} --- один раз при старте};
-    \node at ([xshift=7.4cm]c2) {только вечное: логгер, настройки};
-    \node at ([xshift=7.4cm]c3) {\hi{InvokeAsync} --- на каждый запрос};
-    \node at ([xshift=7.4cm]c4) {параметры --- из контейнера запроса};
-  \end{tikzpicture}
-\end{frame}
-
-% 28
-\begin{frame}[fragile]{Пленённая зависимость}
-  \slidetop
-  \versus{параметры InvokeAsync}{%
-    \begin{cbul}{accent}
-      \item на каждый запрос --- свой экземпляр
-      \item контекст базы, всё «на запрос»
-    \end{cbul}}{конструктор}{%
-    \begin{cbul}{alt}
-      \item один раз --- \lo{навсегда}
-      \item только то, что живёт вечно
-    \end{cbul}}
-
-  \slidegap
-{\small В конструкторе, в Development --- падение на старте:\par
-  \texttt{\lo{Cannot resolve scoped service 'RequestStamp' from root provider.}}\par}
-
-  \rulegap
-  \aside{В Production ошибки нет: два запроса получают \lo{один и тот же}
-    экземпляр.}
-\end{frame}
-
-% 29
-\begin{frame}[plain]
-  \vote{Ловить всё можно только на границе процесса. Где эта граница в
-    сервисе?}
-\end{frame}
-
-% 30
+% 24
 \begin{frame}[fragile]{Обработка ошибок --- middleware}
   \vspace{0.2em}
 \begin{lstlisting}[style=csharp,basicstyle=\ttfamily\fontsize{6.6}{7.2}\selectfont,escapechar=|]
@@ -683,56 +553,39 @@ sealed class ErrorHandlingMiddleware(
   \end{tikzpicture}
 \end{frame}
 
-% 31
+% 25
 \begin{frame}{Пять решений}
   \slidetop
-  {\renewcommand{\arraystretch}{1.5}
-  \begin{tabular}{@{}L{4.0cm}L{8.8cm}@{}}
-    \hi{\textbf{1\enspace try вокруг next}}   & всё приложение внутри одного \texttt{try};
-      поэтому он \hi{первый} \\
-    \hi{\textbf{2\enspace when (!HasStarted)}} & ответ уже уходит --- не ловим, соединение
-      обрывается \\
-    \hi{\textbf{3\enspace switch по типу}}    & «не найдено» $\to$ 404, остальное $\to$ 500 \\
-    \hi{\textbf{4\enspace в лог --- всё}}      & исключение целиком, первым параметром \\
-    \lo{\textbf{5\enspace наружу --- минимум}} & для 500: «Internal error» и
-      \texttt{traceId}, без сообщения исключения \\
+  {\renewcommand{\arraystretch}{1.45}
+  \begin{tabular}{@{}L{4.4cm}L{8.4cm}@{}}
+    \hi{\textbf{1\enspace try вокруг next}}    & всё приложение внутри одного
+      \texttt{try} --- поэтому middleware \hi{первый} \\
+    \hi{\textbf{2\enspace when (!HasStarted)}} & ответ уже уходит --- не ловим,
+      соединение обрывается \\
+    \hi{\textbf{3\enspace switch по типу}}     & \texttt{NotFoundException} $\to$ 404,
+      остальное $\to$ 500 \\
   \end{tabular}}
 
   \slidegap
-  \aside{Сообщение исключения может содержать имя таблицы, путь к файлу, кусок
-    SQL. \texttt{NotFoundException} --- своё исключение домена, наследник
-    \texttt{Exception}.}
+  \begin{minipage}[t]{0.47\textwidth}
+    \colhead{accent}{4 в лог --- всё}\par\vspace{0.6em}
+    \begin{cbul}{accent}
+      \item исключение целиком, со стеком
+      \item путь и статус --- параметрами шаблона
+      \item имя таблицы, путь к файлу, SQL --- \hi{только здесь}
+    \end{cbul}
+  \end{minipage}\hfill
+  \begin{minipage}[t]{0.47\textwidth}
+    \colhead{alt}{5 клиенту --- минимум}\par\vspace{0.6em}
+    \begin{cbul}{alt}
+      \item статус
+      \item «Internal error» вместо сообщения
+      \item \texttt{traceId} --- по нему запись в логе
+    \end{cbul}
+  \end{minipage}
 \end{frame}
 
-% 32
-\begin{frame}[fragile]{Проверка руками}
-  \slidetop
-  \begin{lstlisting}[style=term,basicstyle=\termsm]
-$ curl -s http://localhost:5012/orders/404
-{"error":"Order 404 not found","traceId":"0HNPPKMVENS8K:00000001"}
-$ curl -i http://localhost:5012/orders/500
-HTTP/1.1 500 Internal Server Error
-Content-Type: application/json; charset=utf-8
-Date: Tue, 03 Nov 2026 12:26:54 GMT
-Server: Kestrel
-Transfer-Encoding: chunked
-
-{"error":"Internal error","traceId":"0HNPPKMVENS8L:00000001"}
-\end{lstlisting}
-
-  \slidegap
-\begin{lstlisting}[style=term,basicstyle=\termsm]
-fail: ErrorHandlingMiddleware[0]
-      Request /orders/500 failed with 500
-      System.InvalidOperationException: Connection failed: Host=db;Password=secret
-\end{lstlisting}
-
-  \rulegap
-  \aside{Пароль --- \hi{только в логе}. Клиенту --- «Internal error» и
-    \texttt{traceId}.}
-\end{frame}
-
-% 33
+% 26
 \begin{frame}{Короткое замыкание}
   \slidetop
   \claim{Не вызвал \texttt{next} --- запрос \hi{дальше не идёт}.}
@@ -748,17 +601,25 @@ fail: ErrorHandlingMiddleware[0]
       \foreach \i in {4,5,6} \node[fill=paper,opacity=0.6,fit=(m\i),inner sep=1pt] {};
       \node[anchor=south west,font=\scriptsize,text=accent,inner sep=1pt]
         at ([yshift=2pt]m1.north west) {запрос $\to$};
-      \node[font=\footnotesize,text=accent,below=0.55cm] at (m3.south)
+      \node[font=\footnotesize,text=accent,below=0.12cm] at (m3.south)
         {ответ сформирован здесь};
     \end{tikzpicture}
   \end{center}
 
-  \slidegap
-  \aside{Это не ошибка, а \hi{инструмент}: middleware сам пишет ответ, и цепочка
-    разворачивается на нём.}
+  {\renewcommand{\arraystretch}{1.2}\small
+  \begin{tabular}{@{}L{4.4cm}L{1.6cm}L{6.8cm}@{}}
+    проверка здоровья   & \hi{200}  & вашему коду там нечего делать \\
+    статические файлы   & файл      & обработчики не знают, что файлы есть \\
+    ограничение частоты & \lo{429}  & нагрузка на обработчики и базу не растёт \\
+    нет токена          & \lo{401}  & обработчик не вызван \\
+  \end{tabular}}
+
+  \vspace{0.5em}
+  \aside{Не ошибка, а \hi{инструмент}. Стоит \lo{после} проверки токена ---
+    сначала потребует токен.}
 \end{frame}
 
-% 34
+% 27
 \begin{frame}[fragile]{Забытый \texttt{next}}
   \slidetop
   \claim{Все запросы обрываются на \lo{нём}.}
@@ -780,11 +641,11 @@ Server: Kestrel
 \end{lstlisting}
 
   \slidegap
-  \aside{Сервис отвечает пустым 200 на всё. Один из самых частых багов первой
-    лабораторной с middleware.}
+  \aside{Сервис отвечает пустым 200 на всё --- один из самых частых багов с
+    middleware.}
 \end{frame}
 
-% 35
+% 28
 \begin{frame}[plain]
   \keyline{Конвейер --- цепочка делегатов, и порядок --- это семантика.\\
     Ошибки ловятся в одном месте, снаружи всех.}
@@ -793,12 +654,12 @@ Server: Kestrel
 % ======================================================== 4. HTTPCONTEXT ==
 \section{4. HttpContext}
 
-% 36
+% 29
 \begin{frame}[plain]
   \sectionopener{4}{HttpContext}{Всё о запросе в \hi{одном} объекте.}
 \end{frame}
 
-% 37
+% 30
 \begin{frame}{Один объект на запрос}
   \slidetop
   \claim{Живёт \hi{ровно} столько, сколько запрос.}
@@ -821,13 +682,13 @@ Server: Kestrel
   \end{tabular}}
 \end{frame}
 
-% 38
+% 31
 \begin{frame}[plain]
   \vote{Сервису заказов нужен идентификатор текущего пользователя. Передать
     ему \texttt{HttpContext} или идентификатор?}
 \end{frame}
 
-% 39
+% 32
 \begin{frame}{Три цены}
   \slidetop
   \claim{Контекст в бизнес-логике прибивает её \lo{к вебу}.}
@@ -843,7 +704,7 @@ Server: Kestrel
   \end{tabular}}
 \end{frame}
 
-% 40
+% 33
 \begin{frame}[fragile]{Контекст не уходит дальше эндпоинта}
   \slidetop
 {\renewcommand{\arraystretch}{1.5}
@@ -871,7 +732,7 @@ Server: Kestrel
     где-то есть HTTP.}
 \end{frame}
 
-% 41
+% 34
 \begin{frame}[fragile]{«Текущий пользователь»}
   \vspace{0.3em}
 \begin{lstlisting}[style=csharp,basicstyle=\codesm]
@@ -898,7 +759,7 @@ sealed class HttpCurrentUser(IHttpContextAccessor accessor) : ICurrentUser
     --- \lo{сигнал на ревью}.}
 \end{frame}
 
-% 42
+% 35
 \begin{frame}[plain]
   \keyline{HttpContext --- всё о запросе, и поэтому его не носят вглубь.\\
     Берите нужное на границе.}
@@ -907,13 +768,13 @@ sealed class HttpCurrentUser(IHttpContextAccessor accessor) : ICurrentUser
 % ======================================================== 5. BACKGROUND WORK ==
 \section{5. Фоновая работа}
 
-% 43
+% 36
 \begin{frame}[plain]
   \sectionopener{5}{Фоновая работа в том же хосте}{Хост запускает \hi{не
     только} сервер.}
 \end{frame}
 
-% 44
+% 37
 \begin{frame}[fragile]{\texttt{IHostedService}}
   \slidetop
   \claim{Два метода: \hi{запустить} и остановить.}
@@ -937,7 +798,7 @@ public interface IHostedService
   \end{cbul}
 \end{frame}
 
-% 45
+% 38
 \begin{frame}[fragile]{\texttt{BackgroundService}}
   \vspace{0.3em}
 \begin{lstlisting}[style=csharp,basicstyle=\ttfamily\fontsize{6.8}{7.8}\selectfont,escapechar=|]
@@ -969,7 +830,7 @@ sealed class CleanupService(ILogger<CleanupService> logger) : BackgroundService
   \end{tikzpicture}
 \end{frame}
 
-% 46
+% 39
 \begin{frame}{Четыре решения}
   \slidetop
   \claim{Каждое --- чей-то \lo{инцидент}.}
@@ -992,34 +853,7 @@ sealed class CleanupService(ILogger<CleanupService> logger) : BackgroundService
     ошибка завершит сервис навсегда.}
 \end{frame}
 
-% 47
-\begin{frame}[fragile]{Зависимости «на запрос» в фоне}
-  \vspace{0.3em}
-\begin{lstlisting}[style=csharp,basicstyle=\ttfamily\fontsize{6.8}{7.8}\selectfont,escapechar=|]
-sealed class ReportService(IServiceScopeFactory scopes) : BackgroundService
-{
-    protected override async Task ExecuteAsync(CancellationToken stoppingToken)
-    {
-        using var timer = new PeriodicTimer(TimeSpan.FromMinutes(5));
-
-        while (await timer.WaitForNextTickAsync(stoppingToken))
-        {
-|\mk{r1}|            using var scope = scopes.CreateScope();
-|\mk{r2}|            var reports = scope.ServiceProvider.GetRequiredService<ReportBuilder>();
-            await reports.BuildAsync(stoppingToken);
-        }
-    }
-}
-\end{lstlisting}
-
-  \rulegap
-  {\small В конструкторе, в Development: \texttt{\lo{Cannot consume scoped service
-    'ReportBuilder' from singleton}}\par}
-  \rulegap
-  \aside{Одна итерация --- \hi{одна область}, один контекст базы.}
-\end{frame}
-
-% 48
+% 40
 \begin{frame}[fragile]{Расписание: Quartz.NET}
   \slidetop
   \begin{center}
@@ -1049,7 +883,7 @@ sealed class ReportService(IServiceScopeFactory scopes) : BackgroundService
     классического cron. Scheduler сам --- хостед-сервис.}
 \end{frame}
 
-% 49
+% 41
 \begin{frame}[fragile]{Задание и триггер}
   \vspace{0.3em}
 \begin{lstlisting}[style=csharp,basicstyle=\ttfamily\fontsize{6.8}{7.7}\selectfont,escapechar=|]
@@ -1081,13 +915,13 @@ builder.Services.AddQuartz(q =>
     \quad \hi{4} дождаться заданий на остановке}
 \end{frame}
 
-% 50
+% 42
 \begin{frame}[plain]
   \vote{Два экземпляра сервиса, в каждом задание «в три ночи отправить счета».
     Сколько раз клиенты получат счета?}
 \end{frame}
 
-% 51
+% 43
 \begin{frame}{Три пути к повтору}
   \slidetop
   \claim{Работа запустится \lo{больше} одного раза. Вопрос --- когда.}
@@ -1106,7 +940,7 @@ builder.Services.AddQuartz(q =>
   \aside{Клиенты получат по два счёта. Это не гипотетика --- это классика.}
 \end{frame}
 
-% 52
+% 44
 \begin{frame}{Идемпотентность}
   \slidetop
   \claim{Повторный запуск \hi{не делает} ничего лишнего.}
@@ -1126,47 +960,10 @@ builder.Services.AddQuartz(q =>
     повторы случаются.}
 \end{frame}
 
-% 53
-\begin{frame}{Фоновая работа невидима}
-  \slidetop
-  \claim{Упавший запрос видит клиент. Переставшее запускаться задание ---
-    \lo{никто}.}
-
-  \begin{cbul}{accent}
-    \item лог \hi{начала и конца} с длительностью
-    \item метрика «последний успешный запуск»
-    \item оповещение: отчёт не строился двое суток --- кто-то узнаёт утром
-  \end{cbul}
-\end{frame}
-
-% 54
+% 45
 \begin{frame}[plain]
   \keyline{Фоновая работа запускается столько раз, сколько экземпляров и
     перезапусков.\\ Пишите её так, чтобы повтор был безвреден.}
-\end{frame}
-
-% 55
-\begin{frame}{Лабораторная 8}
-  \slidetop
-  \claim{Первый сервис --- он живёт \hi{до конца} курса.}
-
-  \begin{minipage}[t]{0.50\textwidth}
-    \begin{cbul}{accent}
-      \item шаблон \texttt{web}, минимальный \texttt{Program.cs}
-      \item middleware логирования --- класс
-      \item middleware ошибок --- класс, \hi{первый}
-      \item \texttt{/health} и бросающий эндпоинт
-      \item \texttt{BackgroundService} с \texttt{PeriodicTimer}
-    \end{cbul}
-  \end{minipage}\hfill
-  \begin{minipage}[t]{0.44\textwidth}
-    \eyebrow{проверка}\par\vspace{0.5em}
-    \begin{cbul}{alt}
-      \item \texttt{curl}: здоровье, обычный, бросающий
-      \item в логе строка на запрос и трассировка на ошибку
-      \item Ctrl+C --- остановка за секунды
-    \end{cbul}
-  \end{minipage}
 \end{frame}
 
 \end{document}
