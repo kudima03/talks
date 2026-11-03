@@ -1,0 +1,2142 @@
+% Л8 -- ASP.NET Core: хост и конвейер запроса. Slides.
+%
+% Companion to the spoken script in ../L08-host-and-pipeline.md, which is the
+% source of truth: the slides carry diagrams, code, real terminal output and
+% short marks, and the delivery lives in the script only -- this deck carries
+% no speaker notes. Slide text is in Russian because that is the content;
+% everything else in this file is English.
+%
+% Build:  make          (latexmk -pdf; engine: pdflatex)
+%
+% Every C# listing was compiled and run on dotnet SDK 10.0 in a stock
+% `dotnet new web -n HelloWorld`; terminal output on the slides is captured
+% from those runs, with the home directory replaced by /home/user. See
+% ../CLAUDE.md for the verification table.
+%
+% House rules: ../CLAUDE.md and ../../../CLAUDE.md. Theme: ../../../../theme/.
+
+\documentclass[aspectratio=169,10pt,t]{beamer}
+
+\usetheme{dotnet}
+\usetikzlibrary{arrows.meta,positioning,calc,decorations.pathreplacing,fit}
+\usepackage{array}   % ragged-right table columns
+
+% A ragged-right paragraph column: justified cells in narrow columns hyphenate
+% badly, and a split word is the one thing the back row cannot read.
+\newcolumntype{L}[1]{>{\raggedright\arraybackslash}p{#1}}
+\newcommand{\nohyph}{\hyphenpenalty=10000\exhyphenpenalty=10000\relax}
+
+\dotnetlecture{Л8}
+
+\title[Л8. Хост и конвейер]{ASP.NET Core: хост и конвейер запроса}
+\author{Дмитрий Курочкин}
+\date{}
+
+% Code sizes, one step down from \footnotesize. Smaller than 6.6pt does not
+% carry to the back of the room.
+\newcommand{\codesm}{\ttfamily\fontsize{7.6}{9.0}\selectfont}
+\newcommand{\codexs}{\ttfamily\fontsize{7.0}{8.3}\selectfont}
+\newcommand{\termsm}{\ttfamily\fontsize{6.6}{7.9}\selectfont}
+
+% A mark at the start of a listing line, for labels set beside the listing.
+% Used through the listing's escapechar; the labels are drawn by an overlay
+% picture after the listing, so the build needs two passes (latexmk does that).
+\newcommand{\mk}[1]{\tikz[remember picture,overlay]\coordinate (#1) at (0,0.55ex);}
+
+\tikzset{
+  rawbrace/.style={decorate,decoration={brace,amplitude=4pt},hairline,
+                   line width=0.8pt},
+  rawlab/.style={anchor=west,font=\footnotesize,inner sep=0pt},
+  box/.style={draw=hairline,line width=0.8pt,fill=codebg,inner sep=4pt,
+              align=center,minimum height=0.9cm},
+  arr/.style={-{Straight Barb[length=1.6mm]},muted,line width=0.7pt},
+  arra/.style={-{Straight Barb[length=1.8mm]},accent,line width=0.9pt},
+  arrl/.style={-{Straight Barb[length=1.8mm]},alt,line width=0.9pt},
+}
+
+\begin{document}
+\shorthandoff{"}
+
+% ------------------------------------------------------------------ title --
+% 1
+\begin{frame}[plain]
+  \titlepagednc{Лекция 8}{ASP.NET Core: хост и конвейер запроса}{}{Дмитрий
+    Курочкин}
+\end{frame}
+
+% ============================================== 1. ENTRY POINT AND LIFETIME ==
+\section{1. Точка входа и жизненный цикл}
+
+% 2
+\begin{frame}[plain]
+  \sectionopener{1}{Точка входа и жизненный цикл}{Шесть строк, и в них
+    \hi{вся} структура сервиса.}
+\end{frame}
+
+% 3
+\begin{frame}[plain]
+  \vote{Сколько строк кода нужно, чтобы поднять на .NET HTTP-сервер, который
+    отвечает на запрос?}
+\end{frame}
+
+% 4
+\begin{frame}[fragile]{Шесть строк}
+  \slidetop
+  \claim{Каждая строка --- \hi{фаза} жизни сервиса.}
+
+\begin{lstlisting}[style=csharp,basicstyle=\ttfamily\fontsize{8.4}{10.2}\selectfont,escapechar=|]
+|\mk{a1}|var builder = WebApplication.CreateBuilder(args);
+
+|\mk{a2}|builder.Services.AddHealthChecks();
+
+|\mk{a3}|var app = builder.Build();
+
+|\mk{a4}|app.MapHealthChecks("/health");
+|\mk{a5}|app.MapGet("/", () => "Hello from BSUIR");
+
+|\mk{a6}|app.Run();
+\end{lstlisting}
+  \begin{tikzpicture}[remember picture,overlay]
+    \node[rawlab] at ([xshift=8.9cm]a1) {\textbf{1} создать builder};
+    \node[rawlab] at ([xshift=8.9cm]a2) {\textbf{2} зарегистрировать сервисы};
+    \node[rawlab,text=accent] at ([xshift=8.9cm]a3) {\textbf{3} собрать приложение};
+    \draw[rawbrace] ([xshift=8.65cm,yshift=0.35em]a4) -- ([xshift=8.65cm,yshift=-0.3em]a5);
+    \node[rawlab] at ([xshift=8.9cm]$(a4)!0.5!(a5)$) {\textbf{4} собрать конвейер};
+    \node[rawlab] at ([xshift=8.9cm]a6) {\textbf{5} запустить};
+  \end{tikzpicture}
+
+  \slidegap
+  \aside{Порядок фаз --- то, что нужно понимать. Всё остальное в сервисе
+    встраивается в эти строки.}
+\end{frame}
+
+% 5
+\begin{frame}{\texttt{CreateBuilder}: что уже готово}
+  \slidetop
+  \claim{Одна строка --- и пять вещей \hi{уже} собраны.}
+
+  {\renewcommand{\arraystretch}{1.5}
+  \begin{tabular}{@{}L{3.6cm}L{9.2cm}@{}}
+    \hi{\textbf{конфигурация}} & файлы настроек, переменные окружения, аргументы
+      командной строки \\
+    \hi{\textbf{логирование}}  & в консоль, уровни --- из настроек \\
+    \hi{\textbf{контейнер}}    & зависимостей: создан, пока пустой \\
+    \hi{\textbf{окружение}}    & Development, Staging или Production \\
+    \hi{\textbf{сервер}}       & Kestrel: зарегистрирован, ещё не слушает \\
+  \end{tabular}}
+
+  \slidegap
+  \aside{Вы этого не писали: всё приехало с \texttt{CreateBuilder}.}
+\end{frame}
+
+% 6
+\begin{frame}[fragile]{Откуда конфигурация}
+  \slidetop
+  \claim{Позднее \hi{перекрывает} раннее.}
+
+  \begin{center}
+    \begin{tikzpicture}[font=\footnotesize,
+      cb/.style={box,minimum width=2.75cm,minimum height=1.0cm}]
+      \node[cb] (f1) at (0,0)    {\texttt{appsettings.json}};
+      \node[cb] (f2) at (3.25,0) {\texttt{appsettings.}\\\texttt{Development.json}};
+      \node[cb] (f3) at (6.5,0)  {переменные\\окружения};
+      \node[cb,draw=accent,line width=1.0pt] (f4) at (9.75,0) {\texttt{args}};
+      \draw[arr] (f1) -- (f2);
+      \draw[arr] (f2) -- (f3);
+      \draw[arr] (f3) -- (f4);
+      \node[font=\scriptsize,text=muted,below=0.25em] at (f1.south) {умолчание};
+      \node[font=\scriptsize,text=accent,below=0.25em] at (f4.south) {побеждает};
+    \end{tikzpicture}
+  \end{center}
+
+  \slidegap
+\begin{lstlisting}[style=plain,basicstyle=\codexs]
+# appsettings.json      "Logging": { "LogLevel": { "Default": "Information" } }
+# environment variable  Logging__LogLevel__Default=Warning
+# command line          dotnet run --Logging:LogLevel:Default=Debug
+\end{lstlisting}
+
+  \slidegap
+  \aside{Окружение --- переменная \texttt{ASPNETCORE\_ENVIRONMENT}. Не задана
+    --- приложение считает себя \lo{Production}: без подробных ошибок наружу.}
+\end{frame}
+
+% 7
+\begin{frame}[fragile]{Регистрация сервисов}
+  \slidetop
+  \claim{Регистрация --- это \hi{описание}, а не создание.}
+
+\begin{lstlisting}[style=csharp,basicstyle=\ttfamily\small]
+builder.Services.AddHealthChecks();
+builder.Services.AddAuthentication();
+builder.Services.AddAuthorization();
+\end{lstlisting}
+
+  \slidegap
+  \begin{cbul}{accent}
+    \item ни один объект ещё \hi{не создан}
+    \item \texttt{Add...} --- метод расширения, внутри десяток регистраций
+    \item файл запуска читается как список \hi{модулей}, а не классов
+  \end{cbul}
+\end{frame}
+
+% 8
+\begin{frame}{\texttt{Build}}
+  \slidetop
+  \claim{Здесь описание \hi{становится} приложением.}
+
+  {\renewcommand{\arraystretch}{1.55}
+  \begin{tabular}{@{}L{3.6cm}L{9.2cm}@{}}
+    \hi{\textbf{контейнер}}    & заморожен: зарегистрировать больше нельзя \\
+    \hi{\textbf{конфигурация}} & зафиксирована \\
+    \hi{\textbf{сервер}}       & создан, но ещё не слушает \\
+    \hi{\textbf{app}}          & умеет две вещи: собирать конвейер и запускаться \\
+  \end{tabular}}
+
+  \slidegap
+  \aside{Не ограничение, а гарантия: всё, что нужно приложению, известно
+    до первого шага.}
+\end{frame}
+
+% 9
+\begin{frame}[fragile]{\texttt{Build} проверяет}
+  \slidetop
+  \claim{В Development контейнер проверяет \hi{каждую} регистрацию.}
+
+\begin{lstlisting}[style=csharp,basicstyle=\codesm]
+builder.Services.AddScoped<OrderService>();   // IClock is not registered
+var app = builder.Build();                    // Development: throws here
+
+sealed class OrderService(IClock clock) { }
+\end{lstlisting}
+
+\begin{lstlisting}[style=term,basicstyle=\termsm]
+Unhandled exception. System.AggregateException: Some services are not able to be constructed ...
+\end{lstlisting}
+
+  \slidegap
+  {\small Дальше в той же строке: \texttt{\hi{Unable to resolve service for type
+    'IClock' while attempting to activate 'OrderService'.}}\par}
+
+  \slidegap
+  \aside{Падать \hi{сразу и громко} --- на \texttt{Build}, а не на первом
+    запросе через неделю после выкладки. В Production проверки нет: \texttt{Build}
+    проходит.}
+\end{frame}
+
+% 10
+\begin{frame}[fragile]{Маршрут: путь и лямбда}
+  \slidetop
+  \claim{Обработчик --- это \hi{делегат}. Ответ из него делает фреймворк.}
+
+  \begin{lstlisting}[style=csharp,basicstyle=\codexs]
+app.MapGet("/", () => "Hello from BSUIR");
+app.MapGet("/order", () => new { id = 42, status = "paid" });
+\end{lstlisting}
+
+  \begin{minipage}[t]{0.48\textwidth}
+\begin{lstlisting}[style=term,basicstyle=\termsm]
+$ curl -i http://localhost:5021/
+HTTP/1.1 200 OK
+Content-Type: text/plain; charset=utf-8
+Date: Tue, 03 Nov 2026 12:08:29 GMT
+Server: Kestrel
+Transfer-Encoding: chunked
+
+Hello from BSUIR
+\end{lstlisting}
+  \end{minipage}\hfill
+  \begin{minipage}[t]{0.48\textwidth}
+\begin{lstlisting}[style=term,basicstyle=\termsm]
+$ curl -i http://localhost:5021/order
+HTTP/1.1 200 OK
+Content-Type: application/json; charset=utf-8
+Date: Tue, 03 Nov 2026 12:13:46 GMT
+Server: Kestrel
+Transfer-Encoding: chunked
+
+{"id":42,"status":"paid"}
+\end{lstlisting}
+  \end{minipage}
+
+  \slidegap
+  \aside{Строка уходит текстом, объект --- JSON. Минимальный API подробно ---
+    в следующей лекции.}
+\end{frame}
+
+% 11
+\begin{frame}{\texttt{Run}}
+  \slidetop
+  \claim{До \texttt{Run} --- один раз. Конвейер --- на \hi{каждый} запрос.}
+
+  \begin{center}
+    \begin{tikzpicture}[font=\footnotesize]
+      \node[box,minimum width=5.2cm,minimum height=2.3cm,align=left] (st) at (0,0)
+        {\texttt{CreateBuilder}\\\texttt{Services.Add...}\\\texttt{Build}\\
+         \texttt{Use...} / \texttt{Map...}};
+      \node[font=\scriptsize,text=muted,above=0.2em] at (st.north) {старт: один раз};
+      \node[box,draw=accent,line width=1.0pt,minimum width=1.7cm] (run) at (4.4,0)
+        {\texttt{Run}};
+      \node[box,minimum width=4.4cm,minimum height=2.3cm] (rq) at (8.9,0)
+        {конвейер\\на каждый запрос};
+      \node[font=\scriptsize,text=accent,above=0.2em] at (rq.north)
+        {пока не остановят};
+      \draw[arr] (st) -- (run);
+      \draw[arra] (run) -- (rq);
+    \end{tikzpicture}
+  \end{center}
+
+  \slidegap
+  \aside{\texttt{Run} не возвращается, пока приложение не остановят.}
+\end{frame}
+
+% 12
+\begin{frame}{Где ломаться}
+  \slidetop
+  \versus{на старте}{%
+    \begin{cbul}{accent}
+      \item процесс не встал --- видно сразу
+      \item старая версия продолжает работать
+      \item клиенты ничего не заметили
+    \end{cbul}}{на первом запросе}{%
+    \begin{cbul}{alt}
+      \item новая версия уже под нагрузкой
+      \item падает она --- при клиентах
+      \item через неделю, в три часа ночи
+    \end{cbul}}
+
+  \slidegap
+  \hrulethin{0.42}
+  \rulegap
+  {\large Всё, что может быть настроено неправильно, ломается \hi{до Run}.}
+\end{frame}
+
+% 13
+\begin{frame}[fragile]{Две фазы}
+  \slidetop
+  \begin{center}
+    \begin{tikzpicture}[font=\footnotesize]
+      \node[box,minimum width=5.4cm,minimum height=1.9cm,align=left] (l) at (0,0)
+        {конфигурация\\сервисы\\логирование\\сервер};
+      \node[box,draw=accent,minimum width=5.4cm,minimum height=1.9cm,align=left]
+        (r) at (7.6,0) {middleware\\маршруты};
+      \node[font=\scriptsize\bfseries,text=muted,above=0.3em] at (l.north)
+        {ДО BUILD --- ОПИСАНИЕ};
+      \node[font=\scriptsize\bfseries,text=accent,above=0.3em] at (r.north)
+        {ПОСЛЕ BUILD --- КОНВЕЙЕР};
+      \draw[alt,line width=1.4pt] (3.8,-1.15) -- (3.8,1.15);
+      \node[font=\small\bfseries\ttfamily,fill=paper,text=alt] at (3.8,0) {Build};
+    \end{tikzpicture}
+  \end{center}
+
+  \slidegap
+{\small Сервис после \texttt{Build}: \texttt{\lo{The service collection cannot be
+    modified because it is read-only.}}\par}
+
+  \slidegap
+  \aside{Две фазы \hi{не смешиваются}: глядя на файл, видно сначала, из чего
+    приложение состоит, потом --- как оно обрабатывает запрос.}
+\end{frame}
+
+% 14
+\begin{frame}{Хост}
+  \slidetop
+  \claim{Хост --- контейнер для всего, что живёт в \hi{процессе}.}
+
+  \begin{center}
+    \begin{tikzpicture}[font=\footnotesize,
+      hb/.style={box,minimum width=2.3cm,minimum height=1.0cm}]
+      \node[hb] (c1) at (0,0)    {конфигурация};
+      \node[hb] (c2) at (2.6,0)  {контейнер};
+      \node[hb] (c3) at (5.2,0)  {логгер};
+      \node[hb,draw=accent,line width=1.0pt] (c4) at (7.8,0) {сервер\\Kestrel};
+      \node[hb] (c5) at (10.4,0) {фоновые\\сервисы};
+      \node[draw=muted,line width=0.9pt,rounded corners=3pt,inner sep=9pt,
+            fit=(c1)(c5)] (h) {};
+      \node[anchor=south west,font=\scriptsize\bfseries,text=muted]
+        at ([yshift=2pt]h.north west) {ХОСТ: ЗАПУСК, ОСТАНОВКА, СОСТОЯНИЕ};
+    \end{tikzpicture}
+  \end{center}
+
+  \slidegap
+  \begin{cbul}{accent}
+    \item сервер --- только \hi{один} из жильцов, самый заметный
+    \item без сервера хост тоже есть: консольная утилита, обработчик очереди
+    \item конфигурация, контейнер, логгер --- одинаковы в любом приложении
+  \end{cbul}
+\end{frame}
+
+% 15
+\begin{frame}{Три builder}
+  \slidetop
+  \claim{Один хост, три \hi{набора} умолчаний.}
+
+  {\renewcommand{\arraystretch}{1.6}
+  \begin{tabular}{@{}L{6.6cm}L{6.2cm}@{}}
+    \hi{\texttt{WebApplication.CreateBuilder}}     & веб-приложение: всё, что
+      было сегодня \\
+    \texttt{Host.CreateApplicationBuilder}          & рабочий сервис: те же фазы,
+      без порта (\texttt{dotnet new worker}) \\
+    \texttt{WebApplication.CreateSlimBuilder}       & меньше умолчаний --- для
+      обрезки и AOT \\
+  \end{tabular}}
+
+  \slidegap
+  \aside{Те же \texttt{Services}, тот же \texttt{Build} и \texttt{Run}. Slim ---
+    тот же хост, только диетический.}
+\end{frame}
+
+% 16
+\begin{frame}{Что происходит на \texttt{Run}}
+  \slidetop
+  \begin{center}
+    \begin{tikzpicture}[font=\footnotesize,
+      sb/.style={box,minimum width=2.6cm,minimum height=1.2cm}]
+      \node[sb] (s1) at (0,0)    {фоновые\\сервисы стартуют};
+      \node[sb] (s2) at (3.3,0)  {сервер\\слушает порт};
+      \node[sb,draw=accent,line width=1.0pt] (s3) at (6.6,0)
+        {«приложение\\запущено»};
+      \node[sb] (s4) at (9.9,0)  {ожидание\\сигнала};
+      \draw[arr] (s1) -- (s2);
+      \draw[arr] (s2) -- (s3);
+      \draw[arr] (s3) -- (s4);
+      \node[font=\scriptsize,text=muted,below=0.3em] at (s1.south) {по порядку регистрации};
+      \node[font=\scriptsize,text=muted,below=0.3em] at (s3.south) {подписчики узнают};
+    \end{tikzpicture}
+  \end{center}
+
+  \slidegap
+  \aside{Дальше хост ничего не делает сам: сервер обрабатывает запросы,
+    фоновые сервисы --- свою работу, хост ждёт остановки.}
+\end{frame}
+
+% 17
+\begin{frame}[plain]
+  \vote{Откуда приходит сигнал остановки?}
+\end{frame}
+
+% 18
+\begin{frame}{Корректная остановка}
+  \slidetop
+  \begin{minipage}[t]{0.47\textwidth}
+    \begin{tikzpicture}[font=\footnotesize,baseline=(current bounding box.north),
+      st/.style={box,minimum width=5.6cm,minimum height=0.62cm,inner sep=2pt}]
+      \node[st,draw=alt,line width=1.0pt] (t1) at (0,0)     {сигнал «завершайся»};
+      \node[st] (t2) at (0,-0.9)  {сервер не принимает новые соединения};
+      \node[st,draw=accent] (t3) at (0,-1.8) {текущие запросы дорабатывают};
+      \node[st,draw=accent] (t4) at (0,-2.7) {фоновые сервисы получают токен};
+      \node[st] (t5) at (0,-3.6)  {контейнер вызывает \texttt{Dispose}};
+      \node[st] (t6) at (0,-4.5)  {процесс завершён};
+      \foreach \a/\b in {t1/t2,t2/t3,t3/t4,t4/t5,t5/t6} \draw[arr] (\a) -- (\b);
+    \end{tikzpicture}
+  \end{minipage}\hfill
+  \begin{minipage}[t]{0.47\textwidth}
+    \vspace{0pt}
+    \begin{cbul}{accent}
+      \item локально --- Ctrl+C
+      \item на сервере --- сигнал, и время, обычно \hi{десятки секунд}
+      \item потом --- \lo{убивают}
+      \item клиент, приславший запрос за секунду до сигнала, получит
+        \hi{ответ}, а не ошибку
+    \end{cbul}
+  \end{minipage}
+\end{frame}
+
+% 19
+\begin{frame}[fragile]{Таймаут остановки}
+  \slidetop
+  \claim{Таймаут хоста \hi{меньше}, чем ждёт тот, кто запустил процесс.}
+
+\begin{lstlisting}[style=csharp,basicstyle=\codesm]
+builder.Services.Configure<HostOptions>(options =>
+    options.ShutdownTimeout = TimeSpan.FromSeconds(20));
+\end{lstlisting}
+
+  \slidegap
+  {\renewcommand{\arraystretch}{1.45}
+  \begin{tabular}{@{}L{4.2cm}L{8.6cm}@{}}
+    по умолчанию      & \hi{30 секунд} \\
+    не уложились      & работа \lo{брошена}: процесс завершается, незаконченное
+      теряется \\
+    фоновая работа на минуту & прерывается по токену за секунды, доделывает в
+      следующий раз \\
+  \end{tabular}}
+\end{frame}
+
+% 20
+\begin{frame}{\texttt{Dispose} при остановке}
+  \slidetop
+  \claim{Контейнер освобождает то, чем \hi{владеет}, в обратном порядке.}
+
+  \begin{center}
+    \begin{tikzpicture}[font=\footnotesize,
+      db/.style={box,minimum width=2.8cm,minimum height=0.8cm}]
+      \node[db] (a) at (0,0)   {соединение с БД};
+      \node[db] (b) at (4.0,0) {\texttt{LogWriter}};
+      \node[db] (c) at (8.0,0) {кэш};
+      \draw[arr] ([yshift=0.2cm]a.east) -- ([yshift=0.2cm]b.west);
+      \draw[arr] ([yshift=0.2cm]b.east) -- ([yshift=0.2cm]c.west);
+      \draw[arra] ([yshift=-0.2cm]c.west) -- ([yshift=-0.2cm]b.east);
+      \draw[arra] ([yshift=-0.2cm]b.west) -- ([yshift=-0.2cm]a.east);
+      \node[font=\scriptsize,text=muted,anchor=west] at (9.6,0.2) {создание};
+      \node[font=\scriptsize,text=accent,anchor=west] at (9.6,-0.2) {\texttt{Dispose}};
+    \end{tikzpicture}
+  \end{center}
+
+  \slidegap
+  \begin{cbul}{accent}
+    \item соединения закрыты, файлы и буферы \hi{сброшены}
+    \item \texttt{LogWriter} дописывает буфер --- здесь
+    \item созданное через \texttt{new} --- \lo{ваше}: контейнер о нём не знает
+  \end{cbul}
+\end{frame}
+
+% 21
+\begin{frame}{Не обходите остановку}
+  \slidetop
+  \versus{корректно}{%
+    \begin{cbul}{accent}
+      \item сигнал или \texttt{StopApplication}
+      \item цикл смотрит на токен
+      \item \texttt{Dispose} всего, чем владеет хост
+    \end{cbul}}{в обход}{%
+    \begin{cbul}{alt}
+      \item \texttt{Environment.Exit} из кода
+      \item токен игнорируется
+      \item процесс убит по таймауту
+    \end{cbul}}
+
+  \slidegap
+  \hrulethin{0.42}
+  \rulegap
+  {\large Цена: обрезанные ответы, недописанные файлы, \lo{незакрытые}
+    транзакции.}
+\end{frame}
+
+% 22
+\begin{frame}[fragile]{Жизненный цикл из кода}
+  \slidetop
+  \claim{На события хоста можно \hi{подписаться}.}
+
+\begin{lstlisting}[style=csharp,basicstyle=\codesm]
+var lifetime = app.Services.GetRequiredService<IHostApplicationLifetime>();
+lifetime.ApplicationStarted.Register(() => app.Logger.LogInformation("Started"));
+lifetime.ApplicationStopping.Register(() => app.Logger.LogInformation("Stopping"));
+
+app.MapPost("/shutdown", (IHostApplicationLifetime l) =>
+{
+    l.StopApplication();
+    return Results.Accepted();
+});
+\end{lstlisting}
+
+  \slidegap
+  \aside{\texttt{StopApplication} --- остановка тем же корректным путём, а
+    не убийство процесса.}
+\end{frame}
+
+% 23
+\begin{frame}[fragile]{Первые строки лога}
+  \slidetop
+  \claim{Половина «почему не открывается» --- \hi{здесь}.}
+
+\begin{lstlisting}[style=term,basicstyle=\termsm]
+$ dotnet run
+Using launch settings from /home/user/HelloWorld/Properties/launchSettings.json...
+Building...
+info: Microsoft.Hosting.Lifetime[14]
+      Now listening on: http://localhost:5012
+info: Microsoft.Hosting.Lifetime[0]
+      Application started. Press Ctrl+C to shut down.
+info: Microsoft.Hosting.Lifetime[0]
+      Hosting environment: Development
+info: Microsoft.Hosting.Lifetime[0]
+      Content root path: /home/user/HelloWorld
+^C
+info: Microsoft.Hosting.Lifetime[0]
+      Application is shutting down...
+\end{lstlisting}
+
+  \slidegap
+  \aside{Слушает не там, окружение не то, папка не та --- видно в первых
+    четырёх строках.}
+\end{frame}
+
+% 24
+\begin{frame}{Окружение}
+  \slidetop
+  \versus{Development}{%
+    \begin{cbul}{accent}
+      \item страница с трассировкой при ошибке
+      \item подробные логи
+      \item проверка контейнера при \texttt{Build}
+    \end{cbul}}{Production}{%
+    \begin{cbul}{alt}
+      \item наружу --- только статус
+      \item логи по настройкам
+      \item без проверки при \texttt{Build}
+    \end{cbul}}
+
+  \slidegap
+  \hrulethin{0.42}
+  \rulegap
+  {\large Разница --- в \hi{конфигурации}, а не в коде.}
+
+  \vspace{0.6em}
+  \aside{Каждое «если разработка, то\ldots» в файле запуска --- развилка, которую
+    придётся поддерживать.}
+\end{frame}
+
+% 25
+\begin{frame}[fragile]{Чего не видно в \texttt{Program.cs}}
+  \slidetop
+  \begin{minipage}[t]{0.46\textwidth}
+    \eyebrow{HelloWorld.csproj}\par\vspace{0.3em}
+\begin{lstlisting}[style=xml,basicstyle=\termsm]
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+  </PropertyGroup>
+
+</Project>
+\end{lstlisting}
+    \vspace{0.4em}
+    {\small\raggedright \hi{Sdk.Web}: веб-часть рантайма, неявные \texttt{using},
+      файлы настроек в выводе сборки.\par}
+  \end{minipage}\hfill
+  \begin{minipage}[t]{0.50\textwidth}
+    \eyebrow{Properties / launchSettings.json}\par\vspace{0.3em}
+\begin{lstlisting}[style=json,basicstyle=\termsm]
+"http": {
+  "commandName": "Project",
+  "dotnetRunMessages": true,
+  "launchBrowser": true,
+  "applicationUrl": "http://localhost:5021",
+  "environmentVariables": {
+    "ASPNETCORE_ENVIRONMENT": "Development"
+  }
+}
+\end{lstlisting}
+    \vspace{0.4em}
+    {\small\raggedright Читает \texttt{dotnet run}: адрес и окружение.
+      \lo{Только локально} --- в прод не едет.\par}
+  \end{minipage}
+\end{frame}
+
+% 26
+\begin{frame}[plain]
+  \keyline{Приложение --- это хост плюс конвейер.\\ До \texttt{Build}
+    описываем, после --- собираем конвейер, \texttt{Run} запускает и корректно
+    останавливает.}
+\end{frame}
+
+% ======================================================== 2. KESTREL ==
+\section{2. Kestrel и адрес}
+
+% 27
+\begin{frame}[plain]
+  \sectionopener{2}{Kestrel и адрес}{Kestrel --- это ваш сервер на сокетах,
+    только \hi{правильный}.}
+\end{frame}
+
+% 28
+\begin{frame}{Kestrel и сервер из лабораторной}
+  \slidetop
+  \versus{Kestrel}{%
+    \begin{cbul}{accent}
+      \item HTTP/1.1, HTTP/2 и HTTP/3
+      \item TLS
+      \item пулы буферов
+      \item лимиты на размер и время
+    \end{cbul}}{сервер на сокетах}{%
+    \begin{cbul}{alt}
+      \item только HTTP/1.1
+      \item без TLS
+      \item буфер на каждый запрос
+      \item без лимитов
+    \end{cbul}}
+
+  \slidegap
+  \hrulethin{0.42}
+  \rulegap
+  {\large Делает то же самое: принимает, разбирает, отвечает. Вы к нему
+    \hi{не прикасаетесь}.}
+\end{frame}
+
+% 29
+\begin{frame}[fragile]{Где слушать}
+  \slidetop
+  \claim{Адрес --- свойство \hi{окружения}, а не приложения.}
+
+  \begin{lstlisting}[style=term,basicstyle=\termsm]
+$ dotnet HelloWorld.dll
+      Now listening on: http://localhost:5000
+$ ASPNETCORE_URLS=http://localhost:8092 dotnet HelloWorld.dll
+      Now listening on: http://localhost:8092
+$ ASPNETCORE_URLS=http://localhost:8092 dotnet HelloWorld.dll --urls=http://localhost:8091
+      Now listening on: http://localhost:8091
+$ ASPNETCORE_HTTP_PORTS=8093 dotnet HelloWorld.dll
+      Now listening on: http://[::]:8093
+\end{lstlisting}
+
+  \slidegap
+  {\renewcommand{\arraystretch}{1.3}\small
+  \begin{tabular}{@{}L{3.2cm}L{9.6cm}@{}}
+    \hi{в контейнере}   & все интерфейсы, порт 8080 --- его задаёт образ \\
+    \lo{секция Kestrel} & в \texttt{appsettings.json} перекрывает \texttt{-{}-urls} и
+      \texttt{ASPNETCORE\_URLS} --- выбирайте \lo{один} способ \\
+  \end{tabular}}
+\end{frame}
+
+% 30
+\begin{frame}[fragile]{HTTPS локально}
+  \slidetop
+  \claim{Сертификат для разработки создаёт \hi{SDK}.}
+
+\begin{lstlisting}[style=bash,basicstyle=\ttfamily\small]
+dotnet dev-certs https --trust
+\end{lstlisting}
+
+  \slidegap
+  \begin{cbul}{accent}
+    \item сертификат для \texttt{localhost}, подписан \lo{сам собой}
+    \item браузер не верит, пока не добавите в доверенные --- это и делает
+      \texttt{-{}-trust}
+    \item в проде сертификат --- \hi{конфигурация}, а не код
+  \end{cbul}
+\end{frame}
+
+% 31
+\begin{frame}{Версии протокола}
+  \slidetop
+  \claim{Ваш код от версии \hi{не зависит}.}
+
+  {\renewcommand{\arraystretch}{1.6}
+  \begin{tabular}{@{}L{2.6cm}L{10.2cm}@{}}
+    \hi{\textbf{HTTP/1.1}} & по умолчанию \\
+    \hi{\textbf{HTTP/2}}   & по умолчанию; браузер договаривается о нём только
+      поверх TLS \\
+    \textbf{HTTP/3}        & включается явно; нужна поддержка QUIC в ОС \\
+  \end{tabular}}
+
+  \slidegap
+  \aside{Семантика одна для всех трёх версий --- транспорт под ней меняется,
+    обработчик нет.}
+\end{frame}
+
+% 32
+\begin{frame}{Лимиты по умолчанию}
+  \slidetop
+  \claim{Лишнее отсекает \hi{сервер}, а не ваш код.}
+
+  {\renewcommand{\arraystretch}{1.25}\small
+  \begin{tabular}{@{}L{5.2cm}L{2.9cm}L{4.7cm}@{}}
+    \colhead{muted}{лимит} & \colhead{muted}{по умолчанию} & \colhead{muted}{если больше} \\
+    \texttt{MaxRequestBodySize}         & \hi{30\,000\,000 байт} & \lo{413} при чтении тела \\
+    \texttt{MaxRequestHeadersTotalSize} & 32 КБ  & отказ до вашего кода \\
+    \texttt{MaxRequestHeaderCount}      & 100    & отказ до вашего кода \\
+    \texttt{RequestHeadersTimeout}      & 30 с   & медленный клиент отключён \\
+    \texttt{KeepAliveTimeout}           & 2 мин 10 с & соединение закрыто \\
+    \texttt{MaxConcurrentConnections}   & без предела & --- \\
+  \end{tabular}}
+\end{frame}
+
+% 33
+\begin{frame}[fragile]{Поднять лимит}
+  \slidetop
+  \claim{Для всего сервера или для \hi{одного} маршрута.}
+
+  \begin{lstlisting}[style=csharp,basicstyle=\codexs]
+builder.WebHost.ConfigureKestrel(kestrel =>
+    kestrel.Limits.MaxRequestBodySize = 100_000_000);
+
+app.MapPost("/upload", [RequestSizeLimit(100_000_000)] async (HttpRequest request) =>
+{
+    await request.Body.CopyToAsync(Stream.Null);
+    return Results.Ok();
+});
+\end{lstlisting}
+
+  \slidegap
+  {\small Лимит по умолчанию, 31 МБ в тело --- отказ на \hi{первом чтении}:\par}
+\begin{lstlisting}[style=term,basicstyle=\termsm]
+$ curl -i --data-binary @big.bin http://localhost:5021/upload
+HTTP/1.1 413 Payload Too Large
+Connection: close
+\end{lstlisting}
+\end{frame}
+
+% 34
+\begin{frame}[plain]
+  \keyline{Kestrel отсекает лишнее за вас.\\ Где слушать и по какой схеме ---
+    решает окружение.}
+\end{frame}
+
+% ======================================================== 3. PIPELINE ==
+\section{3. Конвейер запроса}
+
+% The chain of six boxes, drawn the same way on frames 37 and 59.
+\newcommand{\chainboxes}{%
+  \foreach \i/\t in {1/ошибки,2/логирование,3/маршрутизация,4/аутентификация,
+                     5/авторизация} {
+    \node[box,minimum width=1.95cm,minimum height=1.0cm,inner sep=1pt,font=\scriptsize]
+      (m\i) at ({(\i-1)*2.32},0) {\t};
+  }
+  \node[box,draw=accent,line width=1.0pt,minimum width=1.95cm,minimum height=1.0cm,
+        inner sep=1pt,font=\scriptsize\bfseries] (m6) at (11.6,0) {обработчик};
+}
+
+% 35
+\begin{frame}[plain]
+  \sectionopener{3}{Конвейер запроса}{Middleware --- это делегат, который
+    \hi{знает следующего}.}
+\end{frame}
+
+% 36
+\begin{frame}{Простая модель ломается}
+  \slidetop
+  \claim{Каждому запросу нужно \hi{одно и то же}.}
+
+  \begin{minipage}[t]{0.40\textwidth}
+    \begin{cbul}{accent}
+      \item записать в лог
+      \item узнать, кто прислал
+      \item решить, можно ли
+      \item сжать ответ
+      \item поймать исключение
+      \item отдать файл
+    \end{cbul}
+  \end{minipage}\hfill
+  \begin{minipage}[t]{0.54\textwidth}
+    \vspace{0pt}
+    {\renewcommand{\arraystretch}{1.6}
+    \begin{tabular}{@{}L{7.3cm}@{}}
+      \lo{в каждом обработчике} --- сто копий одних и тех же двадцати строк \\
+      \lo{в одном месте перед обработчиком} --- метод на тысячу строк с
+        флагами \\
+    \end{tabular}}
+  \end{minipage}
+
+  \slidegap
+  \aside{Нужен \hi{третий} вариант.}
+\end{frame}
+
+% 37
+\begin{frame}{Конвейер}
+  \slidetop
+  \claim{Каждый компонент видит запрос \hi{до} обработчика и ответ \hi{после}.}
+
+  \begin{center}
+    \begin{tikzpicture}
+      \chainboxes
+      \foreach \i [evaluate=\i as \j using int(\i+1)] in {1,...,5} {
+        \draw[arra] ([yshift=0.22cm]m\i.east) -- ([yshift=0.22cm]m\j.west);
+        \draw[arrl] ([yshift=-0.22cm]m\j.west) -- ([yshift=-0.22cm]m\i.east);
+      }
+      \node[anchor=south west,font=\scriptsize,text=accent,inner sep=1pt]
+        at ([yshift=2pt]m1.north west) {запрос $\to$};
+      \node[anchor=north west,font=\scriptsize,text=alt,inner sep=1pt]
+        at ([yshift=-2pt]m1.south west) {$\leftarrow$ ответ};
+    \end{tikzpicture}
+  \end{center}
+
+  \slidegap
+  \begin{cbul}{accent}
+    \item каждый делает \hi{одно} дело и передаёт дальше
+    \item добавить компонент --- вставить ещё одно звено, остальные не меняются
+    \item ответ идёт по той же цепочке \hi{обратно}
+  \end{cbul}
+\end{frame}
+
+% 38
+\begin{frame}[plain]
+  \statement{\hi{Middleware} --- делегат, который получает контекст и
+    следующего и сам решает: вызвать ли следующего, что сделать до и что
+    после.}
+\end{frame}
+
+% 39
+\begin{frame}[fragile]{Явный конвейер в \texttt{Program.cs}}
+  \vspace{0.3em}
+\begin{lstlisting}[style=csharp,basicstyle=\ttfamily\fontsize{7.0}{7.9}\selectfont,escapechar=|]
+var builder = WebApplication.CreateBuilder(args);
+
+builder.Services.AddAuthentication();
+builder.Services.AddAuthorization();
+builder.Services.AddHealthChecks();
+
+var app = builder.Build();
+
+|\mk{e1}|app.UseMiddleware<ErrorHandlingMiddleware>();
+|\mk{e2}|app.UseMiddleware<RequestLoggingMiddleware>();
+|\mk{e3}|app.UseRouting();
+|\mk{e4}|app.UseAuthentication();
+|\mk{e5}|app.UseAuthorization();
+
+|\mk{e6}|app.MapHealthChecks("/health");
+|\mk{e7}|app.MapGet("/", () => "Hello from BSUIR");
+
+app.Run();
+\end{lstlisting}
+  \begin{tikzpicture}[remember picture,overlay,every node/.style={rawlab}]
+    \node at ([xshift=7.6cm]e1) {\hi{\textbf{1}} вокруг всего: ошибки};
+    \node at ([xshift=7.6cm]e2) {\hi{\textbf{2}} каждый запрос в лог};
+    \node at ([xshift=7.6cm]e3) {\hi{\textbf{3}} выбрать обработчик};
+    \node at ([xshift=7.6cm]e4) {\hi{\textbf{4}} кто пришёл};
+    \node at ([xshift=7.6cm]e5) {\hi{\textbf{5}} можно ли};
+    \draw[rawbrace] ([xshift=7.35cm,yshift=0.35em]e6) -- ([xshift=7.35cm,yshift=-0.3em]e7);
+    \node[text=accent] at ([xshift=7.6cm]$(e6)!0.5!(e7)$) {конец цепочки: обработчики};
+  \end{tikzpicture}
+
+  \vspace{-0.1em}
+  \aside{Сверху вниз идёт \hi{запрос}, снизу вверх --- ответ.}
+\end{frame}
+
+% 40
+\begin{frame}{Три возможности}
+  \slidetop
+  \claim{До, вызвать или \hi{не} вызвать, после --- из этого собирается всё.}
+
+  {\renewcommand{\arraystretch}{1.6}
+  \begin{tabular}{@{}L{4.2cm}L{8.6cm}@{}}
+    \hi{\textbf{до и после}}   & логирование: засечь время, записать статус \\
+    \hi{\textbf{до}}           & аутентификация: узнать, кто пришёл \\
+    \hi{\textbf{вокруг}}       & обработка ошибок: \texttt{try} вокруг всего
+      остального \\
+    \lo{\textbf{не вызывать}}  & статический файл: ответить самому \\
+  \end{tabular}}
+\end{frame}
+
+% 41
+\begin{frame}[fragile]{Матрёшка}
+  \slidetop
+  \claim{При старте цепочка складывается в \hi{один} делегат.}
+
+  \begin{minipage}[t]{0.50\textwidth}
+\begin{lstlisting}[style=csharp,basicstyle=\codesm]
+// one request
+delegate Task RequestDelegate(
+    HttpContext context);
+
+// one middleware
+Func<RequestDelegate, RequestDelegate>
+\end{lstlisting}
+  \end{minipage}\hfill
+  \begin{minipage}[t]{0.45\textwidth}
+    \vspace{0.3em}
+    \begin{tikzpicture}[font=\scriptsize]
+      \node[draw=hairline,line width=0.8pt,minimum width=5.6cm,minimum height=3.0cm,
+            label={[anchor=north west,text=muted]north west:ошибки}] at (0,0) {};
+      \node[draw=hairline,line width=0.8pt,minimum width=4.6cm,minimum height=2.2cm,
+            label={[anchor=north west,text=muted]north west:логирование}] at (0,-0.2) {};
+      \node[draw=hairline,line width=0.8pt,minimum width=3.6cm,minimum height=1.4cm,
+            label={[anchor=north west,text=muted]north west:маршрутизация}] at (0,-0.4) {};
+      \node[box,draw=accent,minimum width=2.4cm,minimum height=0.6cm,
+            inner sep=1pt] at (0,-0.6) {обработчик};
+    \end{tikzpicture}
+  \end{minipage}
+
+  \slidegap
+  \aside{Последний оборачивается предпоследним, тот --- предыдущим. На запрос
+    вызывается один делегат: \hi{без цикла}, без рефлексии, без поиска.}
+\end{frame}
+
+% 42
+\begin{frame}[fragile]{Middleware одной лямбдой}
+  \vspace{0.3em}
+\begin{lstlisting}[style=csharp,basicstyle=\codesm,escapechar=|]
+using System.Diagnostics;
+
+app.Use(async (context, next) =>
+{
+|\mk{i1}|    var started = Stopwatch.GetTimestamp();
+
+|\mk{i2}|    await next(context);
+
+|\mk{i3}|    var elapsed = Stopwatch.GetElapsedTime(started);
+    app.Logger.LogInformation("{Method} {Path} -> {Status} in {Elapsed} ms",
+        context.Request.Method, context.Request.Path,
+        context.Response.StatusCode, elapsed.TotalMilliseconds);
+});
+\end{lstlisting}
+  \begin{tikzpicture}[remember picture,overlay,every node/.style={rawlab}]
+    \node at ([xshift=9.0cm]i1) {\hi{до next} --- запрос};
+    \node at ([xshift=9.0cm]i2) {\hi{await next} --- всё остальное};
+    \node at ([xshift=9.0cm]i3) {\hi{после next} --- ответ};
+  \end{tikzpicture}
+
+  \vspace{0.2em}
+  \aside{Шаблон с именами в фигурных скобках и параметры отдельно --- не
+    интерполяция.}
+\end{frame}
+
+% 43
+\begin{frame}[fragile]{После \texttt{next} --- поздно}
+  \slidetop
+  \claim{Первый байт тела ушёл --- заголовки \lo{не вернуть}.}
+
+  \begin{lstlisting}[style=term,basicstyle=\termsm]
+System.InvalidOperationException: StatusCode cannot be set because the response has already started.
+\end{lstlisting}
+
+  \slidegap
+  {\renewcommand{\arraystretch}{1.4}
+  \begin{tabular}{@{}L{3.6cm}L{9.2cm}@{}}
+    \hi{до \texttt{next}}    & менять статус и заголовки --- можно \\
+    \lo{после \texttt{next}} & читать статус, писать в лог --- можно; менять ---
+      поздно \\
+  \end{tabular}}
+\end{frame}
+
+% 44
+\begin{frame}{Порядок --- это семантика}
+  \slidetop
+  \claim{Первый видит запрос \hi{первым}, а ответ --- \hi{последним}.}
+
+  {\renewcommand{\arraystretch}{1.6}
+  \begin{tabular}{@{}L{5.4cm}L{7.4cm}@{}}
+    \hi{\textbf{аутентификация до авторизации}} & иначе решают про неизвестно
+      кого \\
+    \hi{\textbf{ошибки снаружи всех}}           & иначе исключение улетит в сервер:
+      пустой 500 \\
+    \hi{\textbf{маршрутизация до авторизации}}  & иначе не по чему решать:
+      требования у маршрута \\
+  \end{tabular}}
+
+  \slidegap
+  \aside{Анализатор этого не ловит. Защищённый маршрут падает на первом запросе:
+    \texttt{contains authorization metadata, but a middleware was not found that
+    supports authorization}.}
+\end{frame}
+
+% 45
+\begin{frame}[fragile]{Ветвление}
+  \slidetop
+  \claim{Конвейер не обязан быть \hi{одной} прямой.}
+
+\begin{lstlisting}[style=csharp,basicstyle=\codexs,escapechar=|]
+app.Map("/admin", admin => admin.Run(context => context.Response.WriteAsync("admin")));
+
+app.UseWhen(context => context.Request.Path.StartsWithSegments("/api"),
+    api => api.Use(async (context, next) =>
+    {
+        context.Response.Headers["X-Api"] = "1";
+        await next(context);
+    }));
+\end{lstlisting}
+
+  \slidegap
+  {\renewcommand{\arraystretch}{1.4}
+  \begin{tabular}{@{}L{2.2cm}L{10.6cm}@{}}
+    \hi{\texttt{Map}}     & своя цепочка по префиксу пути; в основную
+      \hi{не возвращается} \\
+    \hi{\texttt{UseWhen}} & вставка по условию; запрос \hi{возвращается} в
+      основную \\
+  \end{tabular}}
+\end{frame}
+
+% 46
+\begin{frame}{Конвейер по умолчанию}
+  \slidetop
+  \claim{До вашего первого \texttt{Use} там \hi{уже} есть компоненты.}
+
+  {\renewcommand{\arraystretch}{1.3}
+  \begin{tabular}{@{}L{0.5cm}L{5.4cm}L{6.9cm}@{}}
+    \textcolor{muted}{1} & страница ошибок разработчика & \lo{только в Development}:
+      трассировка наружу --- утечка \\
+    \textcolor{muted}{2} & фильтрация хостов & чужой заголовок \texttt{Host} --- отказ \\
+    \textcolor{muted}{3} & маршрутизация & выбирает обработчик, но \hi{не вызывает} \\
+    \textcolor{muted}{4} & аутентификация и авторизация & если зарегистрированы ---
+      после маршрутизации \\
+    \textcolor{accent}{5} & \hi{\textbf{ваши middleware}} & там, где вы их написали \\
+    \textcolor{muted}{6} & конечные точки & вызывают выбранный обработчик \\
+  \end{tabular}}
+
+  \rulegap
+  \aside{Стандартные компоненты фреймворк ставит \hi{сам} и в правильном
+    порядке.}
+\end{frame}
+
+% 47
+\begin{frame}[fragile]{Как убедиться}
+  \slidetop
+  \claim{Один и тот же middleware \hi{до} маршрутизации и \hi{после}.}
+
+  \begin{lstlisting}[style=csharp,basicstyle=\codexs]
+app.Use(async (context, next) =>
+{
+    app.Logger.LogInformation("before UseRouting: {Endpoint}",
+        context.GetEndpoint()?.DisplayName ?? "(none)");
+    await next(context);
+});
+app.UseRouting();
+// the same middleware again: "after UseRouting: {Endpoint}"
+\end{lstlisting}
+
+\begin{lstlisting}[style=term,basicstyle=\termsm]
+info: HelloWorld[0]
+      before UseRouting: (none)
+info: HelloWorld[0]
+      after UseRouting: HTTP: GET /
+\end{lstlisting}
+
+  \rulegap
+  \aside{Без явного \texttt{UseRouting} маршрутизация стоит \hi{перед} вашим
+    первым \texttt{Use}: он уже видит обработчик.}
+\end{frame}
+
+% 48
+\begin{frame}{Свой middleware: три способа}
+  \slidetop
+  {\renewcommand{\arraystretch}{1.55}\small
+  \begin{tabular}{@{}L{3.3cm}L{3.0cm}L{3.0cm}L{3.5cm}@{}}
+    & \colhead{muted}{создаётся} & \colhead{muted}{зависимости} & \colhead{muted}{когда брать} \\
+    \textbf{лямбда в \texttt{Use}}  & один раз & то, что видно в файле & две-три
+      строки \\
+    \hi{\textbf{класс с \texttt{InvokeAsync}}} & \hi{один раз} при старте &
+      параметры \texttt{InvokeAsync} & \hi{всё остальное} \\
+    \textbf{\texttt{IMiddleware}}   & на каждый запрос & конструктор & когда точно
+      знаете, зачем \\
+  \end{tabular}}
+
+  \slidegap
+  \aside{\texttt{IMiddleware} --- объект на каждый запрос. Это цена, и она нужна
+    редко.}
+\end{frame}
+
+% 49
+\begin{frame}[fragile]{Класс с \texttt{InvokeAsync}}
+  \vspace{0.3em}
+\begin{lstlisting}[style=csharp,basicstyle=\codesm,escapechar=|]
+sealed class RequestTimingMiddleware(
+|\mk{c1}|    RequestDelegate next,
+|\mk{c2}|    ILogger<RequestTimingMiddleware> logger)
+{
+    public async Task InvokeAsync(
+|\mk{c3}|        HttpContext context,
+|\mk{c4}|        RequestStamp stamp)
+    {
+        var started = Stopwatch.GetTimestamp();
+        await next(context);
+        logger.LogInformation("{Path} [{Stamp}] in {Elapsed} ms",
+            context.Request.Path, stamp.Value,
+            Stopwatch.GetElapsedTime(started).TotalMilliseconds);
+    }
+}
+
+// builder.Services.AddScoped<RequestStamp>();
+\end{lstlisting}
+  \begin{tikzpicture}[remember picture,overlay,every node/.style={rawlab}]
+    \node at ([xshift=7.4cm]c1) {\hi{конструктор} --- один раз при старте};
+    \node at ([xshift=7.4cm]c2) {только вечное: логгер, настройки};
+    \node at ([xshift=7.4cm]c3) {\hi{InvokeAsync} --- на каждый запрос};
+    \node at ([xshift=7.4cm]c4) {параметры --- из контейнера запроса};
+  \end{tikzpicture}
+\end{frame}
+
+% 50
+\begin{frame}[fragile]{Метод расширения \texttt{Use...}}
+  \slidetop
+  \claim{Файл запуска --- \hi{словарь}, а не список типов.}
+
+\begin{lstlisting}[style=csharp,basicstyle=\codesm]
+static class RequestTimingExtensions
+{
+    public static IApplicationBuilder UseRequestTiming(this IApplicationBuilder app)
+        => app.UseMiddleware<RequestTimingMiddleware>();
+}
+
+app.UseRequestTiming();
+\end{lstlisting}
+
+  \slidegap
+  \aside{Так устроены и стандартные: \texttt{UseRouting},
+    \texttt{UseAuthentication}. Внутри --- одна строка.}
+\end{frame}
+
+% 51
+\begin{frame}[fragile]{Пленённая зависимость}
+  \slidetop
+  \versus{параметры InvokeAsync}{%
+    \begin{cbul}{accent}
+      \item на каждый запрос --- свой экземпляр
+      \item контекст базы, всё «на запрос»
+    \end{cbul}}{конструктор}{%
+    \begin{cbul}{alt}
+      \item один раз --- \lo{навсегда}
+      \item только то, что живёт вечно
+    \end{cbul}}
+
+  \slidegap
+{\small В конструкторе, в Development --- падение на старте:\par
+  \texttt{\lo{Cannot resolve scoped service 'RequestStamp' from root provider.}}\par}
+
+  \rulegap
+  \aside{В Production ошибки нет: два запроса получают \lo{один и тот же}
+    экземпляр.}
+\end{frame}
+
+% 52
+\begin{frame}[plain]
+  \vote{Ловить всё можно только на границе процесса. Где эта граница в
+    сервисе?}
+\end{frame}
+
+% 53
+\begin{frame}[fragile]{Обработка ошибок --- middleware}
+  \vspace{0.2em}
+\begin{lstlisting}[style=csharp,basicstyle=\ttfamily\fontsize{6.6}{7.2}\selectfont,escapechar=|]
+sealed class ErrorHandlingMiddleware(
+    RequestDelegate next, ILogger<ErrorHandlingMiddleware> logger)
+{
+    public async Task InvokeAsync(HttpContext context)
+    {
+        try
+        {
+|\mk{h1}|            await next(context);
+        }
+|\mk{h2}|        catch (Exception e) when (!context.Response.HasStarted)
+        {
+|\mk{h3}|            var (status, message) = e switch
+            {
+                NotFoundException => (StatusCodes.Status404NotFound, e.Message),
+                _ => (StatusCodes.Status500InternalServerError, "Internal error"),
+            };
+|\mk{h4}|            logger.LogError(e, "Request {Path} failed with {Status}",
+                context.Request.Path, status);
+            context.Response.StatusCode = status;
+|\mk{h5}|            await context.Response.WriteAsJsonAsync(
+                new { error = message, traceId = context.TraceIdentifier });
+        }
+    }
+}
+\end{lstlisting}
+  \begin{tikzpicture}[remember picture,overlay,every node/.style={rawlab,font=\small\bfseries,text=accent}]
+    \foreach \m/\n in {h1/1,h2/2,h3/3,h4/4,h5/5} \node at ([xshift=11.9cm]\m) {\n};
+  \end{tikzpicture}
+\end{frame}
+
+% 54
+\begin{frame}{Пять решений}
+  \slidetop
+  {\renewcommand{\arraystretch}{1.5}
+  \begin{tabular}{@{}L{4.0cm}L{8.8cm}@{}}
+    \hi{\textbf{1\enspace try вокруг next}}   & всё приложение внутри одного \texttt{try};
+      поэтому он \hi{первый} \\
+    \hi{\textbf{2\enspace when (!HasStarted)}} & ответ уже уходит --- не ловим, соединение
+      обрывается \\
+    \hi{\textbf{3\enspace switch по типу}}    & «не найдено» $\to$ 404, остальное $\to$ 500 \\
+    \hi{\textbf{4\enspace в лог --- всё}}      & исключение целиком, первым параметром \\
+    \lo{\textbf{5\enspace наружу --- минимум}} & для 500: «Internal error» и
+      \texttt{traceId}, без сообщения исключения \\
+  \end{tabular}}
+
+  \slidegap
+  \aside{Сообщение исключения может содержать имя таблицы, путь к файлу, кусок
+    SQL. \texttt{NotFoundException} --- своё исключение домена, наследник
+    \texttt{Exception}.}
+\end{frame}
+
+% 55
+\begin{frame}[fragile]{Отмена --- не ошибка}
+  \slidetop
+  \claim{Клиент ушёл --- отвечать \hi{некому}.}
+
+\begin{lstlisting}[style=csharp,basicstyle=\codexs]
+try
+{
+    await next(context);
+}
+catch (OperationCanceledException) when (context.RequestAborted.IsCancellationRequested)
+{
+    logger.LogInformation("Request {Path} cancelled by the client", context.Request.Path);
+}
+catch (Exception e) when (!context.Response.HasStarted)
+{
+    // as before
+}
+\end{lstlisting}
+
+  \slidegap
+  \aside{Иначе лог забит «ошибками» о закрытых вкладках. Ветка --- в
+    лабораторной.}
+\end{frame}
+
+% 56
+\begin{frame}[fragile]{Проверка руками}
+  \slidetop
+  \begin{lstlisting}[style=term,basicstyle=\termsm]
+$ curl -s http://localhost:5012/orders/404
+{"error":"Order 404 not found","traceId":"0HNPPKMVENS8K:00000001"}
+$ curl -i http://localhost:5012/orders/500
+HTTP/1.1 500 Internal Server Error
+Content-Type: application/json; charset=utf-8
+Date: Tue, 03 Nov 2026 12:26:54 GMT
+Server: Kestrel
+Transfer-Encoding: chunked
+
+{"error":"Internal error","traceId":"0HNPPKMVENS8L:00000001"}
+\end{lstlisting}
+
+  \slidegap
+\begin{lstlisting}[style=term,basicstyle=\termsm]
+fail: ErrorHandlingMiddleware[0]
+      Request /orders/500 failed with 500
+      System.InvalidOperationException: Connection failed: Host=db;Password=secret
+\end{lstlisting}
+
+  \rulegap
+  \aside{Пароль --- \hi{только в логе}. Клиенту --- «Internal error» и
+    \texttt{traceId}.}
+\end{frame}
+
+% 57
+\begin{frame}{Одно место против ста}
+  \slidetop
+  \versus{один middleware}{%
+    \begin{cbul}{accent}
+      \item один формат ошибки
+      \item решение принято и проверено один раз
+      \item обработчики короткие: делают и бросают
+    \end{cbul}}{try/catch в каждом}{%
+    \begin{cbul}{alt}
+      \item сто копий --- через год они разные
+      \item где-то забыли --- голый 500
+      \item где-то «для понятности» --- строка подключения наружу
+    \end{cbul}}
+\end{frame}
+
+% 58
+\begin{frame}{Принцип один}
+  \slidetop
+  \claim{Какой именно код это делает --- \hi{вторично}.}
+
+  \begin{cbul}{accent}
+    \item \hi{одно} место
+    \item снаружи \hi{всех}
+    \item наружу --- минимум
+    \item в лог --- всё
+  \end{cbul}
+
+  \slidegap
+  \aside{У фреймворка есть встроенный механизм с \texttt{IExceptionHandler} и
+    стандартным форматом тела. Мы пишем свой, чтобы видеть каждую строку.}
+\end{frame}
+
+% 59
+\begin{frame}{Короткое замыкание}
+  \slidetop
+  \claim{Не вызвал \texttt{next} --- запрос \hi{дальше не идёт}.}
+
+  \begin{center}
+    \begin{tikzpicture}
+      \chainboxes
+      \draw[arra] ([yshift=0.22cm]m1.east) -- ([yshift=0.22cm]m2.west);
+      \draw[arra] ([yshift=0.22cm]m2.east) -- ([yshift=0.22cm]m3.west);
+      \draw[arrl] ([yshift=-0.22cm]m3.west) -- ([yshift=-0.22cm]m2.east);
+      \draw[arrl] ([yshift=-0.22cm]m2.west) -- ([yshift=-0.22cm]m1.east);
+      \node[draw=accent,line width=1.2pt,fit=(m3),inner sep=1pt] {};
+      \foreach \i in {4,5,6} \node[fill=paper,opacity=0.6,fit=(m\i),inner sep=1pt] {};
+      \node[anchor=south west,font=\scriptsize,text=accent,inner sep=1pt]
+        at ([yshift=2pt]m1.north west) {запрос $\to$};
+      \node[font=\footnotesize,text=accent,below=0.55cm] at (m3.south)
+        {ответ сформирован здесь};
+    \end{tikzpicture}
+  \end{center}
+
+  \slidegap
+  \aside{Это не ошибка, а \hi{инструмент}: middleware сам пишет ответ, и цепочка
+    разворачивается на нём.}
+\end{frame}
+
+% 60
+\begin{frame}{Кто отвечает сам}
+  \slidetop
+  {\renewcommand{\arraystretch}{1.55}
+  \begin{tabular}{@{}L{4.6cm}L{2.0cm}L{6.2cm}@{}}
+    \colhead{muted}{middleware} & \colhead{muted}{ответ} & \colhead{muted}{почему не дальше} \\
+    проверка здоровья          & \hi{200}  & вашему коду там нечего делать \\
+    статические файлы          & файл      & обработчики не знают, что файлы есть \\
+    ограничение частоты        & \lo{429}  & нагрузка на базу не растёт \\
+    предварительный \texttt{OPTIONS} & 204 & обработчику там нечего делать \\
+    аутентификация, нет токена & \lo{401}  & обработчик не вызван \\
+  \end{tabular}}
+
+  \slidegap
+  \aside{Срабатывает до всего, что стоит после. Стоит \lo{после} проверки
+    токена --- сначала потребует токен.}
+\end{frame}
+
+% 61
+\begin{frame}{Middleware и фильтр}
+  \slidetop
+  \versus{middleware}{%
+    \begin{cbul}{accent}
+      \item все запросы
+      \item про обработчик не знает
+      \item лог, ошибки, сжатие
+    \end{cbul}}{фильтр конечной точки}{%
+    \begin{cbul}{alt}
+      \item один маршрут
+      \item видит параметры обработчика
+      \item валидация входа
+    \end{cbul}}
+
+  \slidegap
+  \hrulethin{0.42}
+  \rulegap
+  {\large Одинаково для всех --- \hi{middleware}. Зависит от маршрута ---
+    фильтр.}
+\end{frame}
+
+% 62
+\begin{frame}[fragile]{Забытый \texttt{next}}
+  \slidetop
+  \claim{Все запросы обрываются на \lo{нём}.}
+
+  \begin{lstlisting}[style=csharp,basicstyle=\codexs]
+app.Use(async (HttpContext context, RequestDelegate next) =>
+{
+    app.Logger.LogInformation("Request {Path}", context.Request.Path);
+    // forgot: await next(context);
+});
+\end{lstlisting}
+
+\begin{lstlisting}[style=term,basicstyle=\termsm]
+$ curl -i http://localhost:5021/anything
+HTTP/1.1 200 OK
+Content-Length: 0
+Date: Tue, 03 Nov 2026 12:12:21 GMT
+Server: Kestrel
+\end{lstlisting}
+
+  \slidegap
+  \aside{Сервис отвечает пустым 200 на всё. Один из самых частых багов первой
+    лабораторной с middleware.}
+\end{frame}
+
+% 63
+\begin{frame}{Сколько стоит middleware}
+  \slidetop
+  \claim{Цепочка дешёвая. Дорого то, что \hi{внутри}.}
+
+  \begin{cbul}{accent}
+    \item выполняется на \hi{каждом} запросе без исключения
+    \item синхронное ожидание --- поток занят впустую
+    \item тело --- поток, читается \lo{один раз}: прочитали для лога ---
+      обработчику не осталось
+    \item буферизация разрешает перемотку, но стоит памяти на каждый запрос
+  \end{cbul}
+
+  \slidegap
+  \aside{Пишите middleware так, чтобы он стоил микросекунды.}
+\end{frame}
+
+% 64
+\begin{frame}[plain]
+  \keyline{Конвейер --- цепочка делегатов, и порядок --- это семантика.\\
+    Ошибки ловятся в одном месте, снаружи всех.}
+\end{frame}
+
+% ======================================================== 4. HTTPCONTEXT ==
+\section{4. HttpContext}
+
+% 65
+\begin{frame}[plain]
+  \sectionopener{4}{HttpContext}{Всё о запросе в \hi{одном} объекте.}
+\end{frame}
+
+% 66
+\begin{frame}{Один объект на запрос}
+  \slidetop
+  \begin{center}
+    \begin{tikzpicture}[font=\footnotesize,
+      pb/.style={box,minimum width=2.75cm,minimum height=0.75cm,inner sep=2pt,
+                 font=\footnotesize\ttfamily}]
+      \node[pb,draw=accent] (p1) at (0,0)     {Request};
+      \node[pb,draw=accent] (p2) at (3.05,0)  {Response};
+      \node[pb] (p3) at (6.1,0)   {User};
+      \node[pb] (p4) at (9.15,0)  {RequestAborted};
+      \node[pb] (p5) at (0,-1.0)    {Items};
+      \node[pb] (p6) at (3.05,-1.0) {Features};
+      \node[pb] (p7) at (6.1,-1.0)  {TraceIdentifier};
+      \node[pb] (p8) at (9.15,-1.0) {RequestServices};
+      \node[pb] (p9) at (4.575,-2.0) {Connection};
+      \node[draw=muted,line width=0.9pt,rounded corners=3pt,inner sep=8pt,
+            fit=(p1)(p4)(p9)] (hc) {};
+      \node[anchor=south west,font=\scriptsize\bfseries\ttfamily,text=muted]
+        at ([yshift=2pt]hc.north west) {HttpContext};
+    \end{tikzpicture}
+  \end{center}
+
+  \slidegap
+  \aside{Создан сервером, когда запрос разобран; протянут через весь конвейер;
+    выброшен, когда ответ отправлен. Живёт \hi{ровно} столько, сколько запрос.}
+\end{frame}
+
+% 67
+\begin{frame}{\texttt{Request} и \texttt{Response}}
+  \slidetop
+  \versus{Request}{%
+    \begin{cbul}{accent}
+      \item метод, путь, параметры
+      \item заголовки --- словарь
+      \item тело --- поток, читается \hi{один раз}
+    \end{cbul}}{Response}{%
+    \begin{cbul}{alt}
+      \item статус, заголовки
+      \item тело --- поток, в который пишут
+      \item \texttt{HasStarted}: заголовки ушли
+    \end{cbul}}
+
+  \slidegap
+  \hrulethin{0.42}
+  \rulegap
+  {\large Сырой запрос уже \hi{разобран}: вы читаете свойства, а не строки.}
+\end{frame}
+
+% 68
+\begin{frame}{Кто, ушёл ли, какой номер}
+  \slidetop
+  {\renewcommand{\arraystretch}{1.6}
+  \begin{tabular}{@{}L{3.8cm}L{9.0cm}@{}}
+    \hi{\texttt{User}}            & кто пришёл; пустой, пока аутентификация не
+      заполнила \\
+    \hi{\texttt{RequestAborted}}  & токен отмены: клиент закрыл вкладку, оборвалась
+      сеть \\
+    \hi{\texttt{TraceIdentifier}} & уникален для запроса: в ответе об ошибке и в
+      каждой строке лога \\
+  \end{tabular}}
+
+  \slidegap
+  \aside{\texttt{RequestAborted} протягивают через весь стек до запроса в базу:
+    клиент ушёл --- вся цепочка \hi{остановилась}, а не дорабатывает впустую.}
+\end{frame}
+
+% 69
+\begin{frame}{\texttt{Items}}
+  \slidetop
+  \versus{сервис «на запрос»}{%
+    \begin{cbul}{accent}
+      \item свой маленький тип
+      \item получают через конструктор
+      \item типы проверяет \hi{компилятор}
+    \end{cbul}}{Items}{%
+    \begin{cbul}{alt}
+      \item словарь из \texttt{object} в \texttt{object}
+      \item ключ --- строка, договорённость
+      \item ошибка --- во время работы
+    \end{cbul}}
+
+  \slidegap
+  \hrulethin{0.42}
+  \rulegap
+  {\large Одно-два значения --- \texttt{Items}. Что-то \hi{структурное} --- свой
+    тип.}
+\end{frame}
+
+% 70
+\begin{frame}{Остальное}
+  \slidetop
+  {\renewcommand{\arraystretch}{1.6}
+  \begin{tabular}{@{}L{3.8cm}L{9.0cm}@{}}
+    \texttt{Features}               & низкий уровень сервера: через него работают
+      \texttt{Request} и \texttt{Response} \\
+    \hi{\texttt{RequestServices}}   & область контейнера на этот запрос:
+      освобождается вместе с ним \\
+    \texttt{Connection}             & адрес и порт того, кто открыл соединение \\
+  \end{tabular}}
+
+  \slidegap
+  \aside{Адрес --- точка выхода в сеть, а \lo{не человек}: за одним адресом
+    бывает тысяча пользователей.}
+\end{frame}
+
+% 71
+\begin{frame}[plain]
+  \vote{Сервису заказов нужен идентификатор текущего пользователя. Передать
+    ему \texttt{HttpContext} или идентификатор?}
+\end{frame}
+
+% 72
+\begin{frame}{Три цены}
+  \slidetop
+  \claim{Контекст в бизнес-логике прибивает её \lo{к вебу}.}
+
+  {\renewcommand{\arraystretch}{1.6}
+  \begin{tabular}{@{}L{4.4cm}L{8.4cm}@{}}
+    \lo{\textbf{только внутри HTTP}} & ни из фоновой задачи, ни из теста, ни из
+      утилиты \\
+    \lo{\textbf{живёт с запросом}}   & изменяемый, не потокобезопасный; ссылка
+      после ответа --- мусор \\
+    \lo{\textbf{сигнатура врёт}}     & что метод берёт из контекста --- не видно
+      без чтения тела \\
+  \end{tabular}}
+\end{frame}
+
+% 73
+\begin{frame}[fragile]{Контекст не уходит дальше эндпоинта}
+  \slidetop
+{\renewcommand{\arraystretch}{1.5}
+  \begin{tabular}{@{}L{1.0cm}l@{}}
+    \lo{\textbf{нет}} & {\codexs Task<bool> IsOwnerAsync(Order order, HttpContext context);} \\
+    \hi{\textbf{да}}  & {\codexs Task<bool> IsOwnerAsync(Order order, string userId, CancellationToken ct);} \\
+  \end{tabular}}
+
+  \slidegap
+  \begin{center}
+    \begin{tikzpicture}[font=\footnotesize]
+      \node[box,draw=accent,minimum width=3.4cm] (e) at (0,0)
+        {эндпоинт\\{\scriptsize\ttfamily HttpContext}};
+      \node[box,minimum width=3.4cm] (sv) at (5.0,0)
+        {сервис\\{\scriptsize\ttfamily userId, ct}};
+      \node[box,minimum width=3.4cm] (rp) at (10.0,0)
+        {репозиторий\\{\scriptsize\ttfamily ct}};
+      \draw[arra] (e) -- node[above,font=\scriptsize,text=accent] {значения} (sv);
+      \draw[arr] (sv) -- (rp);
+    \end{tikzpicture}
+  \end{center}
+
+  \slidegap
+  \aside{Бизнес-логика получает строку, число, токен --- и \hi{не знает}, что
+    где-то есть HTTP.}
+\end{frame}
+
+% 74
+\begin{frame}[fragile]{«Текущий пользователь»}
+  \vspace{0.3em}
+\begin{lstlisting}[style=csharp,basicstyle=\codesm]
+interface ICurrentUser { string Id { get; } }
+
+sealed class HttpCurrentUser(IHttpContextAccessor accessor) : ICurrentUser
+{
+    public string Id =>
+        accessor.HttpContext?.User.FindFirstValue(ClaimTypes.NameIdentifier)
+        ?? throw new InvalidOperationException("No user");
+}
+\end{lstlisting}
+
+  \slidegap
+  {\renewcommand{\arraystretch}{1.3}\small
+  \begin{tabular}{@{}L{3.4cm}L{9.4cm}@{}}
+    в вебе     & читает контекст \\
+    в тесте    & \hi{заглушка} с нужным пользователем \\
+    в фоне     & системный пользователь \\
+  \end{tabular}}
+
+  \vspace{0.4em}
+  \aside{\texttt{IHttpContextAccessor} --- для инфраструктуры. В бизнес-логике
+    --- \lo{сигнал на ревью}.}
+\end{frame}
+
+% 75
+\begin{frame}{Контекст и фоновая работа}
+  \slidetop
+  \versus{скопировать значения}{%
+    \begin{cbul}{accent}
+      \item \texttt{userId}, \texttt{traceId} --- до запуска
+      \item живут сколько нужно
+    \end{cbul}}{захватить context}{%
+    \begin{cbul}{alt}
+      \item ответ ушёл --- объект отдан другому запросу
+      \item мусор или исключение
+    \end{cbul}}
+
+  \slidegap
+  \hrulethin{0.42}
+  \rulegap
+  {\large Та же ловушка \hi{захвата}, что с лямбдами, --- только у объекта есть
+    владелец.}
+\end{frame}
+
+% 76
+\begin{frame}[plain]
+  \keyline{HttpContext --- всё о запросе, и поэтому его не носят вглубь.\\
+    Берите нужное на границе.}
+\end{frame}
+
+% ======================================================== 5. BACKGROUND WORK ==
+\section{5. Фоновая работа}
+
+% 77
+\begin{frame}[plain]
+  \sectionopener{5}{Фоновая работа в том же хосте}{Хост запускает \hi{не
+    только} сервер.}
+\end{frame}
+
+% 78
+\begin{frame}[fragile]{\texttt{IHostedService}}
+  \slidetop
+  \claim{Два метода: \hi{запустить} и остановить.}
+
+\begin{lstlisting}[style=csharp,basicstyle=\ttfamily\small]
+public interface IHostedService
+{
+    Task StartAsync(CancellationToken cancellationToken);
+    Task StopAsync(CancellationToken cancellationToken);
+}
+\end{lstlisting}
+
+  \slidegap
+  \begin{cbul}{accent}
+    \item старт --- в порядке регистрации, остановка --- в \hi{обратном}
+    \item веб-сервер запускается так же: это тоже хостед-сервис
+    \item очистка раз в час, отложенные письма, ночной пересчёт, очередь
+  \end{cbul}
+\end{frame}
+
+% 79
+\begin{frame}[fragile]{Подвох старта}
+  \slidetop
+  \claim{Хост ждёт \hi{каждый} \texttt{StartAsync}, по очереди.}
+
+\begin{lstlisting}[style=term,basicstyle=\termsm]
+12:13:24.849 info: SlowStart[0]
+      StartAsync: loading for 5 s
+12:13:29.856 info: SlowStart[0]
+      StartAsync done
+12:13:29.885 info: Microsoft.Hosting.Lifetime[14]
+      Now listening on: http://localhost:5021
+\end{lstlisting}
+
+  \slidegap
+  {\renewcommand{\arraystretch}{1.4}
+  \begin{tabular}{@{}L{4.4cm}L{8.4cm}@{}}
+    \lo{\texttt{StartAsync} грузит 5 с} & сервер не слушает 5 с \\
+    \hi{\texttt{BackgroundService}}     & в .NET 10 весь \texttt{ExecuteAsync} идёт в
+      фоне: запуск \hi{не ждёт} даже код до первого \texttt{await} \\
+  \end{tabular}}
+
+  \slidegap
+  \aside{Долгая инициализация --- внутри фоновой работы, а не в запуске.}
+\end{frame}
+
+% 80
+\begin{frame}[fragile]{\texttt{BackgroundService}}
+  \vspace{0.3em}
+\begin{lstlisting}[style=csharp,basicstyle=\ttfamily\fontsize{6.8}{7.8}\selectfont,escapechar=|]
+sealed class CleanupService(ILogger<CleanupService> logger) : BackgroundService
+{
+    protected override async Task ExecuteAsync(CancellationToken stoppingToken)
+    {
+        using var timer = new PeriodicTimer(TimeSpan.FromMinutes(5));
+|\mk{b1}|        while (await timer.WaitForNextTickAsync(stoppingToken))
+        {
+|\mk{b2}|            try
+            {
+                logger.LogInformation("Cleanup started");
+                // work goes here: delete stale rows, recount, send
+            }
+|\mk{b3}|            catch (Exception e) when (e is not OperationCanceledException)
+            {
+                logger.LogError(e, "Cleanup iteration failed");
+            }
+        }
+    }
+}
+
+|\mk{b4}|// builder.Services.AddHostedService<CleanupService>();
+\end{lstlisting}
+  \begin{tikzpicture}[remember picture,overlay,every node/.style={rawlab,font=\small\bfseries,text=accent}]
+    \foreach \m/\n in {b1/1,b2/2,b3/3} \node at ([xshift=11.9cm]\m) {\n};
+    \node[font=\footnotesize,text=muted] at ([xshift=8.0cm]b4) {регистрация одной строкой};
+  \end{tikzpicture}
+\end{frame}
+
+% 81
+\begin{frame}{Четыре решения}
+  \slidetop
+  \claim{Каждое --- чей-то \lo{инцидент}.}
+
+  {\renewcommand{\arraystretch}{1.5}
+  \begin{tabular}{@{}L{4.4cm}L{8.4cm}@{}}
+    \hi{\textbf{1\enspace PeriodicTimer с токеном}} & поток не занят; на остановке ожидание
+      прерывается \\
+    \hi{\textbf{2\enspace try внутри цикла}}        & упала итерация --- следующая всё
+      равно будет \\
+    \hi{\textbf{3\enspace фильтр на отмену}}        & отмена --- сигнал, а не ошибка: не
+      глотаем \\
+    \lo{\textbf{4\enspace исключение наружу}}       & хост останавливает \lo{всё}
+      приложение \\
+  \end{tabular}}
+
+  \slidegap
+  \aside{\texttt{try} вокруг цикла --- первая же ошибка завершит сервис
+    навсегда, и вы узнаете через месяц.}
+\end{frame}
+
+% 82
+\begin{frame}[fragile]{Исключение из \texttt{ExecuteAsync}}
+  \slidetop
+  \claim{Одна ошибка в фоне --- и \lo{сервис лежит}.}
+
+\begin{lstlisting}[style=term,basicstyle=\termsm]
+fail: Microsoft.Extensions.Hosting.Internal.Host[9]
+      BackgroundService failed
+      System.InvalidOperationException: boom
+crit: Microsoft.Extensions.Hosting.Internal.Host[10]
+      The HostOptions.BackgroundServiceExceptionBehavior is configured to StopHost. ...
+      System.InvalidOperationException: boom
+info: Microsoft.Hosting.Lifetime[0]
+      Application is shutting down...
+\end{lstlisting}
+
+  \slidegap
+  \aside{Так сделано намеренно: упавший фон не должен оставаться незамеченным.
+    Код выхода при этом --- \lo{0}. Поведение меняется настройкой хоста --- лучше
+    не менять.}
+\end{frame}
+
+% 83
+\begin{frame}[fragile]{Зависимости «на запрос» в фоне}
+  \vspace{0.3em}
+\begin{lstlisting}[style=csharp,basicstyle=\ttfamily\fontsize{6.8}{7.8}\selectfont,escapechar=|]
+sealed class ReportService(IServiceScopeFactory scopes) : BackgroundService
+{
+    protected override async Task ExecuteAsync(CancellationToken stoppingToken)
+    {
+        using var timer = new PeriodicTimer(TimeSpan.FromMinutes(5));
+
+        while (await timer.WaitForNextTickAsync(stoppingToken))
+        {
+|\mk{r1}|            using var scope = scopes.CreateScope();
+|\mk{r2}|            var reports = scope.ServiceProvider.GetRequiredService<ReportBuilder>();
+            await reports.BuildAsync(stoppingToken);
+        }
+    }
+}
+\end{lstlisting}
+
+  \rulegap
+  {\small В конструкторе, в Development: \texttt{\lo{Cannot consume scoped service
+    'ReportBuilder' from singleton}}\par}
+  \rulegap
+  \aside{Одна итерация --- \hi{одна область}, один контекст базы.}
+\end{frame}
+
+% 84
+\begin{frame}[fragile]{Расписание: Quartz.NET}
+  \slidetop
+  \begin{center}
+    \begin{tikzpicture}[font=\footnotesize,
+      qb/.style={box,minimum width=3.6cm,minimum height=1.2cm}]
+      \node[qb] (j) at (0,0)   {\textbf{Job}\\что делать};
+      \node[qb] (t) at (4.3,0) {\textbf{Trigger}\\когда};
+      \node[qb,draw=accent,line width=1.0pt] (s) at (8.6,0)
+        {\textbf{Scheduler}\\кто следит};
+    \end{tikzpicture}
+  \end{center}
+
+  \slidegap
+  \begin{center}
+  {\ttfamily\fontsize{14}{16}\selectfont
+  \begin{tabular}{cccccc}
+    0 & 0 & 3 & ? & * & \hi{MON-FRI} \\[-0.2em]
+    {\scriptsize\rmfamily\color{muted} сек} & {\scriptsize\rmfamily\color{muted} мин}
+    & {\scriptsize\rmfamily\color{muted} час} & {\scriptsize\rmfamily\color{muted} день}
+    & {\scriptsize\rmfamily\color{muted} месяц} & {\scriptsize\rmfamily\color{muted}
+      дни недели} \\
+  \end{tabular}}
+  \end{center}
+
+  \slidegap
+  \aside{В три ночи по будням. Секунды --- \hi{первым} полем, в отличие от
+    классического cron. Scheduler сам --- хостед-сервис.}
+\end{frame}
+
+% 85
+\begin{frame}{Чего у таймера не будет}
+  \slidetop
+  {\renewcommand{\arraystretch}{1.6}
+  \begin{tabular}{@{}L{4.2cm}L{8.6cm}@{}}
+    \hi{\textbf{пропущенные запуски}} & остановлено в три ночи --- в девять утра
+      решить: запустить или забыть \\
+    \hi{\textbf{данные задания}}      & параметры, которые триггер передаёт при
+      запуске \\
+    \hi{\textbf{пауза}}               & приостановить и возобновить триггер на
+      ходу \\
+    \hi{\textbf{хранение в базе}}     & задания и триггеры переживают перезапуск \\
+  \end{tabular}}
+
+  \slidegap
+  \aside{Писать это на таймере --- значит писать \lo{свой} планировщик.}
+\end{frame}
+
+% 86
+\begin{frame}[fragile]{Задание и триггер}
+  \vspace{0.3em}
+\begin{lstlisting}[style=csharp,basicstyle=\ttfamily\fontsize{6.8}{7.7}\selectfont,escapechar=|]
+|\mk{q1}|[DisallowConcurrentExecution]
+sealed class NightlyReportJob : IJob
+{
+    public ValueTask Execute(IJobExecutionContext context,
+        CancellationToken cancellationToken)
+    {
+        // build and send the report; cancellationToken is the stop signal
+        return ValueTask.CompletedTask;
+    }
+}
+
+builder.Services.AddQuartz(q =>
+{
+|\mk{q2}|    var key = new JobKey("nightly-report");
+    q.AddJob<NightlyReportJob>(j => j.WithIdentity(key));
+|\mk{q3}|    q.AddTrigger(t => t.ForJob(key).WithCronSchedule("0 0 3 ? * MON-FRI"));
+});
+|\mk{q4}|builder.Services.AddQuartzHostedService(o => o.WaitForJobsToComplete = true);
+\end{lstlisting}
+  \begin{tikzpicture}[remember picture,overlay,every node/.style={rawlab,font=\small\bfseries,text=accent}]
+    \foreach \m/\n in {q1/1,q2/2,q3/3,q4/4} \node at ([xshift=11.9cm]\m) {\n};
+  \end{tikzpicture}
+
+  \vspace{0.1em}
+  \aside{\hi{1} не параллельно \quad \hi{2} ключ задания \quad \hi{3} cron
+    \quad \hi{4} дождаться заданий на остановке}
+\end{frame}
+
+% 87
+\begin{frame}[fragile]{Три ночи --- по какому времени?}
+  \slidetop
+  \claim{В контейнере --- \lo{UTC}: 03:00 UTC --- это 06:00 в Минске.}
+
+\begin{lstlisting}[style=csharp,basicstyle=\codexs]
+q.AddTrigger(t => t.ForJob(key)
+    .WithCronSchedule("0 0 3 ? * MON-FRI", x => x.InTimeZone(
+        TimeZoneInfo.FindSystemTimeZoneById("Europe/Minsk"))));
+\end{lstlisting}
+
+  \slidegap
+  \begin{cbul}{accent}
+    \item перевод часов: час повторяется или пропадает --- запуск \lo{дважды}
+      или ни разу
+    \item расписание для людей --- с \hi{явным} часовым поясом
+    \item остальное --- проще думать в UTC
+  \end{cbul}
+\end{frame}
+
+% 88
+\begin{frame}{Наложение запусков}
+  \slidetop
+  \claim{Триггер каждые 30 минут, работа --- \lo{40}.}
+
+  \begin{center}
+    \begin{tikzpicture}[font=\scriptsize,x=0.075cm,
+      rb/.style={box,minimum height=0.5cm,inner sep=1pt,anchor=west}]
+      \draw[hairline,line width=0.6pt] (0,0) -- (120,0);
+      \foreach \x in {0,30,60,90,120} {
+        \draw[hairline] (\x,0.08) -- (\x,-0.08);
+        \node[text=muted,below=2pt] at (\x,0) {\x};
+      }
+      \node[text=muted,anchor=west] at (122,0) {мин};
+      \node[anchor=east,text=muted] at (-3,2.1)  {запуск 1};
+      \node[anchor=east,text=alt]   at (-3,1.35) {без атрибута};
+      \node[anchor=east,text=accent] at (-3,0.6) {\texttt{[DisallowConcurrentExecution]}};
+      \node[rb,minimum width=3.0cm] at (0,2.1) {40 мин};
+      \node[rb,draw=alt,line width=1.0pt,minimum width=3.0cm] at (30,1.35)
+        {\textcolor{alt}{запуск 2}};
+      \node[rb,draw=accent,line width=1.0pt,minimum width=3.0cm] at (40,0.6)
+        {\textcolor{accent}{запуск 2}};
+      \fill[alt,opacity=0.15] (30,1.05) rectangle (40,2.4);
+      \node[text=alt,anchor=west] at (72,1.35) {два одновременно, одни данные};
+      \node[text=accent,anchor=west] at (82,0.6) {ждёт первый};
+    \end{tikzpicture}
+  \end{center}
+
+  \slidegap
+  \aside{У \texttt{BackgroundService} с \texttt{await} в цикле наложения нет:
+    следующая итерация не начнётся до конца текущей.}
+\end{frame}
+
+% 89
+\begin{frame}[plain]
+  \vote{Два экземпляра сервиса, в каждом задание «в три ночи отправить счета».
+    Сколько раз клиенты получат счета?}
+\end{frame}
+
+% 90
+\begin{frame}{Три пути к повтору}
+  \slidetop
+  \claim{Работа запустится \lo{больше} одного раза. Вопрос --- когда.}
+
+  {\renewcommand{\arraystretch}{1.6}
+  \begin{tabular}{@{}L{4.6cm}L{8.2cm}@{}}
+    \lo{\textbf{два экземпляра}}       & у каждого свой планировщик --- оба честно
+      сработают \\
+    \lo{\textbf{остановка посередине}} & таймаут вышел, процесс убит, после
+      перезапуска --- снова \\
+    \lo{\textbf{наложение}}            & предыдущий запуск ещё идёт, а триггер уже
+      сработал \\
+  \end{tabular}}
+
+  \slidegap
+  \aside{Клиенты получат по два счёта. Это не гипотетика --- это классика.}
+\end{frame}
+
+% 91
+\begin{frame}{Идемпотентность}
+  \slidetop
+  \claim{Повторный запуск \hi{не делает} ничего лишнего.}
+
+  {\renewcommand{\arraystretch}{1.6}
+  \begin{tabular}{@{}L{3.2cm}L{9.6cm}@{}}
+    \hi{\textbf{счёт}}      & помечается отправленным до или атомарно с отправкой
+      --- повтор видит пометку \\
+    \hi{\textbf{отчёт}}     & пишется по ключу «дата + тип» --- повтор
+      перезаписывает тот же \\
+    \hi{\textbf{сообщение}} & подтверждается после обработки --- повторная доставка
+      безвредна \\
+  \end{tabular}}
+
+  \slidegap
+  \aside{То же слово, что у методов HTTP, и та же причина: мир ненадёжен,
+    повторы случаются.}
+\end{frame}
+
+% 92
+\begin{frame}{Очередь}
+  \slidetop
+  \claim{Доставка --- «\hi{хотя бы} один раз».}
+
+  \begin{center}
+    \begin{tikzpicture}[font=\footnotesize,
+      ob/.style={box,minimum width=3.0cm,minimum height=1.0cm}]
+      \node[ob] (a) at (0,0)   {сервис};
+      \node[ob] (q) at (5.0,0) {очередь};
+      \node[ob,draw=accent,line width=1.0pt] (h) at (10.0,0) {обработчик};
+      \draw[arr] (a) -- node[above=2pt,font=\scriptsize] {«отправить счёт»} (q);
+      \draw[arra] ([yshift=0.15cm]q.east) -- node[above=2pt,font=\scriptsize,text=accent]
+        {доставка} ([yshift=0.15cm]h.west);
+      \draw[arrl] ([yshift=-0.15cm]q.east) -- node[below=2pt,font=\scriptsize,text=alt]
+        {повтор} ([yshift=-0.15cm]h.west);
+    \end{tikzpicture}
+  \end{center}
+
+  \slidegap
+  \aside{«Ровно один раз» в распределённой системе стоит огромных денег. Значит,
+    обработчик обязан быть \hi{идемпотентным} --- теперь это записано в контракте
+    очереди.}
+\end{frame}
+
+% 93
+\begin{frame}{Один запуск на всех}
+  \slidetop
+  {\renewcommand{\arraystretch}{1.6}
+  \begin{tabular}{@{}L{4.6cm}L{8.2cm}@{}}
+    \hi{\textbf{кластерный режим}}         & Quartz хранит задания в общей базе,
+      экземпляры договариваются \\
+    \hi{\textbf{распределённая блокировка}} & перед стартом захватить запись с
+      коротким сроком жизни \\
+  \end{tabular}}
+
+  \slidegap
+  \hrulethin{0.42}
+  \rulegap
+  {\large Ни то ни другое \lo{не отменяет} идемпотентности.}
+
+  \vspace{0.6em}
+  \aside{Захвативший может умереть посередине --- остановка никуда не делась.}
+\end{frame}
+
+% 94
+\begin{frame}{Где жить фоновой работе}
+  \slidetop
+  \versus{тот же процесс}{%
+    \begin{cbul}{accent}
+      \item лёгкая и редкая
+      \item общие конфигурация, контейнер, логгер
+    \end{cbul}}{отдельный рабочий сервис}{%
+    \begin{cbul}{alt}
+      \item тяжёлая, занимает ядра на час
+      \item тот же код, другой хост --- без сервера
+    \end{cbul}}
+
+  \slidegap
+  \hrulethin{0.42}
+  \rulegap
+  {\large Пора выносить --- задержки запросов \hi{повторяют} график фоновой
+    работы.}
+
+  \vspace{0.6em}
+  \aside{Фон делит с сервером пул потоков: тяжёлый пересчёт замедляет ответы.}
+\end{frame}
+
+% 95
+\begin{frame}{Фоновая работа невидима}
+  \slidetop
+  \claim{Упавший запрос видит клиент. Переставшее запускаться задание ---
+    \lo{никто}.}
+
+  \begin{cbul}{accent}
+    \item лог \hi{начала и конца} с длительностью
+    \item метрика «последний успешный запуск»
+    \item оповещение: отчёт не строился двое суток --- кто-то узнаёт утром
+  \end{cbul}
+\end{frame}
+
+% 96
+\begin{frame}[plain]
+  \keyline{Фоновая работа запускается столько раз, сколько экземпляров и
+    перезапусков.\\ Пишите её так, чтобы повтор был безвреден.}
+\end{frame}
+
+% 97
+\begin{frame}{Итог}
+  \slidetop
+  \begin{center}
+    \begin{tikzpicture}[font=\footnotesize,
+      hb/.style={box,minimum width=2.3cm,minimum height=0.9cm}]
+      \node[hb] (c1) at (0,0)    {конфигурация};
+      \node[hb] (c2) at (2.6,0)  {контейнер};
+      \node[hb] (c3) at (5.2,0)  {логгер};
+      \node[hb,draw=accent,line width=1.0pt] (c4) at (7.8,0) {сервер};
+      \node[hb] (c5) at (10.4,0) {фоновые\\сервисы};
+      \node[draw=muted,line width=0.9pt,rounded corners=3pt,inner sep=8pt,
+            fit=(c1)(c5)] (h) {};
+      \node[anchor=south west,font=\scriptsize\bfseries,text=muted]
+        at ([yshift=2pt]h.north west) {ХОСТ};
+      \foreach \i/\t in {1/ошибки,2/логирование,3/маршрутизация,4/авторизация} {
+        \node[box,minimum width=2.3cm,minimum height=0.7cm,inner sep=2pt]
+          (k\i) at ({(\i-1)*2.6},-2.1) {\t};
+      }
+      \node[box,draw=accent,line width=1.0pt,minimum width=2.3cm,minimum height=0.7cm,
+            inner sep=2pt] (k5) at (10.4,-2.1) {обработчик};
+      \foreach \i [evaluate=\i as \j using int(\i+1)] in {1,...,4}
+        \draw[arra] (k\i) -- (k\j);
+      \node[anchor=north west,font=\scriptsize\bfseries,text=muted]
+        at ([yshift=-4pt]k1.south west) {КОНВЕЙЕР: НА КАЖДЫЙ ЗАПРОС};
+    \end{tikzpicture}
+  \end{center}
+
+  \slidegap
+  \aside{Дальше --- то, что стоит в конце конвейера: обработчики, параметры
+    из запроса, ответ в JSON.}
+\end{frame}
+
+% 98
+\begin{frame}{Лабораторная 8}
+  \slidetop
+  \claim{Первый сервис --- он живёт \hi{до конца} курса.}
+
+  \begin{minipage}[t]{0.50\textwidth}
+    \begin{cbul}{accent}
+      \item шаблон \texttt{web}, минимальный \texttt{Program.cs}
+      \item middleware логирования --- класс
+      \item middleware ошибок --- класс, \hi{первый}
+      \item \texttt{/health} и бросающий эндпоинт
+      \item \texttt{BackgroundService} с \texttt{PeriodicTimer}
+    \end{cbul}
+  \end{minipage}\hfill
+  \begin{minipage}[t]{0.44\textwidth}
+    \eyebrow{проверка}\par\vspace{0.5em}
+    \begin{cbul}{alt}
+      \item \texttt{curl}: здоровье, обычный, бросающий
+      \item в логе строка на запрос и трассировка на ошибку
+      \item Ctrl+C --- остановка за секунды
+    \end{cbul}
+  \end{minipage}
+\end{frame}
+
+\end{document}
