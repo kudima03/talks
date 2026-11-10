@@ -1,0 +1,1200 @@
+% Л9 -- Эндпоинты, контракт и JSON. Slides.
+%
+% Companion to the spoken script in ../L09-endpoints-and-json.md, which is the
+% source of truth: the slides carry diagrams, code, real terminal output and
+% short marks, and the delivery lives in the script only -- this deck carries
+% no speaker notes. Slide text is in Russian because that is the content;
+% everything else in this file is English.
+%
+% Build:  make          (latexmk -pdf; engine: pdflatex)
+%
+% Every C# listing was compiled on dotnet SDK 10.0 in a scratch
+% `dotnet new web -n HelloWorld`; terminal output on the slides is captured
+% from runs of that project. See ../CLAUDE.md for the verification table.
+%
+% House rules: ../CLAUDE.md and ../../../CLAUDE.md. Theme: ../../../../theme/.
+
+\documentclass[aspectratio=169,10pt,t]{beamer}
+
+\usetheme{dotnet}
+\usetikzlibrary{arrows.meta,positioning,calc,decorations.pathreplacing,fit}
+\usepackage{array}   % ragged-right table columns
+
+% A ragged-right paragraph column: justified cells in narrow columns hyphenate
+% badly, and a split word is the one thing the back row cannot read.
+\newcolumntype{L}[1]{>{\raggedright\arraybackslash}p{#1}}
+
+\dotnetlecture{Л9}
+
+\title[Л9. Эндпоинты, контракт и JSON]{Эндпоинты, контракт и JSON}
+\author{Дмитрий Курочкин}
+\date{}
+
+% Code sizes, one step down from \footnotesize. Smaller than 6.6pt does not
+% carry to the back of the room.
+\newcommand{\codesm}{\ttfamily\fontsize{7.6}{9.0}\selectfont}
+\newcommand{\codexs}{\ttfamily\fontsize{7.0}{8.3}\selectfont}
+\newcommand{\codexxs}{\ttfamily\fontsize{6.8}{7.8}\selectfont}
+\newcommand{\termsm}{\ttfamily\fontsize{6.6}{7.9}\selectfont}
+
+% A mark at the start of a listing line, for labels set beside the listing.
+% Used through the listing's escapechar; the labels are drawn by an overlay
+% picture after the listing, so the build needs two passes (latexmk does that).
+\newcommand{\mk}[1]{\tikz[remember picture,overlay]\coordinate (#1) at (0,0.55ex);}
+
+\tikzset{
+  rawbrace/.style={decorate,decoration={brace,amplitude=4pt},hairline,
+                   line width=0.8pt},
+  rawlab/.style={anchor=west,font=\footnotesize,inner sep=0pt},
+  num/.style={anchor=west,font=\small\bfseries,text=accent,inner sep=0pt},
+  box/.style={draw=hairline,line width=0.8pt,fill=codebg,inner sep=4pt,
+              align=center,minimum height=0.9cm},
+  arr/.style={-{Straight Barb[length=1.6mm]},muted,line width=0.7pt},
+  arra/.style={-{Straight Barb[length=1.8mm]},accent,line width=0.9pt},
+  arrl/.style={-{Straight Barb[length=1.8mm]},alt,line width=0.9pt},
+}
+
+\begin{document}
+\shorthandoff{"}
+
+% ------------------------------------------------------------------ title --
+% 1
+\begin{frame}[plain]
+  \titlepagednc{Лекция 9}{Эндпоинты, контракт и JSON}{}{Дмитрий Курочкин}
+\end{frame}
+
+% ============================================== 1. TWO WAYS TO DESCRIBE ==
+\section{1. Два способа описать эндпоинт}
+
+% 2
+\begin{frame}[plain]
+  \sectionopener{1}{Два способа описать эндпоинт}{Обработчик --- это
+    \hi{делегат}.}
+\end{frame}
+
+% 3
+\begin{frame}[plain]
+  \vote{Кто видел классы с атрибутами над методами, словом
+    \texttt{Controller} в имени и базовым классом?}
+\end{frame}
+
+% 4
+\begin{frame}[fragile]{Минимальный API}
+  \vspace{0.3em}
+\begin{lstlisting}[style=csharp,basicstyle=\termsm,escapechar=|]
+|\mk{a1}|var orders = app.MapGroup("/orders");
+
+|\mk{a2}|orders.MapGet("/{id:int}", async Task<Results<Ok<OrderDto>, NotFound>> (
+|\mk{a3}|    int id, IOrderService service, CancellationToken ct) =>
+{
+    var order = await service.FindAsync(id, ct);
+|\mk{a4}|    return order is null
+        ? TypedResults.NotFound()
+        : TypedResults.Ok(order);
+});
+
+orders.MapPost("/", async Task<Created<OrderDto>> (
+    CreateOrderDto dto, IOrderService service, CancellationToken ct) =>
+{
+    var created = await service.CreateAsync(dto, ct);
+    return TypedResults.Created($"/orders/{created.Id}", created);
+});
+\end{lstlisting}
+  \begin{tikzpicture}[remember picture,overlay,every node/.style={rawlab}]
+    \node at ([xshift=10.7cm]a1) {группа};
+    \node[text=accent] at ([xshift=10.7cm]a2) {результат в типе};
+    \node at ([xshift=10.7cm]a3) {зависимости};
+    \node at ([xshift=10.7cm]a4) {готовый ответ};
+  \end{tikzpicture}
+
+  \aside{Всё об обработчике --- в \hi{одной} сигнатуре.}
+\end{frame}
+
+% 5
+\begin{frame}[fragile]{Группы}
+  \slidetop
+  \claim{Прицеплено к внешней --- \hi{наследуют} внутренние.}
+
+\begin{lstlisting}[style=csharp,basicstyle=\codesm,escapechar=|]
+|\mk{g1}|var api = app.MapGroup("/api/v1").RequireAuthorization();
+
+|\mk{g2}|var orders = api.MapGroup("/orders");
+|\mk{g3}|var users = api.MapGroup("/users");
+
+orders.MapGet("/stats", () => "public stats")
+|\mk{g4}|      .AllowAnonymous();
+\end{lstlisting}
+  \begin{tikzpicture}[remember picture,overlay,every node/.style={rawlab}]
+    \node[text=accent] at ([xshift=9.6cm]g1) {весь API закрыт одной строкой};
+    \draw[rawbrace] ([xshift=9.35cm,yshift=0.35em]g2) -- ([xshift=9.35cm,yshift=-0.3em]g3);
+    \node at ([xshift=9.6cm]$(g2)!0.5!(g3)$) {префикс и требования};
+    \node at ([xshift=9.6cm]g4) {исключение --- на маршруте};
+  \end{tikzpicture}
+
+  \slidegap
+  \aside{К группе цепляют общее: авторизацию, фильтры, теги документа.}
+\end{frame}
+
+% 6
+\begin{frame}{Откуда параметры}
+  \slidetop
+  \claim{Источник --- по \hi{типу и имени}, без атрибутов.}
+
+  {\renewcommand{\arraystretch}{1.5}
+  \begin{tabular}{@{}L{4.4cm}L{4.6cm}L{3.8cm}@{}}
+    \colhead{muted}{параметр} & \colhead{muted}{откуда} & \colhead{muted}{как понял} \\
+    \hi{\texttt{int id}}               & путь               & имя как в \texttt{\{id\}} \\
+    \hi{\texttt{IOrderService service}} & контейнер зависимостей & тип зарегистрирован \\
+    \hi{\texttt{CancellationToken ct}} & \texttt{RequestAborted} & служебный тип \\
+    \hi{\texttt{CreateOrderDto dto}}   & тело запроса, JSON & сложный тип \\
+  \end{tabular}}
+
+  \slidegap
+  \aside{Атрибут нужен там, где угадать нельзя: заголовок, другое имя.}
+\end{frame}
+
+% 7
+\begin{frame}[fragile]{Возвращаемый тип}
+  \slidetop
+  \claim{Статусы --- \hi{в сигнатуре}, а не в комментарии.}
+
+\begin{lstlisting}[style=csharp,basicstyle=\ttfamily\small]
+Task<Results<Ok<OrderDto>, NotFound>>
+\end{lstlisting}
+
+  \rulegap
+  \versus{TypedResults}{%
+    \begin{cbul}{accent}
+      \item конкретные типы: \texttt{Ok<T>}, \texttt{NotFound}
+      \item складываются в \texttt{Results<...>}
+      \item статусы видят документ и компилятор
+    \end{cbul}}{Results}{%
+    \begin{cbul}{alt}
+      \item общий \texttt{IResult}
+      \item по сигнатуре не понять, что вернёт
+      \item статусы --- только в атрибутах
+    \end{cbul}}
+
+  \rulegap
+  \aside{Без результата: объект --- 200 с JSON, строка --- текст, \texttt{Task} ---
+    пустой 200.}
+\end{frame}
+
+% 8
+\begin{frame}[fragile]{Контроллер}
+  \vspace{0.3em}
+\begin{lstlisting}[style=csharp,basicstyle=\codexxs,escapechar=|]
+|\mk{c1}|[ApiController]
+|\mk{c2}|[Route("orders")]
+public sealed class OrdersController(IOrderService service)
+|\mk{c3}|    : ControllerBase
+{
+|\mk{c4}|    [HttpGet("{id:int}")]
+    public async Task<ActionResult<OrderDto>> Get(int id, CancellationToken ct)
+    {
+        var order = await service.FindAsync(id, ct);
+|\mk{c5}|        return order is null ? NotFound() : Ok(order);
+    }
+
+    [HttpPost]
+    public async Task<ActionResult<OrderDto>> Create(
+        CreateOrderDto dto, CancellationToken ct)
+    {
+        var created = await service.CreateAsync(dto, ct);
+        return CreatedAtAction(nameof(Get), new { id = created.Id }, created);
+    }
+}
+\end{lstlisting}
+  \begin{tikzpicture}[remember picture,overlay,every node/.style={rawlab}]
+    \node[text=accent] at ([xshift=10.6cm]c1) {включает соглашения};
+    \node at ([xshift=10.6cm]c2) {маршрут на классе};
+    \node at ([xshift=10.6cm]c3) {базовый класс};
+    \node at ([xshift=10.6cm]c4) {метод HTTP и путь};
+    \node at ([xshift=10.6cm]c5) {ответы базового класса};
+  \end{tikzpicture}
+\end{frame}
+
+% 9
+\begin{frame}{Соглашения}
+  \slidetop
+  \claim{Правила, которых \lo{нет в коде}.}
+
+  {\renewcommand{\arraystretch}{1.5}
+  \begin{tabular}{@{}L{4.6cm}L{8.2cm}@{}}
+    имя на \hi{\texttt{Controller}}       & класс --- контроллер \\
+    \hi{публичный} метод                 & обработчик \\
+    сложный тип в параметре              & тело запроса \\
+    \texttt{ActionResult<T>}              & вернуть можно что угодно --- статусы \lo{не
+      видны} \\
+    экземпляр на \hi{запрос}             & поле живёт один запрос: счётчик в нём всегда
+      ноль \\
+  \end{tabular}}
+
+  \slidegap
+  \aside{Атрибуты уточняют соглашения там, где они не подходят.}
+\end{frame}
+
+% 10
+\begin{frame}[plain]
+  \vote{Мы нигде не зарегистрировали контроллер. Откуда фреймворк узнал о нём
+    и о его маршрутах?}
+\end{frame}
+
+% 11
+\begin{frame}{Как находят контроллеры}
+  \slidetop
+  \claim{При старте, один раз, через \hi{рефлексию}.}
+
+  \begin{center}
+    \begin{tikzpicture}
+      \foreach \i/\t in {1/сборка,2/метаданные,3/все типы,
+                         4/{\texttt{ControllerBase}\\или имя},5/атрибуты\\методов} {
+        \node[box,minimum width=1.95cm,minimum height=1.1cm,inner sep=1pt,font=\scriptsize]
+          (r\i) at ({(\i-1)*2.32},0) {\t};
+      }
+      \node[box,draw=accent,line width=1.0pt,minimum width=1.95cm,minimum height=1.1cm,
+            inner sep=1pt,font=\scriptsize\bfseries] (r6) at (11.6,0) {таблица\\маршрутов};
+      \foreach \i [evaluate=\i as \j using int(\i+1)] in {1,...,5}
+        \draw[arr] (r\i) -- (r\j);
+    \end{tikzpicture}
+  \end{center}
+
+  \slidegap
+  \begin{cbul}{accent}
+    \item сборка описывает себя сама: каждый тип, каждый метод, каждый атрибут
+    \item подходящий класс --- наследует \texttt{ControllerBase} или назван на
+      \texttt{Controller}
+    \item вы написали класс --- и он работает, \hi{ничего не регистрируя}
+  \end{cbul}
+\end{frame}
+
+% 12
+\begin{frame}{Цена}
+  \slidetop
+  \versus{Минимальный API}{%
+    \begin{cbul}{accent}
+      \item прямая ссылка на делегат
+      \item генератор кода вместо рефлексии
+      \item AOT и обрезка --- \hi{да}
+      \item легче в бенчмарках
+    \end{cbul}}{Контроллеры}{%
+    \begin{cbul}{alt}
+      \item находятся рефлексией по имени
+      \item обрезка выкинет: ссылок на класс нет
+      \item AOT --- \lo{не поддерживается}
+      \item фильтры и активация на каждом запросе
+    \end{cbul}}
+
+  \slidegap
+  \hrulethin{0.42}
+  \rulegap
+  \aside{Генератор видит лямбду в \texttt{Map} и метод по имени. Делегат в
+    переменной в цикле --- откат на рефлексию.}
+\end{frame}
+
+% 13
+\begin{frame}{Что берём}
+  \slidetop
+  \claim{Новый сервис --- \hi{минимальный API}.}
+
+  {\renewcommand{\arraystretch}{1.6}
+  \begin{tabular}{@{}L{4.2cm}L{8.6cm}@{}}
+    \hi{\textbf{всё в одном месте}} & путь, параметры, зависимости, результат ---
+      одна сигнатура \\
+    \hi{\textbf{честность типов}}   & статусы проверяет компилятор и читает документ \\
+    \hi{\textbf{AOT и обрезка}}     & меньше магии, даже если AOT не нужен \\
+  \end{tabular}}
+
+  \slidegap
+  \aside{Контроллеры не устарели. Проект уже на них, нужны их механизмы, команда
+    знает их --- переписывать не нужно.}
+\end{frame}
+
+% 14
+\begin{frame}[fragile]{Обработчики по ресурсам}
+  \vspace{0.3em}
+\begin{lstlisting}[style=csharp,basicstyle=\codexxs,escapechar=|]
+public static class OrderEndpoints
+{
+|\mk{o1}|    public static IEndpointRouteBuilder MapOrders(
+        this IEndpointRouteBuilder app)
+    {
+|\mk{o2}|        var orders = app.MapGroup("/orders").WithTags("Orders");
+
+|\mk{o3}|        orders.MapGet("/{id:int}", GetById).WithName("GetOrder");
+        orders.MapPost("/", Create);
+        return app;
+    }
+
+|\mk{o4}|    static async Task<Results<Ok<OrderDto>, NotFound>> GetById(
+        int id, IOrderService service, CancellationToken ct) =>
+        await service.FindAsync(id, ct) is { } order
+            ? TypedResults.Ok(order)
+            : TypedResults.NotFound();
+}
+
+|\mk{o5}|app.MapOrders();   // Program.cs
+\end{lstlisting}
+  \begin{tikzpicture}[remember picture,overlay,every node/.style={rawlab}]
+    \node at ([xshift=9.9cm]o1) {расширение на ресурс};
+    \node at ([xshift=9.9cm]o2) {метаданные цепочкой};
+    \node[text=accent] at ([xshift=9.9cm]o3) {обработчик по имени};
+    \node at ([xshift=9.9cm]o4) {зовётся из теста};
+    \node at ([xshift=9.9cm]o5) {файл запуска --- список};
+  \end{tikzpicture}
+\end{frame}
+
+% 15
+\begin{frame}[plain]
+  \keyline{Обработчик --- делегат, и вся его сигнатура на виду.\\
+    Контроллеры дают то же через соглашения и рефлексию.}
+\end{frame}
+
+% ============================================== 2. FROM REQUEST TO TYPES ==
+\section{2. От запроса к типам .NET}
+
+% 16
+\begin{frame}[plain]
+  \sectionopener{2}{От запроса к типам .NET}{Три шага, и \hi{каждый} может
+    сломаться.}
+\end{frame}
+
+% 17
+\begin{frame}{Три шага}
+  \slidetop
+  \begin{center}
+    \begin{tikzpicture}[font=\footnotesize,
+      st/.style={box,minimum width=2.25cm,minimum height=1.2cm,inner sep=2pt}]
+      \node[st] (s1) at (0,0)     {запрос\\{\scriptsize строки, байты}};
+      \node[st] (s2) at (2.85,0)  {маршрутизация\\{\scriptsize найти обработчик}};
+      \node[st] (s3) at (5.7,0)   {привязка\\{\scriptsize достать данные}};
+      \node[st] (s4) at (8.55,0)  {разбор\\{\scriptsize строку в тип}};
+      \node[st,draw=accent,line width=1.0pt] (s5) at (11.4,0)
+        {параметры\\{\scriptsize обработчика}};
+      \foreach \a/\b in {s1/s2,s2/s3,s3/s4,s4/s5} \draw[arra] (\a) -- (\b);
+      \node[font=\scriptsize,text=alt,below=0.25cm,align=center] at (s2.south)
+        {маршрут\\не совпал};
+      \node[font=\scriptsize,text=alt,below=0.25cm,align=center] at (s3.south)
+        {источник\\не тот};
+      \node[font=\scriptsize,text=alt,below=0.25cm,align=center] at (s4.south)
+        {разобрано\\не так};
+    \end{tikzpicture}
+  \end{center}
+
+  \slidegap
+  \aside{Всё, что пришло из пути, строки запроса и заголовков, --- строки. Тело ---
+    байты. Параметр --- число, дата, перечисление, объект.}
+\end{frame}
+
+% 18
+\begin{frame}{Шаблоны маршрутов}
+  \slidetop
+  \claim{Фигурные скобки --- \hi{параметр}, всё остальное --- буквально.}
+
+  {\renewcommand{\arraystretch}{1.35}
+  \begin{tabular}{@{}L{5.6cm}L{7.2cm}@{}}
+    \texttt{/orders}                  & литерал: совпадает буквально \\
+    \texttt{/orders/\{id\}}           & параметр: любой сегмент \\
+    \hi{\texttt{/orders/\{id:int\}}}  & с ограничением: только целое \\
+    \texttt{/orders/\{id:int:min(1)\}} & два ограничения \\
+    \texttt{/files/\{*path\}}         & остаток пути, с косыми чертами \\
+    \texttt{/orders/\{page=1\}}       & значение по умолчанию \\
+  \end{tabular}}
+\end{frame}
+
+% 19
+\begin{frame}[fragile]{Ограничение выбирает маршрут}
+  \slidetop
+  \claim{Ограничение --- это \hi{выбор маршрута}, а не валидация.}
+
+\begin{lstlisting}[style=term,basicstyle=\termsm]
+$ curl -i http://localhost:5090/orders/abc
+HTTP/1.1 404 Not Found
+Content-Length: 0
+Date: Tue, 10 Nov 2026 11:10:57 GMT
+Server: Kestrel
+\end{lstlisting}
+
+  \slidegap
+  {\renewcommand{\arraystretch}{1.25}\small
+  \begin{tabular}{@{}L{4.6cm}L{8.2cm}@{}}
+    \hi{\texttt{/orders/latest}}       & литерал --- \hi{важнее} всех \\
+    \texttt{/orders/\{id:int\}}        & параметр с ограничением \\
+    \texttt{/orders/\{id\}}            & параметр без ограничения \\
+  \end{tabular}}
+
+  \rulegap
+  \aside{Два равных шаблона --- \lo{\texttt{AmbiguousMatchException}} на запросе,
+    не на старте. Анализатор предупредит при сборке, если видит оба рядом.}
+\end{frame}
+
+% 20
+\begin{frame}[fragile]{Что маршрутизация делает сама}
+  \slidetop
+  {\renewcommand{\arraystretch}{1.3}
+  \begin{tabular}{@{}L{4.6cm}L{8.2cm}@{}}
+    регистр пути           & \texttt{/Orders/1} --- это \texttt{/orders/1} \\
+    косая черта в конце     & \texttt{/orders/1/} --- это \texttt{/orders/1} \\
+    имя в строке запроса    & \texttt{Page} --- это \texttt{page} \\
+    \hi{метод не тот}       & \hi{405} и заголовок \texttt{Allow} \\
+  \end{tabular}}
+
+  \slidegap
+\begin{lstlisting}[style=term,basicstyle=\termsm]
+$ curl -i -X PUT http://localhost:5090/orders/1
+HTTP/1.1 405 Method Not Allowed
+Content-Length: 0
+Date: Tue, 10 Nov 2026 11:10:57 GMT
+Server: Kestrel
+Allow: GET
+\end{lstlisting}
+
+  \rulegap
+  \aside{\texttt{HEAD} на маршрут с \texttt{MapGet} --- тоже \lo{405}: его
+    разрешают явно.}
+\end{frame}
+
+% 21
+\begin{frame}[fragile]{Привязка}
+  \vspace{0.3em}
+\begin{lstlisting}[style=csharp,basicstyle=\codexs,escapechar=|]
+app.MapGet("/orders/{id:int}/items", (
+|\mk{p1}|    int id,
+|\mk{p2}|    IOrderService service,
+|\mk{p3}|    CancellationToken ct,
+|\mk{p4}|    int page = 1,
+|\mk{p5}|    [FromQuery(Name = "size")] int pageSize = 20,
+|\mk{p6}|    [FromHeader(Name = "X-Request-Id")] string? requestId = null)
+    => service.GetItemsAsync(id, page, pageSize, ct));
+
+app.MapPost("/orders", (
+|\mk{p7}|    CreateOrderDto dto, IOrderService service, CancellationToken ct)
+    => service.CreateAsync(dto, ct));
+\end{lstlisting}
+  \begin{tikzpicture}[remember picture,overlay,every node/.style={rawlab}]
+    \node at ([xshift=10.5cm]p1) {из пути};
+    \node at ([xshift=10.5cm]p2) {из контейнера};
+    \node at ([xshift=10.5cm]p3) {из контекста};
+    \node at ([xshift=10.5cm]p4) {строка запроса};
+    \node at ([xshift=10.5cm]p5) {под другим именем};
+    \node at ([xshift=10.5cm]p6) {из заголовка};
+    \node[text=accent] at ([xshift=10.5cm]p7) {\texttt{dto} --- из тела};
+  \end{tikzpicture}
+
+  \slidegap
+  \aside{Сначала обязательные, потом со значениями по умолчанию --- как у любого
+    метода. Значение по умолчанию делает параметр \hi{необязательным}.}
+\end{frame}
+
+% 22
+\begin{frame}[fragile]{Источники}
+  \slidetop
+  {\renewcommand{\arraystretch}{1.22}\small
+  \begin{tabular}{@{}L{3.4cm}L{9.4cm}@{}}
+    \hi{путь}           & имя совпало с параметром шаблона \\
+    \hi{строка запроса} & простой тип не из пути; \texttt{ids=1\&ids=2} --- массив \\
+    заголовок           & только с \texttt{[FromHeader]}: по имени не угадать \\
+    \hi{тело}           & сложный тип, JSON; такой параметр --- \lo{один} \\
+    форма               & \texttt{[FromForm]}: HTML-форма, файлы \\
+  \end{tabular}}
+
+  \slidegap
+\begin{lstlisting}[style=term,basicstyle=\termsm]
+$ curl -i -d @order.json http://localhost:5090/orders
+HTTP/1.1 415 Unsupported Media Type
+Content-Length: 0
+Date: Tue, 10 Nov 2026 11:10:57 GMT
+Server: Kestrel
+\end{lstlisting}
+
+  \rulegap
+  \aside{«Тело приходит пустым» --- сначала \hi{\texttt{Content-Type}}:
+    \texttt{curl -d} шлёт форму. Десять параметров --- один объект с
+    \texttt{[AsParameters]}.}
+\end{frame}
+
+% 23
+\begin{frame}[fragile]{Свой тип в параметре}
+  \vspace{0.3em}
+\begin{lstlisting}[style=csharp,basicstyle=\codexs,escapechar=`]
+public readonly record struct Email(string Value)
+{
+`\mk{e1}`    public static bool TryParse(string? s, out Email email)
+    {
+        email = default;
+        if (string.IsNullOrWhiteSpace(s) || !s.Contains('@')) return false;
+        email = new Email(s.Trim().ToLowerInvariant());
+        return true;
+    }
+}
+
+`\mk{e2}`app.MapGet("/customers/by-email", (Email email) => new CustomerDto(email, "Anna"));
+\end{lstlisting}
+  \begin{tikzpicture}[remember picture,overlay,every node/.style={rawlab}]
+    \node[text=accent] at ([xshift=9.2cm]e1) {фреймворк найдёт сам};
+  \end{tikzpicture}
+
+\begin{lstlisting}[style=term,basicstyle=\termsm]
+$ curl -s 'http://localhost:5090/customers/by-email?email=Anna@Example.com'
+{"email":"anna@example.com","name":"Anna"}
+\end{lstlisting}
+
+  \rulegap
+  \aside{Формат проверен при привязке, \hi{один раз}. \texttt{email=bad} --- 400.}
+\end{frame}
+
+% 24
+\begin{frame}[plain]
+  \vote{Параметр типа \texttt{decimal}, в строке запроса пришло
+    \texttt{12,5}. Что получит обработчик?}
+\end{frame}
+
+% 25
+\begin{frame}[fragile]{Четыре ловушки разбора}
+  \slidetop
+\begin{lstlisting}[style=term,basicstyle=\termsm]
+$ curl -s 'http://localhost:5090/price?amount=12,5'
+125
+\end{lstlisting}
+
+  \slidegap
+  {\renewcommand{\arraystretch}{1.35}
+  \begin{tabular}{@{}L{4.6cm}L{8.2cm}@{}}
+    \texttt{decimal}: \texttt{12,5}    & \lo{125}: запятая --- разделитель тысяч \\
+    \texttt{DateTime}: \texttt{03/04/2026} & \lo{4 марта}: месяц первым \\
+    \texttt{enum}: \texttt{99}, \texttt{paid} & значение, которого нет; 400 \\
+    \texttt{int page = 1}: \texttt{page=} & 400, а \lo{не} умолчание \\
+  \end{tabular}}
+
+  \slidegap
+  \aside{Разбор по \hi{инвариантной} культуре --- одинаково на любой машине, и на
+    машине с русской локалью тоже. Формат --- в контракте, всё вне формата ---
+    отказ.}
+\end{frame}
+
+% 26
+\begin{frame}{DTO $\neq$ сущность}
+  \slidetop
+  \begin{center}
+    \begin{tikzpicture}[font=\footnotesize]
+      \node[box,minimum width=4.6cm,minimum height=2.7cm,align=left] (e) at (0,0)
+        {\ttfamily Id\\\ttfamily CustomerEmail\\\ttfamily Status\\\ttfamily Items\\
+         \ttfamily\lo{CostPrice}\\\ttfamily\lo{InternalNote}};
+      \node[box,draw=accent,line width=1.0pt,minimum width=4.6cm,minimum height=2.7cm,
+            align=left] (d) at (8.2,0)
+        {\ttfamily Id\\\ttfamily CustomerEmail\\\ttfamily Status\\\ttfamily Total};
+      \node[font=\scriptsize\bfseries,text=muted,above=0.3em] at (e.north)
+        {СУЩНОСТЬ --- КАК ХРАНИМ};
+      \node[font=\scriptsize\bfseries,text=accent,above=0.3em] at (d.north)
+        {DTO --- ЧТО ОБЕЩАЛИ};
+      \draw[arra] (e) -- node[above,font=\scriptsize,text=accent]
+        {\texttt{ToDto()}} node[below,font=\scriptsize,text=muted] {на границе} (d);
+    \end{tikzpicture}
+  \end{center}
+
+  \slidegap
+  \aside{Внутренние поля, связи, то, что нужно базе, --- в сущности. Наружу ---
+    ровно нужные поля в удобной клиенту форме.}
+\end{frame}
+
+% 27
+\begin{frame}[plain]
+  \vote{Зачем два типа, если поля почти совпадают?}
+\end{frame}
+
+% 28
+\begin{frame}{Зачем DTO}
+  \slidetop
+  \claim{DTO --- это \hi{контракт}, записанный типом.}
+
+  {\renewcommand{\arraystretch}{1.6}
+  \begin{tabular}{@{}L{4.6cm}L{8.2cm}@{}}
+    \hi{\textbf{не отдать лишнее}}       & себестоимость, внутренние заметки, хэш
+      пароля \\
+    \hi{\textbf{зафиксировать контракт}} & меняется, только когда вы решили изменить
+      контракт \\
+    \hi{\textbf{белый список на входе}}  & клиент задаёт только то, что можно: без
+      \texttt{Id}, статуса, даты \\
+  \end{tabular}}
+
+  \slidegap
+  \aside{Принять сущность целиком --- заказ «оплачен», который никто не оплачивал:
+    \lo{избыточная привязка}.}
+\end{frame}
+
+% 29
+\begin{frame}[fragile]{Несколько DTO на ресурс}
+  \vspace{0.3em}
+\begin{lstlisting}[style=csharp,basicstyle=\codexs,escapechar=|]
+|\mk{d1}|public sealed record OrderDto(
+    int Id, string CustomerEmail, OrderStatus Status, decimal Total);
+|\mk{d2}|public sealed record OrderListItemDto(int Id, OrderStatus Status);
+|\mk{d3}|public sealed record CreateOrderDto(
+    string CustomerEmail,
+    List<OrderItemDto> Items,
+    DateOnly? DeliveryDate = null);
+
+public static class OrderMapping
+{
+|\mk{d4}|    public static OrderDto ToDto(this Order order) =>
+        new(order.Id, order.CustomerEmail, order.Status,
+            order.Items.Sum(i => i.Price * i.Quantity));
+}
+\end{lstlisting}
+  \begin{tikzpicture}[remember picture,overlay]
+    \foreach \m/\n in {d1/1,d2/2,d3/3,d4/4} \node[num] at ([xshift=11.9cm]\m) {\n};
+  \end{tikzpicture}
+
+  \slidegap
+  \aside{\hi{1} ответ \quad \hi{2} строка списка \quad \hi{3} создание --- без
+    \texttt{Id} и статуса \quad \hi{4} преобразование на границе, руками}
+\end{frame}
+
+% 30
+\begin{frame}[plain]
+  \keyline{От запроса до параметров три шага, и каждый может сломаться.\\
+    Наружу уходит DTO --- и никогда сущность.}
+\end{frame}
+
+% ======================================================== 3. VALIDATION ==
+\section{3. Валидация}
+
+% 31
+\begin{frame}[plain]
+  \sectionopener{3}{Валидация}{Невалидный запрос --- \hi{исключение}, ответ
+    формирует middleware.}
+\end{frame}
+
+% 32
+\begin{frame}{Три ступени}
+  \slidetop
+  {\renewcommand{\arraystretch}{1.5}
+  \begin{tabular}{@{}L{3.6cm}L{4.7cm}L{4.5cm}@{}}
+    & \colhead{accent}{даёт} & \colhead{alt}{не даёт} \\
+    \textbf{атрибуты}              & простые правила рядом с полем & правил на два поля и
+      с зависимостями \\
+    \textbf{свои правила}          & код: даты, суммы, условия     & ответа, куда его
+      положить \\
+    \hi{\textbf{FluentValidation}} & класс на DTO, правила цепочкой, ошибки по полям
+      & --- \\
+  \end{tabular}}
+
+  \slidegap
+  \aside{В .NET 10 атрибуты работают и в минимальном API --- одной регистрацией. Но
+    ответ --- в \lo{чужом} формате.}
+\end{frame}
+
+% 33
+\begin{frame}[fragile]{Валидатор}
+  \vspace{0.3em}
+\begin{lstlisting}[style=csharp,basicstyle=\codexs,escapechar=`]
+`\mk{v1}`public sealed class CreateOrderDtoValidator
+    : AbstractValidator<CreateOrderDto>
+{
+    public CreateOrderDtoValidator()
+    {
+`\mk{v2}`        RuleFor(x => x.CustomerEmail).NotEmpty().EmailAddress();
+        RuleFor(x => x.Items).NotEmpty()
+            .WithMessage("Order must have at least one item");
+`\mk{v3}`        RuleForEach(x => x.Items).ChildRules(item =>
+        {
+            item.RuleFor(i => i.Quantity).GreaterThan(0);
+            item.RuleFor(i => i.Price).GreaterThanOrEqualTo(0);
+        });
+        RuleFor(x => x.DeliveryDate)
+`\mk{v4}`            .Must(d => d is null
+                || d > DateOnly.FromDateTime(DateTime.UtcNow))
+            .WithMessage("Delivery date must be in the future");
+    }
+}
+\end{lstlisting}
+  \begin{tikzpicture}[remember picture,overlay,every node/.style={rawlab}]
+    \node at ([xshift=9.6cm]v1) {класс на один DTO};
+    \node at ([xshift=9.6cm]v2) {читается как предложение};
+    \node at ([xshift=9.6cm]v3) {каждая позиция};
+    \node[text=accent] at ([xshift=9.6cm]v4) {свой предикат и сообщение};
+  \end{tikzpicture}
+\end{frame}
+
+% 34
+\begin{frame}[plain]
+  \vote{Валидатор нашёл ошибки. Что делает обработчик?}
+\end{frame}
+
+% 35
+\begin{frame}{Два вида плохого входа}
+  \slidetop
+  \versus{Ошибка контракта}{%
+    \begin{cbul}{accent}
+      \item клиент нарушил договор
+      \item отрицательное количество
+      \item исключение
+      \item 422 из middleware
+      \item до логики
+    \end{cbul}}{Ошибка сценария}{%
+    \begin{cbul}{alt}
+      \item часть логики
+      \item «на складе нет»
+      \item возвращаемое значение
+      \item решает обработчик
+      \item внутри логики
+    \end{cbul}}
+
+  \slidegap
+  \hrulethin{0.42}
+  \rulegap
+  {\large Невалидный запрос --- \hi{исключение}, а не ветка в обработчике.}
+\end{frame}
+
+% 36
+\begin{frame}[fragile]{Фильтр конечной точки}
+  \vspace{0.3em}
+\begin{lstlisting}[style=csharp,basicstyle=\codexxs,escapechar=|]
+|\mk{f1}|orders.AddEndpointFilter(async (context, next) =>
+{
+|\mk{f2}|    var dto = context.Arguments.OfType<CreateOrderDto>()
+        .FirstOrDefault();
+    if (dto is not null)
+    {
+|\mk{f3}|        var validator = context.HttpContext.RequestServices
+            .GetRequiredService<IValidator<CreateOrderDto>>();
+        var result = await validator.ValidateAsync(
+            dto, context.HttpContext.RequestAborted);
+        if (!result.IsValid)
+|\mk{f4}|            throw new ValidationException(result.Errors);
+    }
+    return await next(context);
+});
+
+|\mk{f5}|// ErrorHandlingMiddleware (L8), new branches:
+// ValidationException     => 422 + errors by field
+// BadHttpRequestException => bad.StatusCode (400, 413, 415)
+\end{lstlisting}
+  \begin{tikzpicture}[remember picture,overlay,every node/.style={rawlab}]
+    \node at ([xshift=9.6cm]f1) {фильтр на группе};
+    \node at ([xshift=9.6cm]f2) {DTO среди аргументов};
+    \node at ([xshift=9.6cm]f3) {валидатор из контейнера};
+    \node[text=alt] at ([xshift=9.6cm]f4) {бросок, не возврат};
+    \node[text=accent] at ([xshift=9.6cm]f5) {ветки в middleware};
+  \end{tikzpicture}
+\end{frame}
+
+% 37
+\begin{frame}[fragile]{Три места}
+  \slidetop
+  \begin{center}
+    \begin{tikzpicture}[font=\footnotesize,
+      tb/.style={box,minimum width=3.0cm,minimum height=1.0cm}]
+      \node[tb] (t1) at (0,0)    {\textbf{валидатор}\\правила};
+      \node[tb] (t2) at (3.6,0)  {\textbf{фильтр}\\проверка};
+      \node[tb] (t3) at (7.2,0)  {\textbf{middleware}\\ответ};
+      \node[tb,draw=accent,line width=1.0pt] (t4) at (10.8,0)
+        {\textbf{обработчик}\\не знает об ошибках};
+    \end{tikzpicture}
+  \end{center}
+
+\begin{lstlisting}[style=term,basicstyle=\termsm]
+$ curl -s --json @bad-order.json http://localhost:5090/orders
+{
+  "error": "Validation failed",
+  "traceId": "0HNPV3D7GA67A:00000001",
+  "errors": {
+    "customerEmail": [
+      "'Customer Email' is not a valid email address."
+    ],
+    "items[0].quantity": [
+      "'Quantity' must be greater than '0'."
+    ]
+  }
+}
+\end{lstlisting}
+
+  \aside{Один формат для всех ошибок. Имена полей --- как в JSON: клиент подсветит
+    \hi{нужное поле} формы.}
+\end{frame}
+
+% 38
+\begin{frame}{Граница валидатора}
+  \slidetop
+  \versus{Валидатор}{%
+    \begin{cbul}{accent}
+      \item запрос сам по себе
+      \item число положительное, строка не пустая
+      \item без базы и внешних сервисов
+      \item 422
+    \end{cbul}}{Логика}{%
+    \begin{cbul}{alt}
+      \item запрос относительно мира
+      \item «такой email уже есть»
+      \item нужны данные и состояние
+      \item 409 или значение
+    \end{cbul}}
+
+  \slidegap
+  \hrulethin{0.42}
+  \rulegap
+  \aside{Размер страницы в сто тысяч и список на миллион позиций --- тоже
+    \lo{невалидный} запрос: отклонить до базы. Валидация --- не авторизация.}
+\end{frame}
+
+% ======================================================== 4. JSON ==
+\section{4. JSON и сериализация}
+
+% 39
+\begin{frame}[plain]
+  \sectionopener{4}{JSON и сериализация}{JSON --- это строки и числа; всё
+    остальное --- \hi{договорённость}.}
+\end{frame}
+
+% 40
+\begin{frame}[plain]
+  \vote{В C\# свойство называется \texttt{CustomerEmail}. Как оно будет называться
+    в JSON, если ничего не настраивать?}
+\end{frame}
+
+% 41
+\begin{frame}[fragile]{JSON и типы .NET}
+  \slidetop
+  {\renewcommand{\arraystretch}{1.2}\small
+  \begin{tabular}{@{}L{4.0cm}L{8.8cm}@{}}
+    имена                 & \hi{camelCase} при записи \\
+    регистр при чтении    & не важен \\
+    \texttt{null}         & пишется как \texttt{null} \\
+    \texttt{enum}         & \lo{число}; строка --- по настройке \\
+    даты                  & ISO 8601: \texttt{2026-11-10}, смещение, если есть \\
+    \texttt{decimal}      & число с нужными знаками \\
+    нет поля              & значение по умолчанию, \lo{молча} \\
+  \end{tabular}}
+
+  \slidegap
+\begin{lstlisting}[style=term,basicstyle=\termsm]
+$ curl -s localhost:5090/sample
+{"customerEmail":"a@b.by","status":1,"date":"2026-11-10","total":12.50,"note":null}
+\end{lstlisting}
+
+  \rulegap
+  \aside{Веб-умолчания --- не умолчания сериализатора: их выставили \hi{за вас}.}
+\end{frame}
+
+% 42
+\begin{frame}{Числа и деньги}
+  \slidetop
+  \claim{JSON не различает целое и дробное. Клиент --- \lo{различает}.}
+
+  {\renewcommand{\arraystretch}{1.6}
+  \begin{tabular}{@{}L{4.4cm}L{8.4cm}@{}}
+    \hi{\textbf{больше $2^{53}$}}      & клиент на JavaScript теряет младшие разряды
+      --- идентификатор строкой \\
+    \hi{\textbf{\texttt{decimal}}}     & уходит числом: \texttt{25.00}; клиент читает
+      его в \texttt{double} \\
+    \hi{\textbf{деньги}}               & строкой или целым в копейках \\
+  \end{tabular}}
+
+  \slidegap
+  \aside{Решение контракта --- до первого клиента. Потом это ломающее изменение.}
+\end{frame}
+
+% 43
+\begin{frame}[plain]
+  \vote{Способ оплаты: карта, счёт или наличные, у каждого свои поля. Как
+    записать это в JSON и прочитать обратно?}
+\end{frame}
+
+% 44
+\begin{frame}[fragile]{Полиморфизм}
+  \vspace{0.3em}
+\begin{lstlisting}[style=csharp,basicstyle=\codexs,escapechar=|]
+|\mk{y1}|[JsonPolymorphic(TypeDiscriminatorPropertyName = "kind")]
+|\mk{y2}|[JsonDerivedType(typeof(CardPayment), "card")]
+|\mk{y3}|[JsonDerivedType(typeof(InvoicePayment), "invoice")]
+public abstract record Payment(decimal Amount);
+
+public sealed record CardPayment(decimal Amount, string Last4)
+    : Payment(Amount);
+public sealed record InvoicePayment(decimal Amount, string InvoiceNumber)
+    : Payment(Amount);
+\end{lstlisting}
+  \begin{tikzpicture}[remember picture,overlay,every node/.style={rawlab}]
+    \node[text=accent] at ([xshift=9.0cm]y1) {имя дискриминатора};
+    \draw[rawbrace] ([xshift=8.75cm,yshift=0.35em]y2) -- ([xshift=8.75cm,yshift=-0.3em]y3);
+    \node at ([xshift=9.0cm]$(y2)!0.5!(y3)$) {значение для наследника};
+  \end{tikzpicture}
+
+  \slidegap
+\begin{lstlisting}[style=json,basicstyle=\codesm]
+{"kind":"card","last4":"4242","amount":100}
+\end{lstlisting}
+
+  \slidegap
+  \aside{JSON не несёт типов --- тип несёт \hi{поле}, и оно становится частью
+    контракта.}
+\end{frame}
+
+% 45
+\begin{frame}{Почему полиморфизм болит}
+  \slidetop
+  {\renewcommand{\arraystretch}{1.35}\small
+  \begin{tabular}{@{}L{4.4cm}L{8.4cm}@{}}
+    \lo{\textbf{дискриминатор не первый}} & \lo{500}: \texttt{must specify a type
+      discriminator} \\
+    \lo{\textbf{неизвестное значение}}    & ошибка чтения: клиент старой версии падает
+      целиком \\
+    \lo{\textbf{переименовать}}           & нельзя --- никогда \\
+    \lo{\textbf{документ}}                & описывает варианты неидеально \\
+  \end{tabular}}
+
+  \slidegap
+  \eyebrow{Две скучные альтернативы}\par\vspace{0.5em}
+  \begin{cbul}{accent}
+    \item отдельные маршруты на каждый способ, у каждого плоский DTO
+    \item поле-перечисление «вид» и условные правила в валидаторе
+  \end{cbul}
+\end{frame}
+
+% 46
+\begin{frame}[fragile]{Настройки --- один раз}
+  \slidetop
+  \claim{Контракт \hi{однородный}: настройки на всё приложение.}
+
+\begin{lstlisting}[style=csharp,basicstyle=\codesm,escapechar=|]
+builder.Services.ConfigureHttpJsonOptions(options =>
+{
+    var json = options.SerializerOptions;
+|\mk{j1}|    json.Converters.Add(new JsonStringEnumConverter());
+|\mk{j2}|    json.Converters.Add(new EmailJsonConverter());
+|\mk{j3}|    json.RespectNullableAnnotations = true;
+|\mk{j4}|    json.RespectRequiredConstructorParameters = true;
+|\mk{j5}|    json.WriteIndented = builder.Environment.IsDevelopment();
+});
+\end{lstlisting}
+  \begin{tikzpicture}[remember picture,overlay,every node/.style={rawlab}]
+    \node at ([xshift=10.1cm]j1) {перечисления строками};
+    \node at ([xshift=10.1cm]j2) {свой конвертер};
+    \node at ([xshift=10.1cm]j3) {\texttt{null} в обязательном};
+    \node at ([xshift=10.1cm]j4) {нет поля --- ошибка};
+  \end{tikzpicture}
+
+  \slidegap
+  \aside{Отступы --- единственная развилка по окружению. Настройка в отдельном
+    обработчике --- \lo{никогда}.}
+\end{frame}
+
+% 47
+\begin{frame}[fragile]{Свой конвертер}
+  \vspace{0.3em}
+\begin{lstlisting}[style=csharp,basicstyle=\codexxs]
+public sealed class EmailJsonConverter : JsonConverter<Email>
+{
+    public override Email Read(
+        ref Utf8JsonReader reader, Type type, JsonSerializerOptions options) =>
+        Email.TryParse(reader.GetString(), out var email)
+            ? email
+            : throw new JsonException("Not an email");
+
+    public override void Write(
+        Utf8JsonWriter writer, Email value, JsonSerializerOptions options) =>
+        writer.WriteStringValue(value.Value);
+}
+\end{lstlisting}
+
+  \rulegap
+  {\renewcommand{\arraystretch}{1.3}
+  \begin{tabular}{@{}L{3.4cm}l@{}}
+    \lo{без конвертера} & {\codexs \{"email":\{"value":"anna@example.com"\},"name":"Anna"\}} \\
+    \hi{с конвертером}  & {\codexs \{"email":"anna@example.com","name":"Anna"\}} \\
+  \end{tabular}}
+
+  \rulegap
+  \aside{Тип с одним полем ведёт себя в JSON как \hi{строка}. Конвертер находится
+    по типу свойства.}
+\end{frame}
+
+% 48
+\begin{frame}[fragile]{Генератор кода}
+  \vspace{0.3em}
+\begin{lstlisting}[style=csharp,basicstyle=\codesm,escapechar=|]
+|\mk{x1}|[JsonSerializable(typeof(OrderDto))]
+[JsonSerializable(typeof(CreateOrderDto))]
+[JsonSerializable(typeof(Payment))]
+|\mk{x2}|internal sealed partial class AppJsonContext
+    : JsonSerializerContext;
+
+builder.Services.ConfigureHttpJsonOptions(options =>
+|\mk{x3}|    options.SerializerOptions.TypeInfoResolverChain
+        .Insert(0, AppJsonContext.Default));
+\end{lstlisting}
+  \begin{tikzpicture}[remember picture,overlay,every node/.style={rawlab}]
+    \node at ([xshift=9.4cm]x1) {по атрибуту на тип контракта};
+    \node[text=accent] at ([xshift=9.4cm]x2) {вторую половину пишет генератор};
+    \node at ([xshift=9.4cm]x3) {сначала контекст, потом рефлексия};
+  \end{tikzpicture}
+
+  \slidegap
+  \begin{cbul}{accent}
+    \item под AOT --- \hi{обязательно}: тип, забытый в контексте, --- исключение на
+      первом запросе
+    \item без AOT --- быстрее старт, все типы контракта в одном месте
+    \item в контексте --- DTO, а не сущности
+  \end{cbul}
+\end{frame}
+
+% 49
+\begin{frame}[plain]
+  \statement{Сериализация --- \lo{слабое место} платформы. Кто напишет
+    нормальный сериализатор --- я первым на него \hi{перейду}.}
+\end{frame}
+
+% 50
+\begin{frame}[fragile]{Стриминг ответа}
+  \vspace{0.3em}
+\begin{lstlisting}[style=csharp,basicstyle=\codexs,escapechar=|]
+|\mk{s1}|app.MapGet("/orders/export",
+    (IOrderService service, CancellationToken ct) => service.ExportAsync(ct));
+
+public async IAsyncEnumerable<OrderDto> ExportAsync(
+|\mk{s2}|    [EnumeratorCancellation] CancellationToken ct)
+{
+    await foreach (var order in repository.ReadAllAsync(ct))
+|\mk{s3}|        yield return order.ToDto();
+}
+\end{lstlisting}
+  \begin{tikzpicture}[remember picture,overlay,every node/.style={rawlab}]
+    \node at ([xshift=9.8cm]s1) {последовательность};
+    \node at ([xshift=9.8cm]s2) {токен --- внутрь};
+    \node[text=accent] at ([xshift=9.8cm]s3) {первый уходит сразу};
+  \end{tikzpicture}
+
+\begin{lstlisting}[style=term,basicstyle=\termsm]
+$ curl -i http://localhost:5090/orders/export
+HTTP/1.1 200 OK
+Content-Type: application/json; charset=utf-8
+Date: Tue, 10 Nov 2026 11:10:57 GMT
+Server: Kestrel
+Transfer-Encoding: chunked
+
+[{"id":1,"customerEmail":"anna@example.com","status":"Paid","total":25.00},{"id":2,...
+\end{lstlisting}
+
+\end{frame}
+
+% 51
+\begin{frame}[fragile]{Цена стриминга}
+  \slidetop
+  \claim{Статус уходит с \lo{первым} элементом.}
+
+\begin{lstlisting}[style=term,basicstyle=\termsm]
+$ curl -s -i http://localhost:5090/orders/export
+HTTP/1.1 200 OK
+Content-Type: application/json; charset=utf-8
+Date: Tue, 10 Nov 2026 11:10:59 GMT
+Server: Kestrel
+Transfer-Encoding: chunked
+
+[{"id":1,"customerEmail":"anna@example.com","status":"Paid","total":25.00},{"id":2,...
+$ echo $?
+18
+\end{lstlisting}
+
+  \rulegap
+  \begin{cbul}{alt}
+    \item ошибка на третьем элементе --- 200 и \lo{оборванный} массив
+    \item обработчик ошибок видит начатый ответ и пропускает исключение
+  \end{cbul}
+
+  \aside{Всё, что может упасть, --- \hi{до} первого элемента.}
+\end{frame}
+
+% 52
+\begin{frame}[plain]
+  \keyline{Сериализация --- набор решений, принятых за вас:\\
+    задайте их один раз. Держите контракт плоским.}
+\end{frame}
+
+% ======================================================== 5. CONTRACT OUTSIDE ==
+\section{5. Описание контракта наружу}
+
+% 53
+\begin{frame}[plain]
+  \sectionopener{5}{Описание контракта наружу}{Документ \hi{генерируется} из
+    кода, а не пишется рядом с ним.}
+\end{frame}
+
+% 54
+\begin{frame}[fragile]{OpenAPI}
+  \slidetop
+  {\renewcommand{\arraystretch}{1.25}\small
+  \begin{tabular}{@{}L{4.0cm}L{8.8cm}@{}}
+    пути                & из шаблонов маршрутов \\
+    параметры           & из типов параметров \\
+    \hi{ответы}         & из \hi{типизированных результатов} \\
+    схемы               & из DTO и настроек сериализатора \\
+  \end{tabular}}
+
+  \slidegap
+\begin{lstlisting}[style=csharp,basicstyle=\codesm]
+builder.Services.AddOpenApi();
+app.MapOpenApi();   // /openapi/v1.json
+\end{lstlisting}
+
+\begin{lstlisting}[style=term,basicstyle=\termsm]
+$ curl -s localhost:5090/openapi/v1.json | jq -c '.paths["/orders/{id}"].get.responses|keys'
+["200","404"]
+\end{lstlisting}
+
+  \aside{Главный читатель --- генератор клиентов. Рукописная часть точна, пока её
+    обновляют.}
+\end{frame}
+
+% 55
+\begin{frame}[plain]
+  \vote{Вы переименовали поле в DTO. Клиенты сломались? А если добавили?}
+\end{frame}
+
+% 56
+\begin{frame}{Обратная совместимость}
+  \slidetop
+  \versus{Можно без версии}{%
+    \begin{cbul}{accent}
+      \item добавить поле в ответ
+      \item добавить необязательный параметр
+      \item добавить маршрут
+      \item добавить значение перечисления*
+    \end{cbul}}{Нельзя}{%
+    \begin{cbul}{alt}
+      \item переименовать или удалить поле
+      \item изменить тип поля
+      \item сделать поле запроса обязательным
+      \item изменить смысл статуса или формат
+    \end{cbul}}
+
+  \slidegap
+  \aside{* если клиент обязан переживать неизвестные значения --- договоритесь
+    заранее.}
+\end{frame}
+
+% 57
+\begin{frame}{Версия}
+  \slidetop
+  \claim{Версия --- это \lo{дорого}. Сначала спросите, нельзя ли добавить.}
+
+  {\renewcommand{\arraystretch}{1.5}
+  \begin{tabular}{@{}L{4.0cm}L{8.8cm}@{}}
+    \hi{\textbf{в адресе}}       & префикс группы: \texttt{/api/v1}, \texttt{/api/v2} \\
+    \hi{\textbf{рядом}}          & старая работает, клиенты переезжают в своём темпе \\
+    \hi{\textbf{устаревание}}    & заголовки и пометки в документе; отключение ---
+      в датах \\
+    \lo{\textbf{цена}}           & два набора обработчиков, DTO и тестов --- годами \\
+  \end{tabular}}
+
+  \slidegap
+  \aside{Контракт --- то, что вы обещали, а не то, что написали. Порядок полей и
+    сортировку вы не обещали.}
+\end{frame}
+
+% 58
+\begin{frame}[plain]
+  \keyline{Документ выводится из кода.\\ Контракт --- обещание: добавлять можно,
+    менять и удалять нельзя.}
+\end{frame}
+
+\end{document}
