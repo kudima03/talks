@@ -501,6 +501,34 @@ $ curl -s 'http://localhost:5090/price?amount=12,5'
 \end{frame}
 
 % 23
+\begin{frame}[fragile]{DTO --- только свойства}
+  \slidetop
+
+\begin{lstlisting}[style=csharp,basicstyle=\codesm,escapechar=`]
+`\mk{d1}`public sealed record OrderDto(
+    int Id,
+    string CustomerEmail,
+    OrderStatus Status,
+    decimal Total);
+
+`\mk{d2}`public sealed record CreateOrderDto(
+    string CustomerEmail,
+    List<OrderItemDto> Items,
+    DateOnly? DeliveryDate = null);
+
+public sealed record OrderItemDto(string Sku, int Quantity, decimal Price);
+\end{lstlisting}
+  \begin{tikzpicture}[remember picture,overlay,every node/.style={rawlab}]
+    \node[text=accent] at ([xshift=8.6cm]d1) {ответ: что обещали клиенту};
+    \node[text=alt] at ([xshift=8.6cm]d2) {вход: без \texttt{Id}, статуса, даты};
+  \end{tikzpicture}
+
+  \slidegap
+  \aside{Ни методов, ни атрибутов, ни логики. Преобразование --- снаружи,
+    \texttt{ToDto()} на границе; проверки --- в валидаторе.}
+\end{frame}
+
+% 24
 \begin{frame}[plain]
   \keyline{От запроса до параметров три шага, и каждый может сломаться.\\
     Наружу уходит DTO --- и никогда сущность.}
@@ -509,13 +537,13 @@ $ curl -s 'http://localhost:5090/price?amount=12,5'
 % ======================================================== 3. VALIDATION ==
 \section{3. Валидация}
 
-% 24
+% 25
 \begin{frame}[plain]
   \sectionopener{3}{Валидация}{Невалидный запрос --- \hi{исключение}, ответ
     формирует middleware.}
 \end{frame}
 
-% 25
+% 26
 \begin{frame}{Три ступени}
   \slidetop
   {\renewcommand{\arraystretch}{1.5}
@@ -534,7 +562,7 @@ $ curl -s 'http://localhost:5090/price?amount=12,5'
     ответ --- в \lo{чужом} формате.}
 \end{frame}
 
-% 26
+% 27
 \begin{frame}[fragile]{Валидатор}
   \vspace{0.3em}
 \begin{lstlisting}[style=csharp,basicstyle=\codexs,escapechar=`]
@@ -566,12 +594,12 @@ $ curl -s 'http://localhost:5090/price?amount=12,5'
   \end{tikzpicture}
 \end{frame}
 
-% 27
+% 28
 \begin{frame}[plain]
   \vote{Валидатор нашёл ошибки. Что делает обработчик?}
 \end{frame}
 
-% 28
+% 29
 \begin{frame}{Два вида плохого входа}
   \slidetop
   \versus{Ошибка контракта}{%
@@ -596,7 +624,7 @@ $ curl -s 'http://localhost:5090/price?amount=12,5'
   {\large Невалидный запрос --- \hi{исключение}, а не ветка в обработчике.}
 \end{frame}
 
-% 29
+% 30
 \begin{frame}[fragile]{Три места}
   \slidetop
   \begin{center}
@@ -630,7 +658,7 @@ $ curl -s --json @bad-order.json http://localhost:5090/orders
     \hi{нужное поле} формы.}
 \end{frame}
 
-% 30
+% 31
 \begin{frame}{Граница валидатора}
   \slidetop
   \versus{Валидатор}{%
@@ -655,19 +683,19 @@ $ curl -s --json @bad-order.json http://localhost:5090/orders
 % ======================================================== 4. JSON ==
 \section{4. JSON и сериализация}
 
-% 31
+% 32
 \begin{frame}[plain]
   \sectionopener{4}{JSON и сериализация}{JSON --- это строки и числа; всё
     остальное --- \hi{договорённость}.}
 \end{frame}
 
-% 32
+% 33
 \begin{frame}[plain]
   \vote{В C\# свойство называется \texttt{CustomerEmail}. Как оно будет называться
     в JSON, если ничего не настраивать?}
 \end{frame}
 
-% 33
+% 34
 \begin{frame}[fragile]{JSON и типы .NET}
   \slidetop
   {\renewcommand{\arraystretch}{1.2}\small
@@ -691,7 +719,7 @@ $ curl -s localhost:5090/sample
   \aside{Веб-умолчания --- не умолчания сериализатора: их выставили \hi{за вас}.}
 \end{frame}
 
-% 34
+% 35
 \begin{frame}{Числа и деньги}
   \slidetop
   \claim{JSON не различает целое и дробное. Клиент --- \lo{различает}.}
@@ -709,7 +737,7 @@ $ curl -s localhost:5090/sample
   \aside{Решение контракта --- до первого клиента. Потом это ломающее изменение.}
 \end{frame}
 
-% 35
+% 36
 \begin{frame}[fragile]{Настройки --- один раз}
   \slidetop
   \claim{Контракт \hi{однородный}: настройки на всё приложение.}
@@ -737,7 +765,7 @@ builder.Services.ConfigureHttpJsonOptions(options =>
     обработчике --- \lo{никогда}.}
 \end{frame}
 
-% 36
+% 37
 \begin{frame}[fragile]{Свой конвертер}
   \vspace{0.3em}
 \begin{lstlisting}[style=csharp,basicstyle=\codexxs]
@@ -767,7 +795,7 @@ public sealed class EmailJsonConverter : JsonConverter<Email>
     по типу свойства.}
 \end{frame}
 
-% 37
+% 38
 \begin{frame}[fragile]{Генератор кода}
   \vspace{0.3em}
 \begin{lstlisting}[style=csharp,basicstyle=\codesm,escapechar=|]
@@ -795,13 +823,13 @@ builder.Services.ConfigureHttpJsonOptions(options =>
   \end{cbul}
 \end{frame}
 
-% 38
+% 39
 \begin{frame}[plain]
   \statement{Сериализация --- \lo{слабое место} платформы. Кто напишет
     нормальный сериализатор --- я первым на него \hi{перейду}.}
 \end{frame}
 
-% 39
+% 40
 \begin{frame}[fragile]{Стриминг ответа}
   \vspace{0.3em}
 \begin{lstlisting}[style=csharp,basicstyle=\codexs,escapechar=|]
@@ -834,7 +862,7 @@ Transfer-Encoding: chunked
 
 \end{frame}
 
-% 40
+% 41
 \begin{frame}[fragile]{Цена стриминга}
   \slidetop
   \claim{Статус уходит с \lo{первым} элементом.}
@@ -861,7 +889,7 @@ $ echo $?
   \aside{Всё, что может упасть, --- \hi{до} первого элемента.}
 \end{frame}
 
-% 41
+% 42
 \begin{frame}[plain]
   \keyline{Сериализация --- набор решений, принятых за вас:\\
     задайте их один раз. Держите контракт плоским.}
@@ -870,13 +898,13 @@ $ echo $?
 % ======================================================== 5. CONTRACT OUTSIDE ==
 \section{5. Описание контракта наружу}
 
-% 42
+% 43
 \begin{frame}[plain]
   \sectionopener{5}{Описание контракта наружу}{Документ \hi{генерируется} из
     кода, а не пишется рядом с ним.}
 \end{frame}
 
-% 43
+% 44
 \begin{frame}[fragile]{OpenAPI}
   \slidetop
   {\renewcommand{\arraystretch}{1.25}\small
@@ -902,12 +930,12 @@ $ curl -s localhost:5090/openapi/v1.json | jq -c '.paths["/orders/{id}"].get.res
     обновляют.}
 \end{frame}
 
-% 44
+% 45
 \begin{frame}[plain]
   \vote{Вы переименовали поле в DTO. Клиенты сломались? А если добавили?}
 \end{frame}
 
-% 45
+% 46
 \begin{frame}{Обратная совместимость}
   \slidetop
   \versus{Можно без версии}{%
@@ -929,7 +957,7 @@ $ curl -s localhost:5090/openapi/v1.json | jq -c '.paths["/orders/{id}"].get.res
     заранее.}
 \end{frame}
 
-% 46
+% 47
 \begin{frame}{Версия}
   \slidetop
   \claim{Версия --- это \lo{дорого}. Сначала спросите, нельзя ли добавить.}
@@ -948,7 +976,7 @@ $ curl -s localhost:5090/openapi/v1.json | jq -c '.paths["/orders/{id}"].get.res
     сортировку вы не обещали.}
 \end{frame}
 
-% 47
+% 48
 \begin{frame}[plain]
   \keyline{Документ выводится из кода.\\ Контракт --- обещание: добавлять можно,
     менять и удалять нельзя.}
