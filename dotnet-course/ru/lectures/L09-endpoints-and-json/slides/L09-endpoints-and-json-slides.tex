@@ -504,19 +504,21 @@ $ curl -s 'http://localhost:5090/price?amount=12,5'
 \begin{frame}[fragile]{DTO --- только свойства}
   \slidetop
 
-\begin{lstlisting}[style=csharp,basicstyle=\codesm,escapechar=`]
-`\mk{d1}`public sealed record OrderDto(
-    int Id,
-    string CustomerEmail,
-    OrderStatus Status,
-    decimal Total);
+\begin{lstlisting}[style=csharp,basicstyle=\codexs,escapechar=`]
+`\mk{d1}`public sealed class OrderDto
+{
+    public required int Id { get; init; }
+    public required string CustomerEmail { get; init; }
+    public required OrderStatus Status { get; init; }
+    public required decimal Total { get; init; }
+}
 
-`\mk{d2}`public sealed record CreateOrderDto(
-    string CustomerEmail,
-    List<OrderItemDto> Items,
-    DateOnly? DeliveryDate = null);
-
-public sealed record OrderItemDto(string Sku, int Quantity, decimal Price);
+`\mk{d2}`public sealed class CreateOrderDto
+{
+    public required string CustomerEmail { get; init; }
+    public required List<OrderItemDto> Items { get; init; }
+    public DateOnly? DeliveryDate { get; init; }
+}
 \end{lstlisting}
   \begin{tikzpicture}[remember picture,overlay,every node/.style={rawlab}]
     \node[text=accent] at ([xshift=8.6cm]d1) {ответ: что обещали клиенту};
@@ -524,8 +526,7 @@ public sealed record OrderItemDto(string Sku, int Quantity, decimal Price);
   \end{tikzpicture}
 
   \slidegap
-  \aside{Ни методов, ни атрибутов, ни логики. Преобразование --- снаружи,
-    \texttt{ToDto()} на границе; проверки --- в валидаторе.}
+  \aside{\texttt{required}: без поля DTO не соберёт компилятор и не прочитает сериализатор.}
 \end{frame}
 
 % 24
@@ -757,7 +758,7 @@ builder.Services.ConfigureHttpJsonOptions(options =>
     \node at ([xshift=10.1cm]j1) {перечисления строками};
     \node at ([xshift=10.1cm]j2) {свой конвертер};
     \node at ([xshift=10.1cm]j3) {\texttt{null} в обязательном};
-    \node at ([xshift=10.1cm]j4) {нет поля --- ошибка};
+    \node at ([xshift=10.1cm]j4) {record: нет поля --- ошибка};
   \end{tikzpicture}
 
   \slidegap

@@ -39,9 +39,17 @@ announcement stays.
   filter listing, and the whole polymorphism block — its vote (marker gone too),
   the listing and «почему болит». The script keeps the listings of the cut
   frames. One frame was added after the merge: **23, «DTO --- только свойства»**
-  (follow-up to PR #21) — `OrderDto` and `CreateOrderDto` as positional records,
-  one property per line, labels «ответ» / «вход». The DTO stays clean: no
-  methods, attributes or mapping in it; `ToDto()` is in the aside, not the listing.
+  (follow-up to PR #21) — `OrderDto` and `CreateOrderDto` as classes with
+  `{ get; init; }` properties, labels «ответ» / «вход». The DTO stays clean:
+  properties only, no methods, constructors or mapping; listing in `\codexs`
+  so the aside clears the footer.
+- **DTOs are classes with init properties, not positional records** (author's
+  call after PR #21) — in the script listing, on frame 23 and in the scratch
+  project. Mandatory fields are `required`; STJ honours `required` with no
+  option set, so a missing field is a read error and `DeliveryDate` is plain
+  `DateOnly?` (no `= null` default). `RespectRequiredConstructorParameters`
+  stays in the frame 36 listing, labelled «record: нет поля --- ошибка»; it no
+  longer touches our DTOs. The lab's given DTOs are still positional records.
 - **Frames 5 and 17 colour the data by source** — asked for in review, and the
   one exception to the two-colour rule: `srcroute` (= `accent`), `srcbody`
   (= `alt`), `srcquery` (dark violet), `srcheader` (dark ochre), defined in the
@@ -114,14 +122,14 @@ terminal does not print it.
 
 | Frames | How it was checked |
 |---|---|
-| 3, 4, 5, 6, 7, 16, 23 | Compiled; 5 and 6 are their own snippets in the scratch project; 23 is the `Contracts.cs` records, one property per line. |
+| 3, 4, 5, 6, 7, 16, 23 | Compiled; 5 and 6 are their own snippets in the scratch project; 23 is `Contracts.cs` with the DTOs as init-property classes; frames 17, 30, 36 re-run against them, output unchanged. |
 | 6 | `TypedResults.Created` sets `Location: /orders/4` (run). |
 | 11 | The dictionary-of-delegates loop compiles; the RDG fallback is from the docs, not observed. |
 | 17 | `GET /orders/1/items?page=1&size=5` with `X-Request-Id` and `POST --json @order.json` run in Production; output as shown. `curl -d @order.json` (form content type) → 415. |
 | 19 | Run in Production with `LANG=ru_RU.UTF-8` and with `en-US`: `12,5` → `125` both times. `03/04/2026` → `2026-03-04`. `status=99` → 99. `status=paid`, `page=` and `flag=1` fail to bind (`BadHttpRequestException`; `page=` seen as 400 in Production). |
 | 27, 30 | `--json @bad-order.json` in Development → 422 with `customerEmail` and `items[0].quantity`. Field names are camel-cased by the scratch middleware per path segment. |
 | 34 | Run with the stock web JSON options (no converters): enum as number, `null` written, `decimal` keeps `12.50`. |
-| 36 | With both `Respect…` options: `null` `customerEmail` → `doesn't allow null values`; missing field → `missing required properties`. |
+| 36 | With both `Respect…` options: `null` `customerEmail` → `doesn't allow null values`; missing field → `missing required properties` — from `required` on the class DTO, and the same with no JSON options at all. |
 | 37 | Without the converter `{"email":{"value":…}}`, with it a string. |
 | 40, 41 | Export over a 300 ms-per-row fake repository; `Transfer-Encoding: chunked`. Throwing on row 3 → 200, two elements, `curl` exits 18. |
 | 44 | `jq` on `/openapi/v1.json`: `GET /orders/{id}` has `200` and `404`. |
@@ -140,8 +148,7 @@ endpoint filter; two new branches in the Л8 middleware) plus a commit, one
 question per step and one «усложнённый» in the whole lab. Boilerplate (DTO
 records, the validator, the camel-case line) is given as code. Do not grow it
 back. Cut from the composer's block on purpose: `PUT`/`DELETE`, paging, the
-`Email` converter, the `Respect…` options (so open item 2 does not touch the
-lab), typed `Results<…>` unions and OpenAPI. The `12,5` trap is kept as the
+`Email` converter, the `Respect…` options, typed `Results<…>` unions and OpenAPI. The `12,5` trap is kept as the
 `over` filter on the list (`150,5` → `1505` → empty list), the export stream
 as the extra task.
 
@@ -167,6 +174,4 @@ See «Открытые вопросы» in `README.md` — the same list, in Rus
 
 1. The `BadHttpRequestException` branch is new to the Л8 middleware (verified:
    without it, Development turns binding errors into 500).
-2. `RespectRequiredConstructorParameters` forces `DeliveryDate = null` in
-   `CreateOrderDto`.
-3. The Latin Modern fallback has not been checked; the deck builds with PT Sans.
+2. The Latin Modern fallback has not been checked; the deck builds with PT Sans.
