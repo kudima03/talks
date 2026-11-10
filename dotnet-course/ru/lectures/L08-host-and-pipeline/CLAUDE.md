@@ -12,13 +12,19 @@ first; this file carries only what is specific to Л8.
 | `L08-host-and-pipeline.md` | The spoken script. **Source of truth.** |
 | `README.md` | Theses — a summary and a crib sheet for the lectern, with the frame each thesis lives on. |
 | `slides/L08-host-and-pipeline-slides.tex` | The deck. One frame per `[СЛАЙД n — …]` cue. |
+| `lab/LAB08-task.md` | The lab, as handed to the student. |
+| `lab/LAB08-review.md` | The same lab for whoever accepts it. |
 
-The three move together. Every thesis in `README.md` carries a frame number
+The five move together. Every thesis in `README.md` carries a frame number
 and `[—]` marks a thesis with no frame. **Adding, cutting or reordering a
 frame invalidates those numbers** — renumber the cues in the script, then
-re-derive the tags in `README.md`, in the same commit. There is no `lab/`
-directory yet: the lab is described only by the `[ЛАБА 8 — …]` block at the
-end of the script.
+re-derive the tags in `README.md`, in the same commit. The lab continues Л7's
+`Shop.RawServer`: `OrderStore` and the same three routes move into a new
+`dotnet new web` project, `Shop.Api`, which lives until the end of the
+course. It asks for nothing the lecture does not cover — no DTOs, binding,
+validation or OpenAPI (Л9), no options or lifetimes beyond frame 6 (Л10).
+The `[ЛАБА 8 — …]` block that used to close the script now lives in the two
+lab files; the spoken lab announcement stays.
 
 ## Shape specific to Л8
 
@@ -47,8 +53,7 @@ end of the script.
   the four loop decisions plus «exception stops the host, exit code 0»;
   25 is the five error-handling decisions with «в лог» / «клиенту» columns;
   26 is the short circuit plus who answers by itself.
-- **No lab mentions on slides** (review). The lab lives in the script's
-  `[ЛАБА 8 — …]` block.
+- **No lab mentions on slides** (review). The lab lives in `lab/`.
 - **The deck is what the lecturer reads from.** Slides carry short marks on
   the important things (tables, asides, labels beside listings) rather than
   bare titles. Keep marks short; delivery lives in the script.
@@ -105,12 +110,52 @@ positioned with `remember picture` marks inside the listing, so the deck needs
 two pdflatex passes — `latexmk` does that. After editing such a listing, check
 the labels still sit on their lines in the built PDF.
 
+## Lab — how it was checked
+
+The lab is sized for ~20 minutes: three steps (same service on ASP.NET Core,
+errors in one place, background service) plus git, one «Вопрос» per step and
+one «усложнённый» in the whole lab. Boilerplate is given as ready code. There
+is no `IOrderService` — the handler throws `NotFoundException` when
+`OrderStore.Find` returns `null`. Russian prose uses the English terms
+(middleware, pipeline, endpoint, handler, host, logger, health check,
+background service, timer, token, exception filter, trace id) in Latin script.
+
+Everything quoted in `LAB08-review.md` comes from a minimal reference
+solution built and run on dotnet SDK **10.0.114** (Linux) in a scratch
+directory, not committed: `Shop.Domain` with `DomainException` and
+`NotFoundException`, `Shop.RawServer` on `TcpListener` (port 8088) and
+`Shop.Api` from `dotnet new web`. Seeded orders — Ann Smith, Paid, 300.00;
+Bob Brown, Created, 120.00 — as in Л7's lab. Paths are `/home/user/Shop.Api`;
+`Date` headers and `traceId`s are as captured.
+
+| Claim in the review | How it was checked |
+|---|---|
+| Step 1 | Both servers side by side. `Shop.Api`: `/nope` → empty `404`, `POST /orders` → empty `405` with `Allow: GET`, plus `Date` and `Server`. |
+| Step 2 | `/orders/7` → `404` JSON, `/fail` → `500` `Internal error` + `traceId`; the full exception only in the log. The `traceId` is **not** in the console log. |
+| Step 3 | Two stats lines 10 s apart; stop with `SIGTERM` (a background job of a non-interactive shell ignores `SIGINT`) took 0.03 s, exit 0. |
+| Live edits | No `next` call in `ErrorHandlingMiddleware` → `CS9113`, empty `200` everywhere. `next` without `await` → `CS4014`, but `/orders/7` and `/fail` still work: both handlers are synchronous and throw before any `await`. |
+| Extra task | `RequestLoggingMiddleware` second: without the filter only `/orders/1` gets a line; with it `/orders/7` and `/fail` get one with the exception type. The cancellation branch on a `Task.Delay(10 s, context.RequestAborted)` endpoint with `curl --max-time 1` → curl exit 28, one `Information` line. `try/finally` logging `200` for a failed request was seen in an earlier run of the same reference. |
+
+**Open item 1 is now handled only in the extra task**: the exception filter
+(`catch (Exception e) when (LogFailed(...))` returning `false`) gives one
+line per request without changing the lecture's order. The main lab has no
+logging middleware at all.
+
+**Known gap:** the script (§3, the paragraph after frame 25) says «Чего в
+листинге нет и что вы добавите в лабораторной: отмену». The cancellation
+branch is in the extra task only, so a student who skips it never writes it.
+Either soften that sentence in the script or move the branch back into step 2.
+The 413 → 500 behaviour (open item 2) is not in the lab.
+
 ## Open items
 
 The author's call. Do not quietly "fix" these:
 
 See «Открытые вопросы» in `README.md` — the same list, in Russian:
 
-1. Logging inside error handling never logs failed requests (verified).
-2. `ErrorHandlingMiddleware` turns Kestrel's 413 into 500 (verified).
+1. Logging inside error handling never logs failed requests (verified). The
+   lab's extra task works around it with an exception filter, see above;
+   the lecture is unchanged.
+2. `ErrorHandlingMiddleware` turns Kestrel's 413 into 500 (verified). Not
+   in the lab.
 3. The Latin Modern fallback has not been checked; the deck builds with PT Sans.
