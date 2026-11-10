@@ -22,17 +22,43 @@ end of the script, and it continues the Л8 lab's service.
 
 ## Shape specific to Л9
 
-- **58 frames** (asked for 50–60): §1 2–15, §2 16–30, §3 31–38, §4 39–52,
-  §5 53–58. Eight `\vote` frames (3, 10, 24, 27, 34, 40, 43, 55) — one per
-  `[ВОПРОС В ЗАЛ]`, the question alone. Section timings 18 + 18 + 14 + 22 + 8
-  = 80.
-- **Keylines close four sections** (15, 30, 52, 58). §3 ends on content (38);
+- **47 frames**: §1 2–13, §2 14–23, §3 24–30, §4 31–41, §5 42–47. Six `\vote`
+  frames (9, 18, 21, 27, 32, 44) — one per `[ВОПРОС В ЗАЛ]`, the question
+  alone. Section timings 18 + 18 + 14 + 22 + 8 = 80.
+- **The deck was built at 58 frames and cut to 47 in review** (PR #21). Material
+  without a frame stays in the script as voice and is `[—]` in `README.md`. Do
+  not grow the deck back by splitting frames. Removed by name in review, do not
+  bring back: the «кто видел контроллеры» vote (its `[ВОПРОС В ЗАЛ]` marker
+  went too; the paragraph stays), обработчики по ресурсам (`OrderEndpoints`),
+  три шага, ограничение выбирает маршрут, что маршрутизация делает сама, свой
+  тип в параметре (`Email.TryParse`), несколько DTO на ресурс, the endpoint
+  filter listing, and the whole polymorphism block — its vote (marker gone too),
+  the listing and «почему болит». The script keeps the listings of the cut
+  frames.
+- **Frames 5 and 17 colour the data by source** — asked for in review, and the
+  one exception to the two-colour rule: `srcroute` (= `accent`), `srcbody`
+  (= `alt`), `srcquery` (dark violet), `srcheader` (dark ochre), defined in the
+  deck's preamble with `\src{colour}{text}`. Frame 5 colours `id` in the
+  template and the parameter and `dto`; frame 17 colours the parts of two real
+  `curl` requests and names each source in the same colour, with the .NET way
+  to take it (`[FromRoute]`, `[FromQuery]`, `[FromHeader]`, `[FromBody]`,
+  `[FromForm]`). Do not spread these colours to other frames.
+- **Frame 6 highlights the pair**: `Ok<OrderDto>` and `TypedResults.Ok` in
+  `accent`, `NotFound` and `TypedResults.NotFound` in `alt` (review: «так же,
+  как 6» — an example with marks on it, not a comparison block).
+- **Frame 7 is titled «Контроллер --- иная запись того же»** (review). Frame 8,
+  the conventions, is two `cbul` lists like frame 11 (review).
+- **Frame 30 has no «запрос сам по себе / относительно мира» pair** (review);
+  the script says «валидатор проверяет сам запрос, логика — против текущих
+  данных».
+- **Wording:** «прикреплено», not «прицеплено» (review, frame 4 and the script).
+- **Keylines close four sections** (13, 23, 41, 47). §3 ends on content (30);
   its «мысль раздела» paragraph stays in the script as voice.
 - **The §5 closing thought was moved** before the lecture summary and the lab
-  paragraph, so the last frame is the keyline (58).
-- **Frame 49 is the deck's one `\statement`** — the serializer line promised
+  paragraph, so the last frame is the keyline (47).
+- **Frame 38 is the deck's one `\statement`** — the serializer line promised
   in the course structure. There is no `\shout`.
-- **Frame 28, «Зачем DTO», follows PR #21 review:** the renamed-column example
+- **Frame 22, «Зачем DTO», follows PR #21 review:** the renamed-column example
   was cut as a bad example; the reason is said plainly — DTO фиксирует
   контракт API. Do not bring the column example back.
 - **Labels beside listings are text, not numbers.** Numbered marks with a key
@@ -43,8 +69,8 @@ end of the script, and it continues the Л8 lab's service.
   in the script.
 - **No lab mentions on slides.** The lab lives in the script's
   `[ЛАБА 9 — …]` block.
-- **Listings with `||` use `` escapechar=` ``** (23, 33): with the usual
-  `escapechar=|` the `||` disappears from the listing silently.
+- **Listings that colour tokens or contain `||` use `` escapechar=` ``** (5, 6,
+  17, 26): with `escapechar=|` the `||` disappears from the listing silently.
 - **Script listings keep Russian comments**; slide listings are ASCII. The
   validator messages are English in both, because they are the code's output.
 
@@ -55,7 +81,7 @@ These are now fixed in the script; do not revert them:
 
 - `12,5` in a `decimal` query parameter binds to **125** on every machine
   (invariant culture, comma as thousands separator), not «depends on the
-  locale». The vote answer on 24 and the table on 25 rest on this. The locale
+  locale». The vote answer on 18 and the table on 19 rest on this. The locale
   trap stays, moved to code that parses strings itself.
 - `03/04/2026` binds to **4 March** on every machine.
 - **Query-string parameter names are case-insensitive** (`Page` = `page`).
@@ -82,21 +108,18 @@ terminal does not print it.
 
 | Frames | How it was checked |
 |---|---|
-| 4, 5, 8, 14, 21, 29 | Compiled; frame 14's `MapOrders` is the running app's route table. |
-| 7 | `TypedResults.Created` sets `Location: /orders/4` (run). |
-| 12 | The dictionary-of-delegates loop compiles; the RDG fallback is from the docs, not observed. |
-| 19 | `/orders/abc` → 404, empty body. Two `{id:int}` / `{number:int}` routes: ASP0022 at build, `AmbiguousMatchException` on the request. `/orders/latest` wins over `{id:int}`. |
-| 20 | `/Orders/1`, `/orders/1/` → 200; `?Page=3` binds `page`. `PUT` → 405 `Allow: GET`; `curl -I` → 405. |
-| 22 | `curl -d @order.json` (form content type) → 415. `ids=1&ids=2` → `int[]`. |
-| 23 | `Email.TryParse` used by binding; `email=bad` → 400 in Production. |
-| 25 | Run in Production with `LANG=ru_RU.UTF-8` and with `en-US`: `12,5` → `125` both times. `03/04/2026` → `2026-03-04`. `status=99` → 99. `status=paid`, `page=` and `flag=1` fail to bind (`BadHttpRequestException`; `page=` seen as 400 in Production). |
-| 33, 36, 37 | `--json @bad-order.json` in Development → 422 with `customerEmail` and `items[0].quantity`. Field names are camel-cased by the scratch middleware per path segment. |
-| 41 | Run with the stock web JSON options (no converters): enum as number, `null` written, `decimal` keeps `12.50`. |
-| 44, 45 | Serialized `CardPayment` as shown; `kind` last → 500 with the quoted message; `kind:"crypto"` → `Read unrecognized type discriminator id`. |
-| 46 | With both `Respect…` options: `null` `customerEmail` → `doesn't allow null values`; missing field → `missing required properties`. |
-| 47 | Without the converter `{"email":{"value":…}}`, with it a string. |
-| 50, 51 | Export over a 300 ms-per-row fake repository; `Transfer-Encoding: chunked`. Throwing on row 3 → 200, two elements, `curl` exits 18. |
-| 54 | `jq` on `/openapi/v1.json`: `GET /orders/{id}` has `200` and `404`. |
+| 3, 4, 5, 6, 7, 16 | Compiled; 5 and 6 are their own snippets in the scratch project. |
+| 6 | `TypedResults.Created` sets `Location: /orders/4` (run). |
+| 11 | The dictionary-of-delegates loop compiles; the RDG fallback is from the docs, not observed. |
+| 17 | `GET /orders/1/items?page=1&size=5` with `X-Request-Id` and `POST --json @order.json` run in Production; output as shown. `curl -d @order.json` (form content type) → 415. |
+| 19 | Run in Production with `LANG=ru_RU.UTF-8` and with `en-US`: `12,5` → `125` both times. `03/04/2026` → `2026-03-04`. `status=99` → 99. `status=paid`, `page=` and `flag=1` fail to bind (`BadHttpRequestException`; `page=` seen as 400 in Production). |
+| 26, 29 | `--json @bad-order.json` in Development → 422 with `customerEmail` and `items[0].quantity`. Field names are camel-cased by the scratch middleware per path segment. |
+| 33 | Run with the stock web JSON options (no converters): enum as number, `null` written, `decimal` keeps `12.50`. |
+| 35 | With both `Respect…` options: `null` `customerEmail` → `doesn't allow null values`; missing field → `missing required properties`. |
+| 36 | Without the converter `{"email":{"value":…}}`, with it a string. |
+| 39, 40 | Export over a 300 ms-per-row fake repository; `Transfer-Encoding: chunked`. Throwing on row 3 → 200, two elements, `curl` exits 18. |
+| 43 | `jq` on `/openapi/v1.json`: `GET /orders/{id}` has `200` and `404`. |
+| voice | Routing probes behind the cut frames: `/orders/abc` → 404; ASP0022 and `AmbiguousMatchException` for two `{int}` routes; `/Orders/1`, `/orders/1/`, `?Page=` match; `PUT` → 405 `Allow: GET`, `curl -I` → 405. Polymorphism: `kind` last → 500 (`must specify a type discriminator`), `kind:"crypto"` → `Read unrecognized type discriminator id`. |
 
 Listings are ASCII only, including comments, same as every other lecture.
 Labels beside listings are positioned with `remember picture` marks, so the
