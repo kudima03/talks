@@ -81,27 +81,26 @@ on their lines in the built PDF.
 
 ## Lab — how it was checked
 
-Everything quoted in `LAB07-review.md` and the session in `LAB07-task.md`
-comes from a minimal reference implementation — a stub `Shop.Domain` and a
-`Shop.RawServer` on `TcpListener`, port 8088 — built and run on dotnet SDK
-**10.0.114** (Linux) with curl **8.5.0** and OpenBSD `nc`, in a scratch
-directory, not committed to the repo. `curl -v` was run under a pseudo-terminal
-so the output has no progress meter, as a student sees it.
+The lab is sized for about twenty minutes, on request: `OrderStore` and the
+accept loop are given as code, the student writes only `Server.HandleAsync`,
+and there is one break (`Content-Length` + 1 with the connection left open).
+Do not grow it back with more experiments; extra breaks live in the review
+file as things to ask for live.
+
+Everything quoted in `LAB07-review.md` comes from a minimal reference — a stub
+`Shop.Domain` plus `Shop.RawServer` built from the task's own snippets — run
+on dotnet SDK **10.0.114** (Linux) with curl **8.5.0**, in a scratch
+directory, not committed to the repo.
 
 | What | How it was checked |
 |---|---|
-| Session, sizes | `/` is 32 bytes for 17 characters; `/orders` 57, `/orders/1` 27, `/orders/7` 11. |
-| `Trying [::1]` | Real: `localhost` resolves to both, the listener is `IPAddress.Loopback` (IPv4). |
-| Step 2 | Accept-and-close → `curl: (52) Empty reply from server`. Second instance → `SocketException (98): Address already in use`, exit 134. Ctrl+C with `e.Cancel = true` → `stopped`, exit 0; without it → exit 130. |
-| Step 7 | Each break toggled in the reference and run with `curl -v`: chars → body `Магазин р`, `Excess found`, curl exit 0; `+1` → error 18; `+1` without `using` → error 28 «32 out of 33»; correct length without `using` → no error; no empty line → error 8 «Header without colon»; LF in the response → no error; LF in the request → server waits, `timeout` ends `nc` with 124. |
-| Step 7.6 | A held `nc` with unfinished headers blocks a parallel `curl` (`Connected`, then error 28 with 0 bytes); after `nc` closes, the server logs `closed before headers` and a `Broken pipe` for the late `curl`. |
-| Extra task | Keep-alive: `Re-using existing connection`; `+1` hangs with `using` in place. `curl` collapses `/files/../x` to `/x` unless `--path-as-is`. |
-| Compiler | `CS8509` (with the example pattern `("GET", [""])`) and `CS4014` copied verbatim; no `using` on `TcpClient` and no token on `AcceptTcpClientAsync` build clean. Without the token, SIGINT does not stop the server — the next connection is served normally. |
+| Given code | `OrderStore.cs`, `Program.cs` and the headers line pasted from the task as is; build clean. |
+| Route table | `curl -i` on every row: `/` 32 bytes (17 characters), `/orders` 57, `/orders/1` 27, `/orders/7` 404 / 11, `/orders/abc` and `/nope` 404 / 10, `DELETE /orders/1` 405 / 19 with `Allow: GET`. Ctrl+C → `stopped`, exit 0. |
+| Step 3 break | `+1` without `using` → error 28 «32 out of 33 bytes received» under `--max-time 3`; `+1` with `using` → error 18; correct length without `using` → no error; no `using` builds clean. |
+| Review-only | No empty line → error 8 «Header without colon». Length in characters → body `Магазин р`, curl exit 0. Keep-alive → `Re-using existing connection`, `+1` hangs with `using` in place. LF line endings shown with `curl -D - \| od -c`. |
 
-**Not checked:** the browser (the `favicon.ico` request and what a page
-without `charset` looks like are stated as typical, not captured), and `nc`
-flags on macOS. Re-run the reference if a route, a seeded order or a response
-text changes — the byte counts above depend on them.
+Re-run the reference if a route, a seeded order or a response text changes —
+the byte counts depend on them, and lab 8 compares against them.
 
 ## Open items
 
