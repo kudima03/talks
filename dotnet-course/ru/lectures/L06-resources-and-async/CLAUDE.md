@@ -12,13 +12,17 @@ first; this file carries only what is specific to Л6.
 | `L06-resources-and-async.md` | The spoken script. **Source of truth.** |
 | `README.md` | Theses — a summary and a crib sheet for the lectern, with the frame each thesis lives on. |
 | `slides/L06-resources-and-async-slides.tex` | The deck. One frame per `[СЛАЙД n — …]` cue. |
+| `lab/LAB06-task.md` | The lab, as handed to the student. |
+| `lab/LAB06-review.md` | The same lab for whoever accepts it. |
 
-The three move together. Every thesis in `README.md` carries a frame number
+The five move together. Every thesis in `README.md` carries a frame number
 and `[—]` marks a thesis with no frame. **Adding, cutting or reordering a
 frame invalidates those numbers** — renumber the cues in the script, then
-re-derive the tags in `README.md`, in the same commit. There is no `lab/`
-directory yet: the lab is described only by the `[ЛАБА 6 — …]` block at the
-end of the script.
+re-derive the tags in `README.md`, in the same commit. The lab continues
+`Shop.Domain`/`HelloWorld` from Л3–Л5's labs (the domain's `TryParse` methods
+now parse lines of a file) and asks for nothing the lecture does not cover.
+The `[ЛАБА 6 — …]` block that used to close the script was moved into the
+lab files; the spoken announcement before frame 55 stays.
 
 ## Shape specific to Л6
 
@@ -75,6 +79,35 @@ Listings are ASCII only, including comments, same as every other lecture.
 Frames 12, 38, 50 and 51 set the listing at 6.6–6.8pt to fit above the footer —
 if a line is added there, check the built PDF, not just the `.tex`.
 
+## Lab — how it was checked
+
+The lab is sized for about twenty minutes: three steps (file, streaming
+digest, timeout plus «file is free»), one question each and one
+«усложнённый» in the whole lab; the generator and `FileCheck.IsFree` are
+given ready. The «remove `await using`» break lives in the review as a live
+request at acceptance, not in the task.
+
+Every number, session and diagnostic comes from a minimal reference
+implementation (`OrderLog.DigestAsync`, `FileCheck`, the `digest` mode in
+`Program.cs`, `OrderStatus` from `Shop.Domain`) built and run on dotnet SDK
+**10.0.114** (Linux) in a scratch directory, not committed. Paths are shown
+as `/home/user`.
+
+- The generator is deterministic: 5 000 000 lines, 223 MB, one million per
+  status. Output was compared byte for byte under mawk and busybox awk.
+- Peak memory: the digest 48–49 MB, `ReadAllTextAsync` on the same file 995 MB.
+- A full digest takes ~1.5 s, so a 1 s timeout cancels on every run (5 of 5);
+  `totals.txt` is then empty, since totals are written after the loop.
+- Writer without `await using`: `IsFree` prints `BUSY` with the frame 11
+  message and `totals.txt` is 0 bytes after exit.
+- `CS0029`, `CS8417` and `CS4014` were triggered and copied verbatim; a token
+  not passed to `ReadLineAsync` produces no diagnostic and the 1 s timeout no
+  longer stops the run (exit code 0).
+- The optional task (`ReadLinesAsync` with `yield return`) was run against an
+  earlier version of the generator: an early exit from `await foreach`
+  disposes the Reader and `IsFree` prints `free`. It leans on frame 53 — see
+  open item 1.
+
 ## Open items
 
 The author's call. Do not quietly "fix" these:
@@ -83,7 +116,8 @@ The author's call. Do not quietly "fix" these:
    «помните yield из прошлой лекции» before the state-machine steps (frame
    39) and before `IAsyncEnumerable` (frame 53), and frame 53 contains `yield
    return`. Л5 deliberately cut `yield return` (see its `CLAUDE.md`). Either
-   restore it there or teach it here from scratch.
+   restore it there or teach it here from scratch. Lab 6's optional task
+   (`ReadLinesAsync` with `yield return`) depends on the same frame.
 2. **Section timings are 30 + 45 = 75**, not 80; the header says 80.
 3. **The Latin Modern fallback has not been checked** for this deck; it builds
    with PT Sans.
