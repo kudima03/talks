@@ -12,13 +12,17 @@ first; this file carries only what is specific to Л9.
 | `L09-endpoints-and-json.md` | The spoken script. **Source of truth.** |
 | `README.md` | Theses — a summary and a crib sheet for the lectern, with the frame each thesis lives on. |
 | `slides/L09-endpoints-and-json-slides.tex` | The deck. One frame per `[СЛАЙД n — …]` cue. |
+| `lab/LAB09-task.md` | The lab, as handed to the student. |
+| `lab/LAB09-review.md` | The same lab for whoever accepts it. |
 
-The three move together. Every thesis in `README.md` carries a frame number
+The five move together. Every thesis in `README.md` carries a frame number
 and `[—]` marks a thesis with no frame. **Adding, cutting or reordering a
 frame invalidates those numbers** — renumber the cues in the script, then
-re-derive the tags in `README.md`, in the same commit. There is no `lab/`
-directory yet: the lab is described only by the `[ЛАБА 9 — …]` block at the
-end of the script, and it continues the Л8 lab's service.
+re-derive the tags in `README.md`, in the same commit. The lab continues the
+Л8 lab's `Shop.Api` (`OrderStore`, the `/orders` routes, `ErrorHandlingMiddleware`)
+and asks for nothing the lecture does not cover. The `[ЛАБА 9 — …]` block that
+used to close the script now lives in the two lab files; the spoken lab
+announcement stays.
 
 ## Shape specific to Л9
 
@@ -67,8 +71,7 @@ end of the script, and it continues the Л8 lab's service.
   labels clear them — listings may be reformatted, output may not.
 - **No speaker notes in the deck** — no `\note{}`, on request. Delivery lives
   in the script.
-- **No lab mentions on slides.** The lab lives in the script's
-  `[ЛАБА 9 — …]` block.
+- **No lab mentions on slides.** The lab lives in `lab/`.
 - **Listings that colour tokens or contain `||` use `` escapechar=` ``** (5, 6,
   17, 26): with `escapechar=|` the `||` disappears from the listing silently.
 - **Script listings keep Russian comments**; slide listings are ASCII. The
@@ -125,6 +128,33 @@ Listings are ASCII only, including comments, same as every other lecture.
 Labels beside listings are positioned with `remember picture` marks, so the
 deck needs two pdflatex passes — `latexmk` does that. After editing such a
 listing, check the labels still clear the code in the built PDF.
+
+## Lab — how it was checked
+
+The lab is sized for **about twenty minutes**, like labs 6–8: three steps
+(DTO and a route group with `POST` → `201`; FluentValidation in a generic
+endpoint filter; two new branches in the Л8 middleware) plus a commit, one
+question per step and one «усложнённый» in the whole lab. Boilerplate (DTO
+records, the validator, the camel-case line) is given as code. Do not grow it
+back. Cut from the composer's block on purpose: `PUT`/`DELETE`, paging, the
+`Email` converter, the `Respect…` options (so open item 2 does not touch the
+lab), typed `Results<…>` unions and OpenAPI. The `12,5` trap is kept as the
+`over` filter on the list (`150,5` → `1505` → empty list), the export stream
+as the extra task.
+
+Everything quoted in `LAB09-review.md` comes from a minimal reference — a
+stub `Shop.Domain` (labs 3–5 shape, plus `NotFoundException`) and `Shop.Api`
+in the state the task describes — built and run on dotnet SDK **10.0.114**
+with `FluentValidation.DependencyInjectionExtensions` **12.2.0**, Development,
+port 5090, curl 8.5.0; scratch directory, not committed. Seeded orders are
+Л7's: Ann Smith (Paid, 300.00), Bob Brown (Created, 120.00).
+
+| Claim | How it was checked |
+|---|---|
+| Step 1 | `POST --json @new-order.json` → `201`, `Location: /orders/3`; `?over=200` → orders 1 and 3. `TypedResults.Ok(order)` → the domain JSON quoted. Build clean, no `!`. |
+| Step 3 | `bad-order.json` → `422` with `customerEmail` and `items[0].quantity`; `/orders/abc` → empty `404`; `?over=` → `400` via `BadHttpRequestException`; `--json '{bad'` → `400`; `150.5` → order 1, `150,5` → `[]`. |
+| Live edits | Without `AddValidatorsFromAssemblyContaining` → `500`, ``No service for type 'FluentValidation.IValidator`1[…]'``. Without the `BadHttpRequestException` branch → `?over=` is `500` in Development. |
+| Extra task | `/orders/export` with `curl -N` → `chunked`, no `Content-Length`; no `[EnumeratorCancellation]` → `CS8425`. |
 
 ## Open items
 
