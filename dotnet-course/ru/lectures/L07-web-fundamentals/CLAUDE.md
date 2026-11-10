@@ -12,13 +12,18 @@ first; this file carries only what is specific to Л7.
 | `L07-web-fundamentals.md` | The spoken script. **Source of truth.** |
 | `README.md` | Theses — a summary and a crib sheet for the lectern, with the frame each thesis lives on. |
 | `slides/L07-web-fundamentals-slides.tex` | The deck. One frame per `[СЛАЙД n — …]` cue. |
+| `lab/LAB07-task.md` | The lab, as handed to the student. |
+| `lab/LAB07-review.md` | The same lab for whoever accepts it. |
 
-The three move together. Every thesis in `README.md` carries a frame number
+The five move together. Every thesis in `README.md` carries a frame number
 and `[—]` marks a thesis with no frame. **Adding, cutting or reordering a
 frame invalidates those numbers** — renumber the cues in the script, then
-re-derive the tags in `README.md`, in the same commit. There is no `lab/`
-directory yet: the lab is described only by the `[ЛАБА 7 — …]` block at the
-end of the script.
+re-derive the tags in `README.md`, in the same commit. The lab starts a new
+console project, `Shop.RawServer`, next to `Shop.Domain`/`HelloWorld`; it
+references `Shop.Domain` and asks for nothing the lecture does not cover. Lab
+8 rebuilds the same service on ASP.NET Core and moves `OrderStore` over as
+is, so the routes, the two seeded orders and the response texts are a
+contract between the two labs — change them in both.
 
 ## Shape specific to Л7
 
@@ -47,8 +52,9 @@ end of the script.
   57–58, gRPC 59–61, SSE 62, WebSocket 63, then 64–66 compare. The section
   opener has no ladder.
 - **The socket-server listing at the end was cut** in review («Это не нужно»),
-  together with its walk-through paragraph. The lab block stays, after the
-  closing thought, as in Л6.
+  together with its walk-through paragraph. The `[ЛАБА 7 — …]` block that
+  stayed after the closing thought is gone too: its content now lives in
+  `lab/`. The spoken mentions of the lab (§2, §4) stay.
 - **Comparison order:** the side to follow is on the left in teal — `404`
   before `200` (32), stateless before sessions in memory (42, 43), «можно»
   before «нельзя» (26, 47, 61), SSE before WebSocket (64).
@@ -72,6 +78,29 @@ Labels beside raw messages (21, 23, 62) are positioned with `remember
 picture` marks inside the listing, so the deck needs two pdflatex passes —
 `latexmk` does that. After editing a raw message, check the labels still sit
 on their lines in the built PDF.
+
+## Lab — how it was checked
+
+The lab is sized for about twenty minutes, on request: `OrderStore` and the
+accept loop are given as code, the student writes only `Server.HandleAsync`,
+and there is one break (`Content-Length` + 1 with the connection left open).
+Do not grow it back with more experiments; extra breaks live in the review
+file as things to ask for live.
+
+Everything quoted in `LAB07-review.md` comes from a minimal reference — a stub
+`Shop.Domain` plus `Shop.RawServer` built from the task's own snippets — run
+on dotnet SDK **10.0.114** (Linux) with curl **8.5.0**, in a scratch
+directory, not committed to the repo.
+
+| What | How it was checked |
+|---|---|
+| Given code | `OrderStore.cs`, `Program.cs` and the headers line pasted from the task as is; build clean. |
+| Route table | `curl -i` on every row: `/` 32 bytes (17 characters), `/orders` 57, `/orders/1` 27, `/orders/7` 404 / 11, `/orders/abc` and `/nope` 404 / 10, `DELETE /orders/1` 405 / 19 with `Allow: GET`. Ctrl+C → `stopped`, exit 0. |
+| Step 3 break | `+1` without `using` → error 28 «32 out of 33 bytes received» under `--max-time 3`; `+1` with `using` → error 18; correct length without `using` → no error; no `using` builds clean. |
+| Review-only | No empty line → error 8 «Header without colon». Length in characters → body `Магазин р`, curl exit 0. Keep-alive → `Re-using existing connection`, `+1` hangs with `using` in place. LF line endings shown with `curl -D - \| od -c`. |
+
+Re-run the reference if a route, a seeded order or a response text changes —
+the byte counts depend on them, and lab 8 compares against them.
 
 ## Open items
 
