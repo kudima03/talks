@@ -112,32 +112,40 @@ the labels still sit on their lines in the built PDF.
 
 ## Lab — how it was checked
 
+The lab is sized for ~20 minutes: three steps (same service on ASP.NET Core,
+errors in one place, background service) plus git, one «Вопрос» per step and
+one «усложнённый» in the whole lab. Boilerplate is given as ready code. There
+is no `IOrderService` — the handler throws `NotFoundException` when
+`OrderStore.Find` returns `null`. Russian prose uses the English terms
+(middleware, pipeline, endpoint, handler, host, logger, health check,
+background service, timer, token, exception filter, trace id) in Latin script.
+
 Everything quoted in `LAB08-review.md` comes from a minimal reference
 solution built and run on dotnet SDK **10.0.114** (Linux) in a scratch
-directory, not committed: a `Shop.Domain` with `DomainException` and
-`NotFoundException`, a `Shop.RawServer` on `TcpListener` (port 8088) and
-`Shop.Api` from `dotnet new web`. Two seeded orders — Ann Smith, Paid,
-300.00; Bob Brown, Created, 120.00 — the same as Л7's lab. Paths are shown as
-`/home/user/Shop.Api`; `Date` headers and `traceId`s are as captured.
+directory, not committed: `Shop.Domain` with `DomainException` and
+`NotFoundException`, `Shop.RawServer` on `TcpListener` (port 8088) and
+`Shop.Api` from `dotnet new web`. Seeded orders — Ann Smith, Paid, 300.00;
+Bob Brown, Created, 120.00 — as in Л7's lab. Paths are `/home/user/Shop.Api`;
+`Date` headers and `traceId`s are as captured.
 
 | Claim in the review | How it was checked |
 |---|---|
-| Two-server comparison | Both servers run side by side, `curl -i` on each. A string-returning handler answers `chunked`, `Results.Text` answers with `Content-Length`; `/nope` → empty `404`; `POST /orders` → empty `405` with `Allow: GET`; `/orders/abc` → `404` (route constraint). |
-| `NotFoundException` without middleware | `dotnet run` (Development) → plain-text trace in the body; `dotnet run -- --environment Production` → empty `500`, trace only in the Kestrel log. |
-| Reference session, steps 4–5 | Run as `dotnet Shop.Api.dll --urls …` (Production). `/fail/slow` with `curl --max-time 1` → curl exit 28, one `Information` line; `/fail/late` → curl exit 18. The `traceId` from a response is **not** in the console log. |
-| The missing log line | Without the filter, `/orders/7` and `/fail/boom` have no `RequestLoggingMiddleware` line. With logging before errors the line says `404`; with `try/finally` it says `200` — both run. |
-| Step 6 | `next` without `await` → `CS4014`, `/fail/slow` answers an empty `200` at once; no `next` at all → `CS9113`, empty `200` everywhere; `InvokeAsync` renamed → clean build, `No public 'Invoke' or 'InvokeAsync' method found…` at start. |
-| Step 7 | Stop with `SIGTERM` (a background job of a non-interactive shell ignores `SIGINT`) took 0.03 s, exit 0. `Thread.Sleep(10 s)` loop: no warning, stop took 5.04 s, one more stats line after `Application is shutting down...`. Exception out of `ExecuteAsync` → host stops, exit 0. `IOrderService` in the background service → `Cannot consume scoped service…` on `Build` in Development, silent start in Production. |
-| 413 → 500 | A temporary `MapPost` copying the body to `Stream.Null`, 31 000 000 bytes → `500` `Internal error`, `BadHttpRequestException: Request body too large…` in the log. |
-| Extra task | `dotnet run -- --urls http://localhost:5001` listened on 5001 and logged stats (`--urls` beats the launch profile); two instances side by side were not run. Quartz.Extensions.Hosting 4.7.1, the 4.x listing from frame 41 with `0/5 * * * * ?` and a 7 s job: runs do not overlap. `Program.cs` needs `using Quartz;`. |
+| Step 1 | Both servers side by side. `Shop.Api`: `/nope` → empty `404`, `POST /orders` → empty `405` with `Allow: GET`, plus `Date` and `Server`. |
+| Step 2 | `/orders/7` → `404` JSON, `/fail` → `500` `Internal error` + `traceId`; the full exception only in the log. The `traceId` is **not** in the console log. |
+| Step 3 | Two stats lines 10 s apart; stop with `SIGTERM` (a background job of a non-interactive shell ignores `SIGINT`) took 0.03 s, exit 0. |
+| Live edits | No `next` call in `ErrorHandlingMiddleware` → `CS9113`, empty `200` everywhere. `next` without `await` → `CS4014`, but `/orders/7` and `/fail` still work: both handlers are synchronous and throw before any `await`. |
+| Extra task | `RequestLoggingMiddleware` second: without the filter only `/orders/1` gets a line; with it `/orders/7` and `/fail` get one with the exception type. The cancellation branch on a `Task.Delay(10 s, context.RequestAborted)` endpoint with `curl --max-time 1` → curl exit 28, one `Information` line. `try/finally` logging `200` for a failed request was seen in an earlier run of the same reference. |
 
-**The lab's answer to open item 1 is the exception filter**
-(`catch (Exception e) when (LogFailed(...))` returning `false`): it keeps the
-lecture's order and gives one line per request, at the price of writing the
-exception type, not the final status, for a failed request. The `finally`
-variant is called out in the review as wrong (it logs `200`), the
-logging-first variant as acceptable with its price named. If the lecture's
-order changes, steps 4–5 and the table in the review change with it.
+**Open item 1 is now handled only in the extra task**: the exception filter
+(`catch (Exception e) when (LogFailed(...))` returning `false`) gives one
+line per request without changing the lecture's order. The main lab has no
+logging middleware at all.
+
+**Known gap:** the script (§3, the paragraph after frame 25) says «Чего в
+листинге нет и что вы добавите в лабораторной: отмену». The cancellation
+branch is in the extra task only, so a student who skips it never writes it.
+Either soften that sentence in the script or move the branch back into step 2.
+The 413 → 500 behaviour (open item 2) is not in the lab.
 
 ## Open items
 
@@ -146,8 +154,8 @@ The author's call. Do not quietly "fix" these:
 See «Открытые вопросы» in `README.md` — the same list, in Russian:
 
 1. Logging inside error handling never logs failed requests (verified). The
-   lab works around it with an exception filter, see above; the lecture is
-   unchanged.
-2. `ErrorHandlingMiddleware` turns Kestrel's 413 into 500 (verified). In the
-   lab it is an «усложнённый» question only.
+   lab's extra task works around it with an exception filter, see above;
+   the lecture is unchanged.
+2. `ErrorHandlingMiddleware` turns Kestrel's 413 into 500 (verified). Not
+   in the lab.
 3. The Latin Modern fallback has not been checked; the deck builds with PT Sans.
