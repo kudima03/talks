@@ -12,13 +12,17 @@ first; this file carries only what is specific to Л6.
 | `L06-resources-and-async.md` | The spoken script. **Source of truth.** |
 | `README.md` | Theses — a summary and a crib sheet for the lectern, with the frame each thesis lives on. |
 | `slides/L06-resources-and-async-slides.tex` | The deck. One frame per `[СЛАЙД n — …]` cue. |
+| `lab/LAB06-task.md` | The lab, as handed to the student. |
+| `lab/LAB06-review.md` | The same lab for whoever accepts it. |
 
-The three move together. Every thesis in `README.md` carries a frame number
+The five move together. Every thesis in `README.md` carries a frame number
 and `[—]` marks a thesis with no frame. **Adding, cutting or reordering a
 frame invalidates those numbers** — renumber the cues in the script, then
-re-derive the tags in `README.md`, in the same commit. There is no `lab/`
-directory yet: the lab is described only by the `[ЛАБА 6 — …]` block at the
-end of the script.
+re-derive the tags in `README.md`, in the same commit. The lab continues
+`Shop.Domain`/`HelloWorld` from Л3–Л5's labs (the domain's `TryParse` methods
+now parse lines of a file) and asks for nothing the lecture does not cover.
+The `[ЛАБА 6 — …]` block that used to close the script was moved into the
+lab files; the spoken announcement before frame 55 stays.
 
 ## Shape specific to Л6
 
@@ -75,6 +79,46 @@ Listings are ASCII only, including comments, same as every other lecture.
 Frames 12, 38, 50 and 51 set the listing at 6.6–6.8pt to fit above the footer —
 if a line is added there, check the built PDF, not just the `.tex`.
 
+## Lab — how it was checked
+
+Every number, session and diagnostic in `LAB06-review.md` (and the sample
+session in `LAB06-task.md`) comes from a minimal reference implementation —
+`Shop.Domain` (`Email`, `Money`, `OrderStatus` with `TryParse`) plus
+`HelloWorld` with `OrderLine`, `OrderLog`, `FileCheck` and the `digest` mode —
+built and run on dotnet SDK **10.0.114** (Linux, 8 cores) in a scratch
+directory, not committed to the repo. Paths are shown as `/home/user`.
+
+- **The generator is deterministic** (no `rand`): the totals are the same on
+  any machine, which is why the review quotes them as exact. Its output was
+  compared byte for byte under mawk 1.3.4 and busybox awk, and the totals were
+  cross-checked with an independent `awk` one-liner. 5 000 000 lines, 223 MB,
+  50 broken lines (all `Created`).
+- **Memory:** `ReadAllTextAsync` peaks at ~1 GB, `ReadAllLinesAsync` at
+  764 MB, the streaming digest at 56 MB (`PeakWorkingSet64`).
+- **The token is deliberately not passed to `WriteLineAsync`.** With it, 1 of
+  12 runs with a 1 s timeout ended on a cut line — with `await using` and with
+  plain `using` alike: cancellation lands between the writer taking chars out
+  of its buffer and handing them to the file. Without it, 15 of 15 runs ended
+  on a whole line. The task explains the choice; one «усложнённый» question
+  has the student put the token back and look. This departs from frame 52 on
+  purpose — keep the two consistent if either changes.
+- **The «file is free» check runs inside the process** (`FileShare.None`
+  open): after exit the OS closes everything, so an outside check proves
+  nothing. A writer without any `using` gives `BUSY` with the frame 11
+  message, and the file loses its tail (999 922 of 1 000 000 lines, last line
+  cut); a reader without `using` gives `BUSY` on the input.
+- **Ctrl+C** without a handler kills the process with the output cut
+  mid-line; with a linked token and `e.Cancel = true` it ends cleanly. Checked
+  with `timeout -s INT`.
+- **Diagnostics** (`CS4014` plus the runtime «stream is currently in use»,
+  `CS0029`, `CS8417`, `CS0161`, `CS8425`) were each triggered and copied
+  verbatim. `ReadLine()` instead of `ReadLineAsync`, an unpassed token and
+  sync `using` on the writer produce no diagnostic — the review says so.
+- The `grep` in step 7 was run against the reference (empty) and a probe file
+  (matches `.Result`, `.Wait(`, `ReadAll…`, `async void`).
+
+The extra task leans on `yield return` from frame 53 — see open item 1.
+
 ## Open items
 
 The author's call. Do not quietly "fix" these:
@@ -83,7 +127,8 @@ The author's call. Do not quietly "fix" these:
    «помните yield из прошлой лекции» before the state-machine steps (frame
    39) and before `IAsyncEnumerable` (frame 53), and frame 53 contains `yield
    return`. Л5 deliberately cut `yield return` (see its `CLAUDE.md`). Either
-   restore it there or teach it here from scratch.
+   restore it there or teach it here from scratch. Lab 6's optional task
+   (`ReadLinesAsync` with `yield return`) depends on the same frame.
 2. **Section timings are 30 + 45 = 75**, not 80; the header says 80.
 3. **The Latin Modern fallback has not been checked** for this deck; it builds
    with PT Sans.
