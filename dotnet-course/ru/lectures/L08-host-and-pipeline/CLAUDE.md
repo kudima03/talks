@@ -12,13 +12,19 @@ first; this file carries only what is specific to Л8.
 | `L08-host-and-pipeline.md` | The spoken script. **Source of truth.** |
 | `README.md` | Theses — a summary and a crib sheet for the lectern, with the frame each thesis lives on. |
 | `slides/L08-host-and-pipeline-slides.tex` | The deck. One frame per `[СЛАЙД n — …]` cue. |
+| `lab/LAB08-task.md` | The lab, as handed to the student. |
+| `lab/LAB08-review.md` | The same lab for whoever accepts it. |
 
-The three move together. Every thesis in `README.md` carries a frame number
+The five move together. Every thesis in `README.md` carries a frame number
 and `[—]` marks a thesis with no frame. **Adding, cutting or reordering a
 frame invalidates those numbers** — renumber the cues in the script, then
-re-derive the tags in `README.md`, in the same commit. There is no `lab/`
-directory yet: the lab is described only by the `[ЛАБА 8 — …]` block at the
-end of the script.
+re-derive the tags in `README.md`, in the same commit. The lab continues Л7's
+`Shop.RawServer`: `OrderStore` and the same three routes move into a new
+`dotnet new web` project, `Shop.Api`, which lives until the end of the
+course. It asks for nothing the lecture does not cover — no DTOs, binding,
+validation or OpenAPI (Л9), no options or lifetimes beyond frame 6 (Л10).
+The `[ЛАБА 8 — …]` block that used to close the script now lives in the two
+lab files; the spoken lab announcement stays.
 
 ## Shape specific to Л8
 
@@ -47,8 +53,7 @@ end of the script.
   the four loop decisions plus «exception stops the host, exit code 0»;
   25 is the five error-handling decisions with «в лог» / «клиенту» columns;
   26 is the short circuit plus who answers by itself.
-- **No lab mentions on slides** (review). The lab lives in the script's
-  `[ЛАБА 8 — …]` block.
+- **No lab mentions on slides** (review). The lab lives in `lab/`.
 - **The deck is what the lecturer reads from.** Slides carry short marks on
   the important things (tables, asides, labels beside listings) rather than
   bare titles. Keep marks short; delivery lives in the script.
@@ -105,12 +110,44 @@ positioned with `remember picture` marks inside the listing, so the deck needs
 two pdflatex passes — `latexmk` does that. After editing such a listing, check
 the labels still sit on their lines in the built PDF.
 
+## Lab — how it was checked
+
+Everything quoted in `LAB08-review.md` comes from a minimal reference
+solution built and run on dotnet SDK **10.0.114** (Linux) in a scratch
+directory, not committed: a `Shop.Domain` with `DomainException` and
+`NotFoundException`, a `Shop.RawServer` on `TcpListener` (port 8088) and
+`Shop.Api` from `dotnet new web`. Two seeded orders — Ann Smith, Paid,
+300.00; Bob Brown, Created, 120.00 — the same as Л7's lab. Paths are shown as
+`/home/user/Shop.Api`; `Date` headers and `traceId`s are as captured.
+
+| Claim in the review | How it was checked |
+|---|---|
+| Two-server comparison | Both servers run side by side, `curl -i` on each. A string-returning handler answers `chunked`, `Results.Text` answers with `Content-Length`; `/nope` → empty `404`; `POST /orders` → empty `405` with `Allow: GET`; `/orders/abc` → `404` (route constraint). |
+| `NotFoundException` without middleware | `dotnet run` (Development) → plain-text trace in the body; `dotnet run -- --environment Production` → empty `500`, trace only in the Kestrel log. |
+| Reference session, steps 4–5 | Run as `dotnet Shop.Api.dll --urls …` (Production). `/fail/slow` with `curl --max-time 1` → curl exit 28, one `Information` line; `/fail/late` → curl exit 18. The `traceId` from a response is **not** in the console log. |
+| The missing log line | Without the filter, `/orders/7` and `/fail/boom` have no `RequestLoggingMiddleware` line. With logging before errors the line says `404`; with `try/finally` it says `200` — both run. |
+| Step 6 | `next` without `await` → `CS4014`, `/fail/slow` answers an empty `200` at once; no `next` at all → `CS9113`, empty `200` everywhere; `InvokeAsync` renamed → clean build, `No public 'Invoke' or 'InvokeAsync' method found…` at start. |
+| Step 7 | Stop with `SIGTERM` (a background job of a non-interactive shell ignores `SIGINT`) took 0.03 s, exit 0. `Thread.Sleep(10 s)` loop: no warning, stop took 5.04 s, one more stats line after `Application is shutting down...`. Exception out of `ExecuteAsync` → host stops, exit 0. `IOrderService` in the background service → `Cannot consume scoped service…` on `Build` in Development, silent start in Production. |
+| 413 → 500 | A temporary `MapPost` copying the body to `Stream.Null`, 31 000 000 bytes → `500` `Internal error`, `BadHttpRequestException: Request body too large…` in the log. |
+| Extra task | `dotnet run -- --urls http://localhost:5001` listened on 5001 and logged stats (`--urls` beats the launch profile); two instances side by side were not run. Quartz.Extensions.Hosting 4.7.1, the 4.x listing from frame 41 with `0/5 * * * * ?` and a 7 s job: runs do not overlap. `Program.cs` needs `using Quartz;`. |
+
+**The lab's answer to open item 1 is the exception filter**
+(`catch (Exception e) when (LogFailed(...))` returning `false`): it keeps the
+lecture's order and gives one line per request, at the price of writing the
+exception type, not the final status, for a failed request. The `finally`
+variant is called out in the review as wrong (it logs `200`), the
+logging-first variant as acceptable with its price named. If the lecture's
+order changes, steps 4–5 and the table in the review change with it.
+
 ## Open items
 
 The author's call. Do not quietly "fix" these:
 
 See «Открытые вопросы» in `README.md` — the same list, in Russian:
 
-1. Logging inside error handling never logs failed requests (verified).
-2. `ErrorHandlingMiddleware` turns Kestrel's 413 into 500 (verified).
+1. Logging inside error handling never logs failed requests (verified). The
+   lab works around it with an exception filter, see above; the lecture is
+   unchanged.
+2. `ErrorHandlingMiddleware` turns Kestrel's 413 into 500 (verified). In the
+   lab it is an «усложнённый» question only.
 3. The Latin Modern fallback has not been checked; the deck builds with PT Sans.
