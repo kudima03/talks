@@ -81,43 +81,32 @@ if a line is added there, check the built PDF, not just the `.tex`.
 
 ## Lab — how it was checked
 
-Every number, session and diagnostic in `LAB06-review.md` (and the sample
-session in `LAB06-task.md`) comes from a minimal reference implementation —
-`Shop.Domain` (`Email`, `Money`, `OrderStatus` with `TryParse`) plus
-`HelloWorld` with `OrderLine`, `OrderLog`, `FileCheck` and the `digest` mode —
-built and run on dotnet SDK **10.0.114** (Linux, 8 cores) in a scratch
-directory, not committed to the repo. Paths are shown as `/home/user`.
+The lab is sized for about twenty minutes: three steps (file, streaming
+digest, timeout plus «file is free»), one question each and one
+«усложнённый» in the whole lab; the generator and `FileCheck.IsFree` are
+given ready. The «remove `await using`» break lives in the review as a live
+request at acceptance, not in the task.
 
-- **The generator is deterministic** (no `rand`): the totals are the same on
-  any machine, which is why the review quotes them as exact. Its output was
-  compared byte for byte under mawk 1.3.4 and busybox awk, and the totals were
-  cross-checked with an independent `awk` one-liner. 5 000 000 lines, 223 MB,
-  50 broken lines (all `Created`).
-- **Memory:** `ReadAllTextAsync` peaks at ~1 GB, `ReadAllLinesAsync` at
-  764 MB, the streaming digest at 56 MB (`PeakWorkingSet64`).
-- **The token is deliberately not passed to `WriteLineAsync`.** With it, 1 of
-  12 runs with a 1 s timeout ended on a cut line — with `await using` and with
-  plain `using` alike: cancellation lands between the writer taking chars out
-  of its buffer and handing them to the file. Without it, 15 of 15 runs ended
-  on a whole line. The task explains the choice; one «усложнённый» question
-  has the student put the token back and look. This departs from frame 52 on
-  purpose — keep the two consistent if either changes.
-- **The «file is free» check runs inside the process** (`FileShare.None`
-  open): after exit the OS closes everything, so an outside check proves
-  nothing. A writer without any `using` gives `BUSY` with the frame 11
-  message, and the file loses its tail (999 922 of 1 000 000 lines, last line
-  cut); a reader without `using` gives `BUSY` on the input.
-- **Ctrl+C** without a handler kills the process with the output cut
-  mid-line; with a linked token and `e.Cancel = true` it ends cleanly. Checked
-  with `timeout -s INT`.
-- **Diagnostics** (`CS4014` plus the runtime «stream is currently in use»,
-  `CS0029`, `CS8417`, `CS0161`, `CS8425`) were each triggered and copied
-  verbatim. `ReadLine()` instead of `ReadLineAsync`, an unpassed token and
-  sync `using` on the writer produce no diagnostic — the review says so.
-- The `grep` in step 7 was run against the reference (empty) and a probe file
-  (matches `.Result`, `.Wait(`, `ReadAll…`, `async void`).
+Every number, session and diagnostic comes from a minimal reference
+implementation (`OrderLog.DigestAsync`, `FileCheck`, the `digest` mode in
+`Program.cs`, `OrderStatus` from `Shop.Domain`) built and run on dotnet SDK
+**10.0.114** (Linux) in a scratch directory, not committed. Paths are shown
+as `/home/user`.
 
-The extra task leans on `yield return` from frame 53 — see open item 1.
+- The generator is deterministic: 5 000 000 lines, 223 MB, one million per
+  status. Output was compared byte for byte under mawk and busybox awk.
+- Peak memory: the digest 48–49 MB, `ReadAllTextAsync` on the same file 995 MB.
+- A full digest takes ~1.5 s, so a 1 s timeout cancels on every run (5 of 5);
+  `totals.txt` is then empty, since totals are written after the loop.
+- Writer without `await using`: `IsFree` prints `BUSY` with the frame 11
+  message and `totals.txt` is 0 bytes after exit.
+- `CS0029`, `CS8417` and `CS4014` were triggered and copied verbatim; a token
+  not passed to `ReadLineAsync` produces no diagnostic and the 1 s timeout no
+  longer stops the run (exit code 0).
+- The optional task (`ReadLinesAsync` with `yield return`) was run against an
+  earlier version of the generator: an early exit from `await foreach`
+  disposes the Reader and `IsFree` prints `free`. It leans on frame 53 — see
+  open item 1.
 
 ## Open items
 
