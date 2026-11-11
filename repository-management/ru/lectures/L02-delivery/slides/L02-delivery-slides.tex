@@ -19,6 +19,7 @@
 
 \usetheme{dotnet}
 \usetikzlibrary{arrows.meta,positioning,calc}
+\usepackage{array}   % \arraybackslash on the reading-list slide
 
 \dotnetlecture{Л2}
 
@@ -45,6 +46,15 @@
     {\includegraphics[width=2.6cm,height=2.6cm,keepaspectratio]{img/#1.png}}%
     {\fcolorbox{hairline}{paper}{\parbox[c][2.5cm][c]{2.5cm}%
        {\centering\color{muted}\scriptsize QR}}}}
+
+% A book cover at a fixed height, on a hairline so a white cover does not
+% dissolve into the paper. Falls back to an empty box when the file is absent.
+\newcommand{\bookcover}[1]{%
+  \IfFileExists{img/#1.jpg}%
+    {{\setlength{\fboxsep}{0pt}\setlength{\fboxrule}{0.5pt}%
+      \fcolorbox{hairline}{paper}{\includegraphics[height=3.7cm]{img/#1.jpg}}}}%
+    {\fcolorbox{hairline}{paper}{\parbox[c][3.7cm][c]{2.6cm}%
+       {\centering\color{muted}\scriptsize cover}}}}
 
 \begin{document}
 
@@ -806,5 +816,27 @@ public sealed class Greeter
 \end{frame}
 \note{Если вопросов нет -- спросить: с каким тезисом сегодня вы не
   согласны? Попросить оформить возражение как issue в репозитории лекции.}
+
+\begin{frame}{Рекомендовано к прочтению}
+  \slidetop
+  \begin{center}
+    \begin{tabular}{@{}p{4.1cm}p{4.1cm}p{4.1cm}@{}}
+      \centering\bookcover{book-code-ahead} &
+      \centering\bookcover{book-continuous-delivery} &
+      \centering\arraybackslash\bookcover{book-pmp-exam-prep} \\[0.9em]
+      \centering{\bfseries\hi{Code Ahead}} &
+      \centering{\bfseries\hi{Continuous Delivery}} &
+      \centering\arraybackslash{\bfseries\hi{PMP Exam Prep}} \\[0.3em]
+      \centering{\small\color{muted}Егор Бугаенко} &
+      \centering{\small\color{muted}Jez Humble, David Farley} &
+      \centering\arraybackslash{\small\color{muted}Rita Mulcahy} \\
+    \end{tabular}
+  \end{center}
+\end{frame}
+\note{Оставить на экране, пока расходятся. Code Ahead -- полуавтобиографический
+  роман об архитекторе ПО: те же темы, но изнутри и в лицах.
+  Continuous Delivery -- главная книга о поставке: всё из четвёртого
+  раздела там разобрано подробно. PMP Exam Prep -- управление проектами как
+  дисциплина: сроки, риски, содержание работ.}
 
 \end{document}
