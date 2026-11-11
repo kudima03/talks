@@ -20,15 +20,15 @@ the numbers** — renumber the cues in the script, then re-derive the tags in
 ## Facts this lecture commits to
 
 - Section timings: **5 / 15 / 25 / 13 / 22** = 80 minutes.
-- **38 slides**, numbered 1–38 in order.
+- **39 slides**, numbered 1–39 in order.
 - Git is one section of four (§2): the model, nine everyday commands, bisect.
   It must not grow into a command reference.
-- The sample repository is `HelloWorld`. Every terminal listing (frames 16,
-  18, 19, 22) is real output of git 2.43.0 on a throwaway repository, author
+- The sample repository is `HelloWorld`. Every terminal listing (frames 17,
+  19, 20, 23) is real output of git 2.43.0 on a throwaway repository, author
   `Student`; only the home directory is anonymised. Re-capture rather than
-  edit: the hashes on frames 14, 16, 18, 19 and 22 belong to one history.
-- One `\statement` pair (frames 5, 34), one `\shout` (frame 38), three
-  `\keyline`s (frames 12, 28, 37).
+  edit: the hashes on frames 14, 15, 17, 19, 20 and 23 belong to one history.
+- One `\statement` pair (frames 5, 35), one `\shout` (frame 39), three
+  `\keyline`s (frames 12, 29, 38).
 
 ## Open items
 
