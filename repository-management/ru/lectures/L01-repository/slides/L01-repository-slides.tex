@@ -1,31 +1,31 @@
 % Repository management, lecture 1 of 2 -- the repository as the centre of
 % the project: philosophy, Git in broad strokes, organisation, protection.
 %
-% Companion to ../repository-management-talk.md, which is the source of
-% truth for structure and theses. Slide text and speaker notes are in Russian
+% Companion to ../L01-repository.md, which is the source of truth for structure
+% and theses. Slide text and speaker notes are in Russian
 % because that is the content; everything else in this file is English.
 %
 % Build:  make          (latexmk -pdf; engine: pdflatex)
-%         make notes    (same decks plus speaker notes on a second screen)
+%         make notes    (same deck plus speaker notes on a second screen)
 %
 % Every terminal listing is real output of git 2.43.0 on a throwaway
 % HelloWorld repository; only the home directory is anonymised.
 %
-% Theme and house rules: ../../../dotnet-course/theme/ and
-% ../../../dotnet-course/CLAUDE.md.
+% House rules: ../CLAUDE.md and ../../../../CLAUDE.md.
+% Theme: ../../../../../dotnet-course/theme/.
 
 \documentclass[aspectratio=169,10pt,t]{beamer}
 
 \usetheme{dotnet}
 \usetikzlibrary{arrows.meta,positioning,calc}
 
-\dotnetlecture{РМ1}
+\dotnetlecture{Л1}
 
 \ifdefined\shownotes
   \setbeameroption{show notes on second screen=right}
 \fi
 
-\title[РМ1. Репозиторий]{Управление репозиторием: центр мироздания проекта}
+\title[Л1. Репозиторий]{Управление репозиторием: центр мироздания проекта}
 \author{Дмитрий Курочкин}
 \date{}
 
@@ -34,6 +34,15 @@
               minimum height=0.95cm,align=center,inner sep=0.4em},
   ar/.style={-{Straight Barb[length=1.8mm]},ink,line width=0.7pt},
 }
+
+% Fit inside a 2.6cm square rather than scaling by width alone: the supplied
+% codes are not all square, and width-only scaling makes a taller one overrun
+% the row.
+\newcommand{\qrbox}[1]{%
+  \IfFileExists{img/#1.png}%
+    {\includegraphics[width=2.6cm,height=2.6cm,keepaspectratio]{img/#1.png}}%
+    {\fcolorbox{hairline}{paper}{\parbox[c][2.5cm][c]{2.5cm}%
+       {\centering\color{muted}\scriptsize QR}}}}
 
 \begin{document}
 
@@ -48,6 +57,25 @@
 
 % ================================================= 0. WHY ==================
 \section{0. Зачем это всё}
+
+\begin{frame}{Контакты}
+  \slidetop
+  \begin{center}
+    \begin{tabular}{@{}c@{\hspace{1.6cm}}c@{\hspace{1.6cm}}c@{}}
+      \qrbox{github-qr} & \qrbox{telegram-qr} & \qrbox{nuget-qr} \\[0.8em]
+      {\color{accent}\bfseries GitHub} &
+      {\color{accent}\bfseries Telegram} &
+      {\color{accent}\bfseries NuGet} \\
+    \end{tabular}
+  \end{center}
+
+  \slidegap
+  \begin{center}
+    {\large\texttt{dmitry.kurochkin0@gmail.com}}
+  \end{center}
+\end{frame}
+\note{Все ссылки здесь, на одном слайде. Регалии -- голосом, одной фразой.
+  Дальше сразу вопрос в зал.}
 
 \begin{frame}[plain]
   \vote{Кто собирается быть разработчиком ПО?\\[0.4em] А кто ---
