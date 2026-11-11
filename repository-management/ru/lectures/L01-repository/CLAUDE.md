@@ -19,8 +19,8 @@ the numbers** — renumber the cues in the script, then re-derive the tags in
 
 ## Facts this lecture commits to
 
-- Section timings: **5 / 15 / 22 / 18 / 20** = 80 minutes.
-- **45 slides**, numbered 1–45 in order.
+- Section timings: **5 / 15 / 24 / 22 / 14** = 80 minutes.
+- **42 slides**, numbered 1–42 in order.
 - Git is one section of four (§2): the model, the first commit, branching,
   the three ways to merge, nine everyday commands. It must not grow into a
   command reference. **Bisect was cut in review** — do not restore it.
@@ -41,8 +41,10 @@ the numbers** — renumber the cues in the script, then re-derive the tags in
   not in a note. First-year students may not know the words; frames 28 and
   29 introduce them. Before that it is «задача в репозитории» and
   «изменение».
-- One `\statement` pair (frames 5, 41), one `\shout` (frame 45), three
-  `\keyline`s (frames 12, 35, 44).
+- **Tests and review are not in this lecture.** They were moved to Л2 §1 in
+  review; §4 here stops at the CI workflow.
+- One `\statement` (frame 5), one `\shout` (frame 42), three `\keyline`s
+  (frames 12, 35, 41).
 
 ## Open items
 
