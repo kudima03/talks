@@ -8,8 +8,8 @@ carries only what is specific to Л1.
 
 | File | What it is |
 |---|---|
-| `L01-repository.md` | The script: slide cues and the thesis each frame carries. **Source of truth.** Spoken prose is not written yet. |
-| `README.md` | Theses — a compressed index of the script, with the frame each thesis lives on. |
+| `L01-repository.md` | The spoken script, with one `[СЛАЙД n — …]` cue per frame. **Source of truth.** |
+| `README.md` | Theses — a compressed index of the script, used as a crib sheet at the lectern. Every thesis carries its frame number; `[—]` marks one that is spoken only. Written by hand, not generated. |
 | `slides/L01-repository-slides.tex` | The deck. One frame per `[СЛАЙД n — …]` cue. |
 | `slides/img/` | QR codes for the contact slide (frame 2), copied from the .NET course. |
 
@@ -19,6 +19,9 @@ the numbers** — renumber the cues in the script, then re-derive the tags in
 
 ## Facts this lecture commits to
 
+- **The script is written for the ear**, about 7,200 words. That is under an
+  hour of speech; the rest of the 80 minutes is the two live demos (frames 17
+  and 31), the questions to the room and the pauses.
 - Section timings: **5 / 15 / 24 / 22 / 14** = 80 minutes.
 - **42 slides**, numbered 1–42 in order.
 - Git is one section of four (§2): the model, the first commit, branching,

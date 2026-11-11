@@ -8,8 +8,8 @@ carries only what is specific to Л2.
 
 | File | What it is |
 |---|---|
-| `L02-delivery.md` | The script: slide cues and the thesis each frame carries. **Source of truth.** Spoken prose is not written yet. |
-| `README.md` | Theses — a compressed index of the script, with the frame each thesis lives on. |
+| `L02-delivery.md` | The spoken script, with one `[СЛАЙД n — …]` cue per frame. **Source of truth.** |
+| `README.md` | Theses — a compressed index of the script, used as a crib sheet at the lectern. Every thesis carries its frame number; `[—]` marks one that is spoken only. Written by hand, not generated. |
 | `slides/L02-delivery-slides.tex` | The deck. One frame per `[СЛАЙД n — …]` cue. |
 | `slides/img/` | QR codes for the contact slide (frame 37), copied from the .NET course. |
 
@@ -19,6 +19,13 @@ the numbers** — renumber the cues in the script, then re-derive the tags in
 
 ## Facts this lecture commits to
 
+- **The script is written for the ear**, about 6,800 words. That is under an
+  hour of speech; the rest is the author's own story about tests (frame 4,
+  marked `[ИСТОРИЯ АВТОРА: …]` in the script and still to be written), the
+  questions to the room and the discussion the lecture invites.
+- **Where the script states the author's position rather than industry
+  practice, it says so aloud**: the leader as main contributor (frame 11) and
+  pay per artefact (frame 18). Keep those sentences.
 - Section timings: **2 / 10 / 20 / 20 / 20 / 8** = 80 minutes.
 - **38 slides**, numbered 1–38 in order.
 - §1 «Тесты и review» (frames 3–5) came from Л1 §4. The phrase «код без

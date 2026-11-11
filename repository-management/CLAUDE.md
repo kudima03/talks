@@ -17,6 +17,9 @@ What differs from the .NET course:
 - **The theme is not copied.** Each lecture's `Makefile` points at
   `dotnet-course/theme/`.
 - **There are no labs** and no `lecture-notes.md` yet.
+- **Scripts are spoken prose**, in the register of the .NET scripts: plain
+  sentences, terms explained on first use, no slide bullets. Delivery marks
+  are `[ВОПРОС В ЗАЛ]` and `[ПАУЗА]`.
 - **The audience is first-year students.** Git is taught as a model and a
   handful of commands; the weight is on concepts.
 - **The sample repository is `HelloWorld`**, and terminal output is real git
