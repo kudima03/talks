@@ -1,0 +1,717 @@
+% Repository management, lecture 2 of 2 -- who runs the repository and how
+% the product reaches its users: the leader, tasks and money, delivery, AI.
+%
+% Companion to ../repository-management-talk.md, which is the source of
+% truth for structure and theses. Slide text and speaker notes are in Russian
+% because that is the content; everything else in this file is English.
+%
+% Build:  make          (latexmk -pdf; engine: pdflatex)
+%         make notes    (same decks plus speaker notes on a second screen)
+%
+% The sabotage slide paraphrases section 11 of the OSS Simple Sabotage Field
+% Manual (1944) in Russian; re-check it against the original before
+% delivery.
+%
+% Theme and house rules: ../../../dotnet-course/theme/ and
+% ../../../dotnet-course/CLAUDE.md.
+
+\documentclass[aspectratio=169,10pt,t]{beamer}
+
+\usetheme{dotnet}
+\usetikzlibrary{arrows.meta,positioning,calc}
+
+\dotnetlecture{РМ2}
+
+\ifdefined\shownotes
+  \setbeameroption{show notes on second screen=right}
+\fi
+
+\title[РМ2. Лидер и поставка]{Управление репозиторием: лидер, задачи,
+  поставка}
+\author{Дмитрий Курочкин}
+\date{}
+
+\tikzset{
+  box/.style={draw=hairline,line width=0.8pt,fill=codebg,
+              minimum height=0.95cm,align=center,inner sep=0.4em},
+  ar/.style={-{Straight Barb[length=1.8mm]},ink,line width=0.7pt},
+}
+
+\begin{document}
+
+% ------------------------------------------------------------------ title --
+\begin{frame}[plain]
+  \titlepagednc{Управление репозиторием · лекция 2 из 2}{Лидер, задачи,
+    поставка}{Кто управляет репозиторием и как продукт доходит до
+    пользователя}{Дмитрий Курочкин}
+\end{frame}
+\note{80 минут. В прошлый раз -- механизм: репозиторий, Git, проверки.
+  Сегодня -- люди, деньги и выпуск. Самая спорная лекция из двух: спорьте.}
+
+% ================================================= 0. RECAP ================
+\section{0. Где мы}
+
+\begin{frame}{Где мы остановились}
+  \slidetop
+  \claim{Механизм есть. Он \hi{ничего не решает сам}.}
+
+  \begin{center}
+    \begin{tikzpicture}[font=\small,
+      sk/.style={box,text width=2.05cm,minimum height=1.25cm}]
+      \node[sk] (a) {философия};
+      \node[sk,right=0.45cm of a] (b) {организация};
+      \node[sk,right=0.45cm of b] (c) {защита};
+      \node[sk,draw=accent,line width=1.0pt,right=0.45cm of c] (d)
+        {\hi{управление задачами}};
+      \node[sk,draw=accent,line width=1.0pt,right=0.45cm of d] (e)
+        {\hi{поставка}};
+      \draw[ar] (a) -- (b); \draw[ar] (b) -- (c);
+      \draw[ar] (c) -- (d); \draw[ar] (d) -- (e);
+      \node[accent,font=\scriptsize\bfseries,below=0.7em]
+        at ($(d.south)!0.5!(e.south)$) {сегодня};
+    \end{tikzpicture}
+  \end{center}
+
+  \slidegap
+  \aside{Проверки говорят <<можно слить>>. Кто говорит \hi{<<сливаем>>},
+    \hi{<<не будем этого делать>>} и \hi{<<выпускаем>>}?}
+\end{frame}
+\note{Напомнить три вещи: чего нет в репозитории -- того не было; main
+  всегда рабочий; не доверяй контрибьютору. Теперь вопрос, на который
+  автоматика не отвечает.}
+
+% ================================================= 1. LEADER ===============
+\section{1. Лидер}
+
+\begin{frame}[plain]
+  \sectionopener{1}{Лидер}{Важнее любого утверждения из обеих лекций ---
+    \hi{наличие лидера}.}
+\end{frame}
+\note{Бюджет: 22 минуты.}
+
+\begin{frame}[plain]
+  \vote{Вы делали проект командой.\\[0.4em] Кто принимал окончательное
+    решение?}
+\end{frame}
+\note{Ждать ответов. Обычно: <<все вместе>>, <<как-то само>>, <<тот, кто
+  больше всех писал>>. Третий ответ запомнить -- к нему вернёмся.}
+
+\begin{frame}{Инструкция по саботажу, 1944 год}
+  \slidetop
+  \claim{Как развалить организацию изнутри, \lo{не нарушив ни одного
+    правила}.}
+
+  \begin{cbul}{alt}
+    \item всё делать только через <<официальные каналы>>, не допускать
+      коротких путей
+    \item любой вопрос передавать в комитет <<для дальнейшего изучения>>;
+      комитет --- не меньше пяти человек
+    \item спорить о точности формулировок
+    \item возвращаться к уже принятым решениям и ставить их под сомнение
+    \item призывать к <<осторожности>> и не спешить
+  \end{cbul}
+
+  \slidegap
+  \aside{Simple Sabotage Field Manual, Управление стратегических служб
+    США. Рассекречено. Написано для диверсантов --- читается как
+    \lo{протокол обычного совещания}.}
+\end{frame}
+\note{Дать прочитать молча. Спросить: узнаёте? Это не карикатура, это
+  документ разведки. Всё перечисленное лечится одним: человеком, который
+  выслушал и сказал <<делаем так>>. Сам документ приложен к лекции.}
+
+\begin{frame}[plain]
+  \statement{Самый плохой лидер лучше, чем \lo{его отсутствие}.}
+\end{frame}
+\note{Команда хочет лидера. Без него она тильтует и ничего не хочет делать:
+  любой спор длится вечно, любое решение можно переоткрыть. Не стесняйтесь
+  быть лидером: отклонять и принимать, поощрять и наказывать.}
+
+\begin{frame}{Сержант}
+  \slidetop
+  \claim{Лидер \hi{слушает всех} --- и решает \hi{один}.}
+
+  \begin{center}
+    \begin{tikzpicture}[font=\small,
+      st/.style={box,minimum width=2.7cm,minimum height=1.15cm}]
+      \node[st] (a) {доклады\\{\scriptsize\color{muted}письменно}};
+      \node[st,right=1.0cm of a] (b) {лидер\\слушает};
+      \node[st,right=1.0cm of b,draw=accent,line width=1.0pt] (c)
+        {\hi{решение}\\{\scriptsize\color{muted}одно, жёсткое}};
+      \node[st,right=1.0cm of c] (d) {все бегут\\в одну сторону};
+      \foreach \x/\y in {a/b,b/c,c/d} \draw[ar] (\x) -- (\y);
+    \end{tikzpicture}
+  \end{center}
+
+  \slidegap
+  \aside{<<Всем спасибо, бежим туда>>. Решение может оказаться неверным
+    --- его исправят следующим. \lo{Отсутствие решения исправить нечем.}}
+\end{frame}
+\note{Сержант и солдаты -- самая вечная структура. Он собирает разведку,
+  слушает, потом говорит: всем спасибо, бежим мы туда. Финальное решение за
+  лидером, и он не обязан выигрывать спор, чтобы его принять. Это не
+  безрассудство: доклады -- письменно, в задаче или в PR, чтобы остался
+  след.}
+
+\begin{frame}{Лидером не назначают}
+  \slidetop
+  \claim{Единственный способ стать лидером проекта --- стать его
+    \hi{главным контрибьютором}.}
+
+  \versus{боевой генерал}{%
+    \begin{cbul}{accent}
+      \item пишет код и читает чужой
+      \item знает проект руками
+      \item решает, потому что понимает
+      \item ему верят
+    \end{cbul}}{штабной}{%
+    \begin{cbul}{alt}
+      \item двигает карточки по доске
+      \item знает проект по отчётам
+      \item решает, потому что назначен
+      \item его терпят
+    \end{cbul}}
+\end{frame}
+\note{Если вас назначили на проект и вы перетаскиваете задачи на
+  канбан-доске -- вы не лидер, даже если так написано в должности. Команде
+  нужен тот, кто идёт первым. Вернуться к ответу из зала: <<тот, кто больше
+  всех писал>>.}
+
+\begin{frame}{Что лидер должен}
+  \slidetop
+  \begin{tabular}{@{}p{4.8cm}p{8.4cm}@{}}
+    \textbf{\hi{отвечать}} & успехи --- это успехи команды, провалы ---
+      ваши провалы \\[0.55em]
+    \textbf{\hi{держать дисциплину}} & правило без исключений; жёсткость
+      к работе, а не к людям \\[0.55em]
+    \textbf{\hi{расставаться}} & тот, кто не работает, деморализует тех,
+      кто работает \\[0.55em]
+    \textbf{\hi{стоять}} & <<весь мир делает иначе>> --- не аргумент;
+      аргумент --- артефакт \\[0.55em]
+    \textbf{\hi{вдыхать жизнь}} & проект движется, пока вы им горите \\
+  \end{tabular}
+
+  \slidegap
+  \aside{Вас будут пытаться сломать. Если вы уступаете каждому --- зачем
+    вы нужны?}
+\end{frame}
+\note{Дисциплина first. Масштаб личности: проект не больше своего лидера.
+  Про <<весь мир использует Agile>>: не спорьте о методологии -- попросите
+  оформить предложение артефактом и примите решение.}
+
+\begin{frame}[plain]
+  \keyline{Review, спор, приоритет, выпуск: \hi{решение всегда за лидером
+    проекта}.}
+\end{frame}
+\note{Теперь у нас есть тот, кто решает. Посмотрим, как к нему попадает
+  работа.}
+
+% ================================================= 2. TASKS ================
+\section{2. Управление задачами}
+
+\begin{frame}[plain]
+  \sectionopener{2}{Управление задачами}{Смотрим с двух сторон:
+    \hi{владелец репозитория} с бюджетом и \lo{разработчик}.}
+\end{frame}
+\note{Бюджет: 22 минуты. Вы побываете и тем и другим, часто одновременно.}
+
+\begin{frame}{След изменения}
+  \slidetop
+  \claim{Про любую строку кода можно выяснить: \hi{кто просил, кто сделал,
+    кто принял}.}
+
+  \begin{center}
+    \begin{tikzpicture}[font=\small,
+      st/.style={box,minimum width=1.9cm,minimum height=1.15cm}]
+      \node[st] (a) {issue\\\texttt{\#42}};
+      \node[st,right=0.6cm of a] (b) {ветка};
+      \node[st,right=0.6cm of b] (c) {pull request\\\texttt{\#43}};
+      \node[st,right=0.6cm of c] (d) {коммит\\в main};
+      \node[st,right=0.6cm of d] (e) {релиз\\\texttt{1.4.0}};
+      \foreach \x/\y in {a/b,b/c,c/d,d/e} \draw[ar] (\x) -- (\y);
+      \node[muted,font=\scriptsize,below=0.5em] at (a.south) {зачем};
+      \node[muted,font=\scriptsize,below=0.5em] at (c.south)
+        {как и кто принял};
+      \node[muted,font=\scriptsize,below=0.5em] at (e.south)
+        {когда дошло до людей};
+    \end{tikzpicture}
+  \end{center}
+
+  \slidegap
+  \aside{Каждое звено ссылается на предыдущее. Pull request без задачи ---
+    \lo{подозрительный}: никто не просил этого делать.}
+\end{frame}
+\note{Это и есть <<полный trace изменений>>. Через год вопрос <<почему тут
+  так>> решается за минуту: blame, коммит, PR, задача.}
+
+\begin{frame}{Задача --- маленькая}
+  \slidetop
+  \claim{Задачу можно сделать \hi{за один подход} и проверить \hi{одним
+    взглядом}.}
+
+  \begin{tabular}{@{}p{4.6cm}p{8.6cm}@{}}
+    \textbf{\hi{что не так}}       & наблюдаемый факт, а не пожелание \\[0.5em]
+    \textbf{\hi{что считается готовым}} & условие, которое можно
+      проверить \\[0.5em]
+    \textbf{\hi{один результат}}   & одна задача --- один pull request \\[0.5em]
+    \textbf{\hi{milestone}}        & к какому выпуску это относится \\
+  \end{tabular}
+
+  \slidegap
+  \aside{Большое делится на маленькое. Вклад измеряется \hi{числом принятых
+    микровкладов}, а не часами и не строками.}
+\end{frame}
+\note{Milestones: набор задач, который вместе образует выпуск. Видно,
+  сколько осталось. Вклад -- contribution: принятый PR, оформленная задача,
+  найденная ошибка в документации.}
+
+\begin{frame}{Draft и пинг}
+  \slidetop
+  \versus{draft pull request}{%
+    \begin{cbul}{accent}
+      \item открывается \hi{в первый день}
+      \item видно, что работа идёт
+      \item CI проверяет с первого коммита
+      \item ошибку направления ловят рано
+    \end{cbul}}{ping until death}{%
+    \begin{cbul}{alt}
+      \item задача без ответа \lo{не лежит}
+      \item напоминание --- по расписанию
+      \item нет ответа --- задача уходит другому
+      \item молчание не бывает статусом
+    \end{cbul}}
+
+  \slidegap
+  \aside{И то и другое --- про одно: состояние работы видно \hi{в
+    репозитории}, а не выясняется в личной переписке.}
+\end{frame}
+\note{Draft PR: <<я ещё не закончил, но смотрите уже>>. Ping until death:
+  напоминать, пока не получишь ответ или пока задача не будет снята. Пинг
+  может делать бот.}
+
+\begin{frame}{Вы платите за артефакт, а не за время}
+  \slidetop
+  \versus{цена за задачу}{%
+    \begin{cbul}{accent}
+      \item у задачи есть цена, она названа заранее
+      \item принято --- оплачено, \hi{сразу}
+      \item не берут --- мало дали
+      \item рабочего дня нет: есть результат
+    \end{cbul}}{оплата за время}{%
+    \begin{cbul}{alt}
+      \item оплачивается присутствие
+      \item результат и оплата не связаны
+      \item лень не видна до конца месяца
+      \item {}<<делал, думал, анализировал>>
+    \end{cbul}}
+
+  \slidegap
+  \aside{Бюджет распределяется \hi{по вкладу}. Это и есть честность: люди
+    не ваши рабы и не ваши иждивенцы.}
+\end{frame}
+\note{Позиция автора, спорная -- так и сказать. Дайте цену за задачи, и
+  люди придут; не пришли -- мало дали. Быстрая оплата маленького результата
+  мотивирует сильнее большой и далёкой. Вы вооружены деньгами и защищены
+  системой контроля качества.}
+
+\begin{frame}{Одна задача, две стороны}
+  \slidetop
+  \versus{владелец репозитория}{%
+    \begin{cbul}{accent}
+      \item формулирует задачу и цену
+      \item не верит на слово: смотрит pull request
+      \item знает о человеке \hi{профиль и куда платить}
+      \item принимает или отклоняет
+    \end{cbul}}{разработчик}{%
+    \begin{cbul}{alt}
+      \item выбирает задачу сам
+      \item \lo{жадный}: считает, что сколько стоит
+      \item не уговаривает: показывает результат
+      \item жалуется --- артефактом
+    \end{cbul}}
+
+  \slidegap
+  \aside{Никому не нужно никого контролировать: всё, о чём стороны могут
+    поспорить, \hi{лежит в репозитории}.}
+\end{frame}
+\note{Разработчик должен быть жадным -- это честный сигнал, а не порок: он
+  берёт то, что выгодно, и делает быстро. Владельцу не нужно знать о нём
+  ничего, кроме GitHub и адреса, куда платить.}
+
+\begin{frame}{Эксперт --- это риск}
+  \slidetop
+  \claim{Если что-то умеет \lo{только один человек}, проект принадлежит
+    ему, а не вам.}
+
+  \begin{tabular}{@{}p{4.6cm}p{8.6cm}@{}}
+    \textbf{\lo{знание в голове}}  & уходит вместе с человеком \\[0.5em]
+    \textbf{\hi{знание в репозитории}} & документация, тесты, записи
+      о решениях, история \\[0.5em]
+    \textbf{\hi{проверка}}         & новый участник делает первую задачу
+      \hi{без единого вопроса} \\
+  \end{tabular}
+
+  \slidegap
+  \aside{От эксперта избавляются не увольнением, а тем, что его знание
+    становится \hi{артефактом}.}
+\end{frame}
+\note{<<Избавляйтесь от экспертов>> -- в смысле незаменимости. Если у вас
+  есть незаменимый -- вам крышка в день, когда он заболеет. Личное общение
+  -- главный способ производить экспертов: знание передалось и нигде не
+  осталось.}
+
+\begin{frame}{Нанимайте агентов}
+  \slidetop
+  \claim{Агент --- такой же контрибьютор. \hi{Правила те же.}}
+
+  \begin{cbul}{accent}
+    \item получает задачу из репозитория, а не из разговора
+    \item работает в своей ветке, открывает pull request
+    \item проходит те же проверки и то же review
+    \item \lo{доверия к нему не больше}, чем к любому другому
+  \end{cbul}
+
+  \slidegap
+  \aside{Маленькая задача, проверяемое условие, воспроизводимое окружение,
+    всё записано --- репозиторий, в который может войти человек с улицы,
+    \hi{готов и к агенту}.}
+\end{frame}
+\note{Employ agents, not people -- там, где задача формализована. Всё, что
+  мы строили две лекции, -- это и есть условия, при которых агентам можно
+  давать работу.}
+
+% ================================================= 3. DELIVERY =============
+\section{3. Поставка}
+
+\begin{frame}[plain]
+  \sectionopener{3}{Поставка}{Код в main --- ещё \lo{не продукт}. Продукт
+    --- то, что \hi{дошло до пользователя}.}
+\end{frame}
+\note{Бюджет: 26 минут.}
+
+\begin{frame}{Trunk-based и GitFlow}
+  \slidetop
+  \versus{trunk-based}{%
+    \begin{cbul}{accent}
+      \item ветка живёт \hi{часы или дни}
+      \item всё сливается в main постоянно
+      \item конфликты маленькие и сразу
+      \item требует сильных проверок
+    \end{cbul}}{GitFlow}{%
+    \begin{cbul}{alt}
+      \item ветки \texttt{develop} и \texttt{release} живут \lo{месяцами}
+      \item интеграция --- отдельное событие
+      \item конфликты большие и потом
+      \item нужен, когда поддерживают несколько версий сразу
+    \end{cbul}}
+
+  \slidegap
+  \aside{Цена долгой ветки растёт каждый день: всё это время main уходит
+    от неё.}
+\end{frame}
+\note{По умолчанию -- trunk-based. GitFlow оправдан, когда вы обязаны
+  одновременно чинить версию 2 и версию 3 у разных клиентов. Долгая ветка --
+  это отложенный хаос.}
+
+\begin{frame}{Номер версии --- это обещание}
+  \slidetop
+  \begin{center}
+    \begin{tikzpicture}[font=\small]
+      \node[font=\fontsize{30}{36}\selectfont\bfseries] (maj) {\lo{2}};
+      \node[font=\fontsize{30}{36}\selectfont\bfseries,right=0.0cm of maj]
+        (d1) {.};
+      \node[font=\fontsize{30}{36}\selectfont\bfseries,right=0.0cm of d1]
+        (min) {\hi{4}};
+      \node[font=\fontsize{30}{36}\selectfont\bfseries,right=0.0cm of min]
+        (d2) {.};
+      \node[font=\fontsize{30}{36}\selectfont\bfseries,right=0.0cm of d2]
+        (pat) {1};
+      \node[alt,font=\scriptsize\bfseries,anchor=east] (lm)
+        at ([xshift=-1.6cm,yshift=-0.2cm]maj.west) {MAJOR};
+      \node[accent,font=\scriptsize\bfseries,below=0.9cm of min] (lmi)
+        {MINOR};
+      \node[muted,font=\scriptsize\bfseries,anchor=west] (lp)
+        at ([xshift=1.6cm,yshift=-0.2cm]pat.east) {PATCH};
+      \draw[alt,line width=0.7pt] (lm.east) -- (maj.west);
+      \draw[accent,line width=0.7pt] (lmi.north) -- (min.south);
+      \draw[muted,line width=0.7pt] (lp.west) -- (pat.east);
+    \end{tikzpicture}
+  \end{center}
+
+  \vspace{0.3em}
+  \begin{tabular}{@{}p{3.0cm}p{10.2cm}@{}}
+    \textbf{\lo{MAJOR}} & сломали совместимость: старый код может перестать
+      работать \\[0.4em]
+    \textbf{\hi{MINOR}} & добавили новое, старое работает как раньше \\[0.4em]
+    \textbf{PATCH}      & исправили ошибку, поведение по контракту то же \\
+  \end{tabular}
+\end{frame}
+\note{Semantic versioning. Номер версии -- контракт с теми, кто от вас
+  зависит: по нему решают, можно ли обновляться не глядя. Если вы сломали
+  совместимость в патче -- вам перестают верить, и все фиксируют версию
+  навсегда.}
+
+\begin{frame}[fragile]{Не обещайте лишнего}
+  \slidetop
+  \claim{Всё, что видно снаружи, вы обязаны \lo{поддерживать}. Наружу ---
+    только необходимое.}
+  \begin{minipage}[t]{0.56\textwidth}
+\begin{lstlisting}[style=csharp]
+public sealed class Greeter
+{
+    public string Greet(string name) =>
+        Format(name);
+
+    [Obsolete("Use Greet. Removed in 3.0.")]
+    public string Hello(string name) =>
+        Greet(name);
+
+    private static string Format(string n) =>
+        $"Hello, {n}!";
+}
+\end{lstlisting}
+  \end{minipage}\hfill
+  \begin{minipage}[t]{0.40\textwidth}
+    \vspace{0.3em}
+    \aside{\texttt{Format} закрыт: его можно менять и удалять \hi{в любой
+      версии}.}\par
+    \vspace{0.8em}
+    \aside{\texttt{Greet} открыт: изменить его --- это \lo{MAJOR}.}\par
+    \vspace{0.8em}
+    \aside{\texttt{Hello} уходит по правилам: сначала предупреждение, в
+      следующей мажорной версии --- удаление.}\par
+  \end{minipage}
+\end{frame}
+\note{Как только задекларировали наружу -- обязаны соблюдать обратную
+  совместимость. Поэтому по умолчанию всё закрыто. Deprecation policy:
+  никто не должен узнать об удалении из сломанной сборки. Совместимость API
+  тоже проверяется автоматически, в CI.}
+
+\begin{frame}{Релиз --- это артефакт}
+  \slidetop
+  \claim{Не <<собрали и отправили>>, а то, что можно \hi{воспроизвести и
+    проследить} до коммита.}
+
+  \begin{center}
+    \begin{tikzpicture}[font=\small,
+      st/.style={box,minimum width=2.2cm,minimum height=1.15cm}]
+      \node[st] (a) {коммит\\в main};
+      \node[st,right=0.7cm of a,draw=accent,line width=1.0pt] (b)
+        {\hi{тег}\\\texttt{v2.4.1}};
+      \node[st,right=0.7cm of b] (c) {сборка\\в CI};
+      \node[st,right=0.7cm of c] (d) {пакет\\и changelog};
+      \node[st,right=0.7cm of d] (e) {пользователь};
+      \foreach \x/\y in {a/b,b/c,c/d,d/e} \draw[ar] (\x) -- (\y);
+    \end{tikzpicture}
+  \end{center}
+
+  \slidegap
+  \aside{Выпуск начинается с тега и делается \hi{машиной}. С ноутбука
+    разработчика не выпускают: такую сборку нельзя повторить.}
+\end{frame}
+\note{Changelog собирается из сообщений коммитов -- вот зачем в первой
+  лекции был формат <<feat:, fix:>>. По номеру версии всегда можно получить
+  точный исходный код, из которого она собрана.}
+
+\begin{frame}{Feature flags: деплой --- ещё не релиз}
+  \slidetop
+  \claim{Код может быть в main и у пользователей --- и при этом
+    \hi{выключен}.}
+
+  \versus{с флагом}{%
+    \begin{cbul}{accent}
+      \item недоделанное сливается в main маленькими частями
+      \item включается, когда готово
+      \item включается \hi{не всем сразу}
+      \item выключается за секунду
+    \end{cbul}}{без флага}{%
+    \begin{cbul}{alt}
+      \item недоделанное живёт в долгой ветке
+      \item появляется у всех в момент выкладки
+      \item сломалось --- \lo{выкладываем заново}
+      \item откат --- это ещё один выпуск
+    \end{cbul}}
+
+  \slidegap
+  \aside{Флаг --- это долг. Включили всем --- удалите флаг.}
+\end{frame}
+\note{Флаг отделяет техническое событие (код доставлен) от продуктового
+  (функция включена). Именно это делает trunk-based возможным для больших
+  изменений.}
+
+\begin{frame}{Canary и rollback}
+  \slidetop
+  \claim{Новую версию получают \hi{сначала немногие}. Откат --- обычная
+    процедура, а не авария.}
+
+  \begin{center}
+    \begin{tikzpicture}[font=\small,
+      st/.style={box,minimum width=2.4cm,minimum height=1.15cm}]
+      \node[st] (a) {1\,\%};
+      \node[st,right=1.0cm of a] (b) {10\,\%};
+      \node[st,right=1.0cm of b] (c) {50\,\%};
+      \node[st,right=1.0cm of c,draw=accent,line width=1.0pt] (d)
+        {\hi{100\,\%}};
+      \foreach \x/\y in {a/b,b/c,c/d} \draw[ar] (\x) -- (\y);
+      \draw[alt,line width=0.7pt,-{Straight Barb[length=1.8mm]}]
+        (c.south) -- ++(0,-0.6) -|
+        node[pos=0.25,below,font=\scriptsize,text=alt]
+        {метрики ухудшились --- назад} (a.south);
+    \end{tikzpicture}
+  \end{center}
+
+  \slidegap
+  \aside{На каждом шаге смотрят на ошибки и время ответа. Откат возможен,
+    потому что \hi{предыдущий релиз --- сохранённый артефакт}.}
+\end{frame}
+\note{Канарейка в шахте. Откат должен быть настолько скучным, чтобы его не
+  боялись нажать. Если откат -- подвиг, им не воспользуются вовремя.}
+
+\begin{frame}{Из чего на самом деле собран продукт}
+  \slidetop
+  \claim{Ваш код --- малая часть того, что вы выпускаете. \lo{Остальное
+    --- поверхность атаки.}}
+
+  \begin{tabular}{@{}p{4.6cm}p{8.6cm}@{}}
+    \textbf{\hi{SBOM}}          & список всего, что вошло в сборку, с
+      версиями \\[0.5em]
+    \textbf{\hi{сканирование}}  & известные уязвимости --- на каждой
+      сборке \\[0.5em]
+    \textbf{\hi{автообновления}} & бот открывает pull request, проверки
+      решают \\[0.5em]
+    \textbf{\hi{закреплённые версии}} & зависимости и actions --- по
+      точной версии, а не <<последняя>> \\
+  \end{tabular}
+
+  \slidegap
+  \aside{Когда в популярной библиотеке находят уязвимость, вопрос один:
+    \hi{<<она у нас есть?>>}. SBOM отвечает за минуту.}
+\end{frame}
+\note{SBOM -- software bill of materials, спецификация состава. Supply-chain
+  security: атакуют не вас, а то, от чего вы зависите, включая шаги вашего
+  собственного CI.}
+
+\begin{frame}{Соедините пользователя с репозиторием}
+  \slidetop
+  \claim{Самый ценный тестировщик --- \hi{пользователь}. Дайте ему кнопку.}
+
+  \begin{center}
+    \begin{tikzpicture}[font=\small,
+      st/.style={box,minimum width=2.7cm,minimum height=1.15cm}]
+      \node[st] (a) {ошибка\\у пользователя};
+      \node[st,right=1.0cm of a] (b) {<<сообщить>>\\в самом продукте};
+      \node[st,right=1.0cm of b,draw=accent,line width=1.0pt] (c)
+        {\hi{issue}\\{\scriptsize\color{muted}версия, шаги, журнал}};
+      \node[st,right=1.0cm of c] (d) {исправление\\в релизе};
+      \foreach \x/\y in {a/b,b/c,c/d} \draw[ar] (\x) -- (\y);
+    \end{tikzpicture}
+  \end{center}
+
+  \slidegap
+  \aside{Встройте отчёт об ошибке в сам продукт. Пользователь, который
+    пожаловался, сделал вклад --- \hi{как и новичок}, который не смог
+    запустить проект.}
+\end{frame}
+\note{Круг замкнулся: жалоба -- артефакт, артефакт -- задача, задача --
+  изменение, изменение -- релиз. Номер версии в отчёте ведёт к точному
+  коммиту.}
+
+% ================================================= 4. AI ===================
+\section{4. ИИ и вы}
+
+\begin{frame}[plain]
+  \sectionopener{4}{ИИ и вы}{Писать код без ИИ --- как ехать по незнакомому
+    городу без навигатора.\\[0.3em] Но навигатор \lo{ошибается}.}
+\end{frame}
+\note{Бюджет: 10 минут.}
+
+\begin{frame}{ИИ ошибается --- репозиторий ловит}
+  \slidetop
+  \begin{tabular}{@{}p{5.6cm}p{7.6cm}@{}}
+    \eyebrow{что сделал ИИ} & \eyebrow{что это останавливает} \\[0.6em]
+    \textbf{\lo{придумал зависимость}} & lock-файл, сканирование, review
+      каждой новой зависимости \\[0.5em]
+    \textbf{\lo{сломал совместимость}} & тесты и проверка API в CI \\[0.5em]
+    \textbf{\lo{написал вечно зелёный тест}} & review теста
+      наравне с кодом \\[0.5em]
+    \textbf{\lo{забыл документацию}} & шаблон pull request, владельцы
+      кода \\[0.5em]
+    \textbf{\lo{сделал не то, что просили}} & задача с проверяемым
+      условием \\
+  \end{tabular}
+
+  \slidegap
+  \aside{Ни одна строка справа не про ИИ. Это \hi{те же механизмы}, что
+    защищают от ошибки человека.}
+\end{frame}
+\note{Ради этого слайда обе лекции. Мы не строим отдельную защиту от ИИ.
+  Мы строим систему, которой всё равно, кто ошибся.}
+
+\begin{frame}{Кем вы становитесь}
+  \slidetop
+  \claim{Координатор людей и агентов --- и \hi{последняя точка контроля}.}
+
+  \begin{cbul}{accent}
+    \item вы ставите задачи так, чтобы их можно было проверить
+    \item вы строите механизм, который не пропускает ошибку
+    \item вы читаете чужой код --- человеческий и сгенерированный
+    \item вы \hi{решаете и отвечаете}
+  \end{cbul}
+
+  \slidegap
+  \aside{Для этого нужна \hi{интуиция разработчика}: чувствовать, что
+    решение не туда, раньше, чем это покажут тесты. Она появляется только
+    одним способом --- вы пишете и читаете код сами.}
+\end{frame}
+\note{Ответ на вопрос из начала первой лекции. Разработчик от вайбкодера
+  отличается не тем, пользуется ли он ИИ, а тем, может ли он отвечать за
+  результат.}
+
+\begin{frame}{Из хаоса --- в систему}
+  \slidetop
+  \claim{Вы пришли в проект, где царит хаос. \hi{С чего начать.}}
+
+  \begin{tabular}{@{}p{4.6cm}p{8.6cm}@{}}
+    \textbf{\hi{философия}}     & всё --- артефакт; личных договорённостей
+      нет \\[0.5em]
+    \textbf{\hi{организация}}   & клонировал --- одна команда --- работает \\[0.5em]
+    \textbf{\hi{защита}}        & main закрыт; CI; тесты; review \\[0.5em]
+    \textbf{\hi{задачи}}        & лидер; маленькие задачи; след от просьбы
+      до релиза \\[0.5em]
+    \textbf{\hi{поставка}}      & версии --- обещания; релиз из тега;
+      откат всегда возможен \\
+  \end{tabular}
+\end{frame}
+\note{Пять навыков одним слайдом. Порядок важен: без защиты нельзя
+  раздавать задачи, без задач нечего выпускать.}
+
+\begin{frame}{Источники}
+  \slidetop
+  {\small
+  \begin{tabular}{@{}p{5.6cm}p{7.6cm}@{}}
+    \textbf{Simple Sabotage Field Manual} & Office of Strategic Services,
+      1944 \\[0.45em]
+    \textbf{Angry Tests} & Егор Бугаенко \\[0.45em]
+    \textbf{Pro Git} & Scott Chacon, Ben Straub --- \texttt{git-scm.com/book} \\[0.45em]
+    \textbf{Semantic Versioning} & \texttt{semver.org} \\[0.45em]
+    \textbf{Conventional Commits} & \texttt{conventionalcommits.org} \\[0.45em]
+    \textbf{Trunk Based Development} & \texttt{trunkbaseddevelopment.com} \\[0.45em]
+    \textbf{Documenting Architecture Decisions} & Michael Nygard, 2011 \\
+  \end{tabular}}
+\end{frame}
+\note{Не читать вслух. Сказать, что слайды и документ о саботаже лежат в
+  репозитории лекции.}
+
+\begin{frame}[plain]
+  \statement{Это был курс не про Git.\\[0.3em] Это курс про то, как
+    \hi{управлять жизнью продукта} через репозиторий.}
+\end{frame}
+\note{Держать слайд, пока не осядет.}
+
+\begin{frame}[plain]
+  \shout{Задавайте вопросы}
+\end{frame}
+\note{Если вопросов нет -- спросить: с каким тезисом сегодня вы не
+  согласны? Попросить оформить возражение как issue в репозитории лекции.}
+
+\end{document}
