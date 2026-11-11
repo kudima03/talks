@@ -39,7 +39,7 @@ the numbers** — renumber the cues in the script, then re-derive the tags in
 - **Frame 39 «Рекомендовано к прочтению» is the last frame, after the
   questions slide**, and stays on screen as the room leaves. Covers: *Code
   Ahead* from the author's site (yegor256.com), *Continuous Delivery* and
-  *PMP Exam Prep* (eighth edition) from Open Library. It is a separate slide
+  *PMP Exam Prep* (tenth edition) from Open Library. It is a separate slide
   from «Источники» (frame 35): that one lists what the lecture cites.
 - Two `\statement`s (frames 9, 36), one `\shout` (frame 38), one `\keyline`
   (frame 13).

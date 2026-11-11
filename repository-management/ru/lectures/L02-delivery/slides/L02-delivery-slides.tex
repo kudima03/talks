@@ -52,8 +52,8 @@
 \newcommand{\bookcover}[1]{%
   \IfFileExists{img/#1.jpg}%
     {{\setlength{\fboxsep}{0pt}\setlength{\fboxrule}{0.5pt}%
-      \fcolorbox{hairline}{paper}{\includegraphics[height=3.7cm]{img/#1.jpg}}}}%
-    {\fcolorbox{hairline}{paper}{\parbox[c][3.7cm][c]{2.6cm}%
+      \fcolorbox{hairline}{paper}{\includegraphics[height=4.3cm]{img/#1.jpg}}}}%
+    {\fcolorbox{hairline}{paper}{\parbox[c][4.5cm][c]{3.2cm}%
        {\centering\color{muted}\scriptsize cover}}}}
 
 \begin{document}
@@ -818,15 +818,15 @@ public sealed class Greeter
   согласны? Попросить оформить возражение как issue в репозитории лекции.}
 
 \begin{frame}{Рекомендовано к прочтению}
-  \slidetop
+  \vspace{0.1em}
   \begin{center}
     \begin{tabular}{@{}p{4.1cm}p{4.1cm}p{4.1cm}@{}}
       \centering\bookcover{book-code-ahead} &
       \centering\bookcover{book-continuous-delivery} &
-      \centering\arraybackslash\bookcover{book-pmp-exam-prep} \\[0.9em]
+      \centering\arraybackslash\bookcover{book-pmp-exam-prep} \\[0.55em]
       \centering{\bfseries\hi{Code Ahead}} &
       \centering{\bfseries\hi{Continuous Delivery}} &
-      \centering\arraybackslash{\bfseries\hi{PMP Exam Prep}} \\[0.3em]
+      \centering\arraybackslash{\bfseries\hi{PMP Exam Prep}} \\[0.1em]
       \centering{\small\color{muted}Егор Бугаенко} &
       \centering{\small\color{muted}Jez Humble, David Farley} &
       \centering\arraybackslash{\small\color{muted}Rita Mulcahy} \\
