@@ -8,8 +8,8 @@
 % Build:  make          (latexmk -pdf; engine: pdflatex)
 %         make notes    (same deck plus speaker notes on a second screen)
 %
-% Every terminal listing is real output of git 2.43.0 on a throwaway
-% HelloWorld repository; only the home directory is anonymised.
+% The history on the diagrams is real: every hash comes from git 2.43.0 run
+% on a throwaway HelloWorld repository (merge, squash and rebase included).
 %
 % House rules: ../CLAUDE.md and ../../../../CLAUDE.md.
 % Theme: ../../../../../dotnet-course/theme/.
@@ -33,6 +33,17 @@
   box/.style={draw=hairline,line width=0.8pt,fill=codebg,
               minimum height=0.95cm,align=center,inner sep=0.4em},
   ar/.style={-{Straight Barb[length=1.8mm]},ink,line width=0.7pt},
+  % vertical history diagrams: a commit is a dot on its branch's line
+  dot/.style={circle,draw=accent,line width=1.0pt,fill=paper,
+              minimum size=0.36cm,inner sep=0pt},
+  bdot/.style={dot,draw=alt},
+  gdot/.style={dot,draw=hairline,dashed},
+  ml/.style={accent,line width=1.6pt},
+  bl/.style={alt,line width=1.6pt},
+  gl/.style={hairline,line width=1.2pt,dashed},
+  cl/.style={font=\scriptsize,align=left,anchor=west},
+  cr/.style={font=\scriptsize,align=right,anchor=east},
+  ref/.style={font=\scriptsize\bfseries},
 }
 
 % Fit inside a 2.6cm square rather than scaling by width alone: the supplied
@@ -98,12 +109,12 @@
     \end{cbul}}{что стало дешёвым}{%
     \begin{cbul}{alt}
       \item написать функцию
-      \item открыть pull request
+      \item предложить изменение
       \item сгенерировать тест
       \item придумать API или зависимость
     \end{cbul}}
 \end{frame}
-\note{PR сейчас ничего не стоит: агент откроет десять за час. Значит,
+\note{Изменение сейчас ничего не стоит: агент предложит десять за час. Значит,
   ценность переехала от написания к контролю.
   Вся лекция про левую колонку.}
 
@@ -195,8 +206,7 @@
     \textbf{\hi{что это?}}          & \texttt{README} \\[0.5em]
     \textbf{\hi{как запустить?}}    & одна команда, одинаковая у всех \\[0.5em]
     \textbf{\hi{что делать?}}       & открытые задачи \\[0.5em]
-    \textbf{\hi{как сдать работу?}} & \texttt{CONTRIBUTING}, шаблон pull
-      request \\[0.5em]
+    \textbf{\hi{как сдать работу?}} & \texttt{CONTRIBUTING} --- правила участия \\[0.5em]
     \textbf{\hi{почему так сделано?}} & история и записи о решениях \\
   \end{tabular}
 
@@ -214,8 +224,8 @@
 
   \begin{tabular}{@{}p{4.6cm}p{8.6cm}@{}}
     \textbf{\lo{<<изучал>>}}        & \hi{документ} или запись о решении \\[0.5em]
-    \textbf{\lo{<<нашёл проблему>>}} & \hi{issue} \\[0.5em]
-    \textbf{\lo{<<придумал>>}}      & \hi{черновой pull request} \\[0.5em]
+    \textbf{\lo{<<нашёл проблему>>}} & \hi{задача} в репозитории \\[0.5em]
+    \textbf{\lo{<<придумал>>}}      & \hi{черновик изменения}, который видно всем \\[0.5em]
     \textbf{\lo{<<обсудили>>}}      & \hi{комментарий} в задаче \\[0.5em]
     \textbf{\lo{<<почти готово>>}}  & \hi{коммит}, который можно
       посмотреть \\
@@ -229,7 +239,7 @@
   \slidetop
   \claim{<<Я не могу запустить проект>>.}
 
-  \versus{issue}{%
+  \versus{задача в репозитории}{%
     \begin{cbul}{accent}
       \item видят все, включая будущих
       \item у проблемы есть номер и ссылка
@@ -244,7 +254,7 @@
     \end{cbul}}
 \end{frame}
 \note{Человек пришёл и не смог запустить -- он не пишет в чат, он оформляет
-  issue. Это вклад: у нас плохие доки, он нам помог. Жалуйтесь постоянно --
+  задачу в репозитории. Это вклад: у нас плохие доки, он нам помог. Жалуйтесь постоянно --
   но в форме артефакта. Личное общение создаёт почву для отсутствия следа.}
 
 \begin{frame}[plain]
@@ -260,7 +270,7 @@
   \sectionopener{2}{Git в общих чертах}{Команды вы выучите за вечер.
     Сейчас --- \hi{модель}, без которой команды не имеют смысла.}
 \end{frame}
-\note{Бюджет: 25 минут. Кто уже пользовался Git? Кто делал git push --force
+\note{Бюджет: 22 минуты. Кто уже пользовался Git? Кто делал git push --force
   и жалел?}
 
 \begin{frame}{История --- это цепочка снимков}
@@ -370,29 +380,25 @@
   всё, что вы наменяли, а то, что вы осознанно выбрали. Это пригодится через
   два слайда.}
 
-\begin{frame}[fragile]{Первый коммит}
+\begin{frame}{Первый коммит}
   \slidetop
-\begin{lstlisting}[style=term,basicstyle=\ttfamily\footnotesize]
-$ git init -b main
-Initialized empty Git repository in /home/user/HelloWorld/.git/
-$ git status --short
-?? Program.cs
-?? README.md
-$ git add Program.cs
-$ git status --short
-A  Program.cs
-?? README.md
-$ git commit -m "feat: print greeting"
-[main (root-commit) cb5849b] feat: print greeting
- 1 file changed, 1 insertion(+)
- create mode 100644 Program.cs
-\end{lstlisting}
-  \vspace{0.5em}
-  \aside{\texttt{??} --- Git файл не знает. \texttt{A} --- файл в индексе.
-    В коммит попал \hi{один файл из двух}: тот, который выбрали.}
+  \claim{Четыре команды --- и снимок \hi{записан в историю}.}
+
+  \begin{tabular}{@{}p{8.1cm}p{4.9cm}@{}}
+    \texttt{git init}                 & создать репозиторий в папке \\[0.7em]
+    \texttt{git status}               & что изменилось и что выбрано \\[0.7em]
+    \texttt{git add Program.cs}       & \hi{выбрать} файл для коммита \\[0.7em]
+    \texttt{git commit -m \textquotedbl feat: print greeting\textquotedbl}
+                                      & \hi{записать} снимок с сообщением \\
+  \end{tabular}
+
+  \slidegap
+  \aside{В коммит попадает только выбранное. В папке два файла, в снимке
+    \hi{один}: \texttt{README.md} ждёт своего коммита и своего сообщения.}
 \end{frame}
-\note{Проговорить построчно. README остался неотслеживаемым -- он войдёт в
-  следующий коммит, со своим сообщением.}
+\note{Проговорить по строке и показать вживую в терминале. git status --
+  команда, которую набирают чаще всех остальных: она ничего не меняет и
+  всегда говорит, где вы.}
 
 \begin{frame}{Один коммит --- одна логическая мысль}
   \slidetop
@@ -421,72 +427,312 @@ $ git commit -m "feat: print greeting"
   что сделано. Из таких сообщений потом автоматически собирается changelog и
   считается номер версии -- об этом в следующей лекции.}
 
-\begin{frame}[fragile]{Ветка --- это указатель}
+\begin{frame}{Ветка под задачу}
   \slidetop
-  \begin{minipage}[t]{0.56\textwidth}
-\begin{lstlisting}[style=term,basicstyle=\ttfamily\footnotesize]
-$ git switch -c feat/greet-by-name
-Switched to a new branch 'feat/greet-by-name'
-$ git log --oneline --graph --all
-* c320998 feat: return exit code
-* 3508968 feat: greet by name
-| * 983e9ae docs: describe usage
-|/
-* 408319b docs: add readme
-* cb5849b feat: print greeting
-\end{lstlisting}
+  \begin{minipage}[t]{0.47\textwidth}
+    \vspace{0pt}
+    \centering
+    \begin{tikzpicture}
+      \draw[ml] (0,-0.4) -- (0,3.4);
+      \draw[bl] (0,0.9) to[out=70,in=-90] (1.5,1.9) -- (1.5,3.4);
+      \node[dot] (c1) at (0,0.0) {};
+      \node[dot] (c2) at (0,0.9) {};
+      \node[dot,fill=accent] (c3) at (0,2.7) {};
+      \node[bdot] (b1) at (1.5,1.9) {};
+      \node[bdot,fill=alt] (b2) at (1.5,2.8) {};
+      \node[cr] at ([xshift=-0.25cm]c1.west) {\texttt{cb5849b}\\{\color{muted}print greeting}};
+      \node[cr] at ([xshift=-0.25cm]c2.west) {\texttt{408319b}\\{\color{muted}add readme}};
+      \node[cr] at ([xshift=-0.25cm]c3.west) {\texttt{983e9ae}\\{\color{muted}describe usage}};
+      \node[cl] at ([xshift=0.25cm]b1.east) {\texttt{3508968}\\{\color{muted}greet by name}};
+      \node[cl] at ([xshift=0.25cm]b2.east) {\texttt{c320998}\\{\color{muted}return exit code}};
+      \node[ref,accent,anchor=south] at (0,3.45) {main};
+      \node[ref,alt,anchor=south west] at (1.2,3.45) {feat/greet-by-name};
+    \end{tikzpicture}
   \end{minipage}\hfill
-  \begin{minipage}[t]{0.39\textwidth}
-    \vspace{0.4em}
-    \aside{Ветка не копирует проект. Это \hi{имя}, которое указывает на
-      коммит и двигается вместе с новыми.}\par
+  \begin{minipage}[t]{0.49\textwidth}
+    \vspace{0.6em}
+    \claim{\raggedright Новая ветка --- \lo{вторая линия} от того же
+      коммита.}
+
+    \texttt{git switch -c feat/greet-by-name}
+
     \vspace{0.9em}
-    \aside{Два коммита слева --- ваша работа. \texttt{983e9ae} --- за это
-      время \lo{main ушёл вперёд}.}\par
+    \begin{cbul}{accent}
+      \item ветка не копирует проект: это ещё одно \hi{имя}
+      \item ваши коммиты ложатся на \lo{свою линию}
+      \item main тем временем \hi{уходит вперёд}
+    \end{cbul}
   \end{minipage}
 \end{frame}
-\note{Ветка стоит ноль. Поэтому на каждую задачу -- своя ветка. Пока вы
-  работали, main изменился: это нормальное состояние, и чем дольше живёт
-  ветка, тем дальше он уходит.}
+\note{Ветка ничего не стоит, поэтому на каждую задачу -- своя. Пока вы
+  работали, в main появился 983e9ae: это нормальное состояние, и чем дольше
+  живёт ветка, тем дальше уходит main. Две линии надо когда-то соединить --
+  способов три.}
 
-\begin{frame}[fragile]{Слияние}
+\begin{frame}{Слияние: merge commit}
   \slidetop
-  \begin{minipage}[t]{0.63\textwidth}
-\begin{lstlisting}[style=term]
-$ git merge --no-ff feat/greet-by-name
-Merge made by the 'ort' strategy.
- Program.cs | 4 +++-
- 1 file changed, 3 insertions(+), 1 deletion(-)
-$ git log --oneline --graph
-*   845636a Merge pull request #1 from feat/greet-by-name
-|\
-| * c320998 feat: return exit code
-| * 3508968 feat: greet by name
-* | 983e9ae docs: describe usage
-|/
-* 408319b docs: add readme
-* cb5849b feat: print greeting
-\end{lstlisting}
+  \begin{minipage}[t]{0.47\textwidth}
+    \vspace{0pt}
+    \centering
+    \begin{tikzpicture}
+      \draw[ml] (0,-0.4) -- (0,4.0);
+      \draw[bl] (0,0.9) to[out=70,in=-90] (1.5,1.7) -- (1.5,2.6)
+        to[out=90,in=-70] (0,3.5);
+      \node[dot] (c1) at (0,0.0) {};
+      \node[dot] (c2) at (0,0.9) {};
+      \node[dot] (c3) at (0,2.5) {};
+      \node[cr] at ([xshift=-0.25cm]c1.west) {\texttt{cb5849b}\\{\color{muted}print greeting}};
+      \node[cr] at ([xshift=-0.25cm]c2.west) {\texttt{408319b}\\{\color{muted}add readme}};
+      \node[cr] at ([xshift=-0.25cm]c3.west) {\texttt{983e9ae}\\{\color{muted}describe usage}};
+      \node[bdot] (b1) at (1.5,1.7) {};
+      \node[bdot] (b2) at (1.5,2.6) {};
+      \node[dot,fill=accent] (m) at (0,3.5) {};
+      \node[cl] at ([xshift=0.25cm]b1.east) {\texttt{3508968}\\{\color{muted}greet by name}};
+      \node[cl] at ([xshift=0.25cm]b2.east) {\texttt{c320998}\\{\color{muted}return exit code}};
+      \node[cr] at ([xshift=-0.25cm]m.west) {\texttt{845636a}\\{\color{accent}merge commit}};
+      \node[ref,accent,anchor=south] at (0,4.05) {main};
+    \end{tikzpicture}
   \end{minipage}\hfill
-  \begin{minipage}[t]{0.33\textwidth}
-    \vspace{0.4em}
-    \eyebrow{три способа}\par
-    \vspace{0.7em}
-    {\small
-    \textbf{\hi{merge commit}} --- история как была, с развилкой\par
+  \begin{minipage}[t]{0.49\textwidth}
     \vspace{0.6em}
-    \textbf{\hi{squash}} --- вся ветка одним коммитом в main\par
-    \vspace{0.6em}
-    \textbf{\hi{rebase}} --- коммиты ветки переставлены поверх main,
-      линейно\par}
+    \claim{\raggedright Две линии сходятся в \hi{одном коммите} с двумя родителями.}
+
+    \texttt{git merge feat/greet-by-name}
+
+    \vspace{0.9em}
+    \begin{cbul}{accent}
+      \item история сохранена \hi{как была}
+      \item видно, где ветка началась и где влилась
+      \item цена: граф ветвится
+    \end{cbul}
   \end{minipage}
 \end{frame}
-\note{Выбор способа --
-  выбор того, как будет читаться история. Squash: main чистый, один PR --
-  один коммит, но детали ветки теряются. Merge: всё сохранено, но граф
-  ветвистый. Договоритесь один раз на проект.}
+\note{Первый способ. Ничего не теряется: оба коммита ветки остаются в
+  истории, а над ними появляется коммит слияния. На большом проекте с сотней
+  веток граф становится трудно читать.}
 
-\begin{frame}{От задачи до main}
+\begin{frame}{Слияние: squash}
+  \slidetop
+  \begin{minipage}[t]{0.42\textwidth}
+    \vspace{0pt}
+    \centering
+    \begin{tikzpicture}
+      \draw[ml] (0,-0.4) -- (0,4.0);
+      \draw[gl] (0,0.9) to[out=70,in=-90] (1.5,1.7) -- (1.5,2.9);
+      \node[dot] (c1) at (0,0.0) {};
+      \node[dot] (c2) at (0,0.9) {};
+      \node[dot] (c3) at (0,2.5) {};
+      \node[cr] at ([xshift=-0.25cm]c1.west) {\texttt{cb5849b}\\{\color{muted}print greeting}};
+      \node[cr] at ([xshift=-0.25cm]c2.west) {\texttt{408319b}\\{\color{muted}add readme}};
+      \node[cr] at ([xshift=-0.25cm]c3.west) {\texttt{983e9ae}\\{\color{muted}describe usage}};
+      \node[gdot] (b1) at (1.5,1.7) {};
+      \node[gdot] (b2) at (1.5,2.6) {};
+      \node[dot,fill=accent] (m) at (0,3.5) {};
+      \node[cl,text=muted] at ([xshift=0.25cm]b1.east) {\texttt{3508968}};
+      \node[cl,text=muted] at ([xshift=0.25cm]b2.east) {\texttt{c320998}};
+      \draw[alt,line width=0.7pt,dashed,-{Straight Barb[length=1.6mm]}]
+        (1.5,2.95) to[out=90,in=0] (m.east);
+      \node[cl,text=alt] at (1.58,3.3) {изменения\\обоих коммитов};
+      \node[cr] at ([xshift=-0.25cm]m.west) {\texttt{5e77d87}\\{\color{accent}greet by name}};
+      \node[ref,accent,anchor=south] at (0,4.05) {main};
+    \end{tikzpicture}
+  \end{minipage}\hfill
+  \begin{minipage}[t]{0.56\textwidth}
+    \vspace{0.6em}
+    \claim{\raggedright Вся ветка превращается в \hi{один коммит} в main.}
+
+    \texttt{git merge -{}-squash feat/greet-by-name}
+
+    \vspace{0.9em}
+    \begin{cbul}{accent}
+      \item main \hi{прямой}: одна задача --- один коммит
+      \item черновые коммиты ветки не засоряют историю
+      \item цена: шаги внутри ветки \lo{теряются}
+    \end{cbul}
+  \end{minipage}
+\end{frame}
+\note{Второй способ. Коммиты ветки в main не попадают: попадает один новый,
+  в котором лежат изменения их обоих. Хорош, когда в ветке <<fix>>, <<ещё
+  fix>>, <<теперь точно>>.}
+
+\begin{frame}{Слияние: rebase}
+  \slidetop
+  \begin{minipage}[t]{0.47\textwidth}
+    \vspace{0pt}
+    \centering
+    \begin{tikzpicture}
+      \draw[ml] (0,-0.4) -- (0,4.5);
+      \draw[gl] (0,0.9) to[out=70,in=-90] (1.5,1.7) -- (1.5,2.3);
+      \node[dot] (c1) at (0,0.0) {};
+      \node[dot] (c2) at (0,0.9) {};
+      \node[dot] (c3) at (0,2.2) {};
+      \node[cr] at ([xshift=-0.25cm]c1.west) {\texttt{cb5849b}\\{\color{muted}print greeting}};
+      \node[cr] at ([xshift=-0.25cm]c2.west) {\texttt{408319b}\\{\color{muted}add readme}};
+      \node[cr] at ([xshift=-0.25cm]c3.west) {\texttt{983e9ae}\\{\color{muted}describe usage}};
+      \node[gdot] (b1) at (1.5,1.5) {};
+      \node[gdot] (b2) at (1.5,2.1) {};
+      \node[ref,accent,anchor=west] at (0.28,2.5) {main};
+      \node[bdot] (r1) at (0,3.1) {};
+      \node[bdot,fill=alt] (r2) at (0,4.0) {};
+      \node[cl,text=muted] at ([xshift=0.2cm]b1.east) {\texttt{3508968}};
+      \node[cl,text=muted] at ([xshift=0.2cm]b2.east) {\texttt{c320998}};
+      \draw[alt,line width=0.7pt,dashed,-{Straight Barb[length=1.6mm]}]
+        (1.5,2.35) to[out=90,in=0] (r1.east);
+      \node[cl,text=alt] at (0.9,3.6) {те же изменения,\\новые коммиты};
+      \node[cr] at ([xshift=-0.25cm]r1.west) {\texttt{68fa711}\\{\color{muted}greet by name}};
+      \node[cr] at ([xshift=-0.25cm]r2.west) {\texttt{bffa5e2}\\{\color{muted}return exit code}};
+      \node[ref,alt,anchor=south] at (0,4.55) {feat/greet-by-name};
+    \end{tikzpicture}
+  \end{minipage}\hfill
+  \begin{minipage}[t]{0.49\textwidth}
+    \vspace{0.6em}
+    \claim{\raggedright Коммиты ветки \lo{переставляются} поверх свежего main.}
+
+    \texttt{git rebase main}
+
+    \vspace{0.9em}
+    \begin{cbul}{accent}
+      \item история \hi{прямая}, и каждый шаг сохранён
+      \item коммиты получают \lo{новые имена}: это другие коммиты
+      \item нельзя делать с веткой, которой уже пользуются другие
+    \end{cbul}
+  \end{minipage}
+\end{frame}
+\note{Третий способ. Git берёт изменения каждого коммита ветки и записывает
+  их заново, начиная от верхнего коммита main. Хеши другие, потому что
+  другой родитель. После этого main просто передвигается вверх -- без
+  коммита слияния. Договоритесь о способе один раз на проект.}
+
+\begin{frame}{Команды на каждый день}
+  \slidetop
+  {\small
+  \begin{tabular}{@{}p{4.9cm}p{8.3cm}@{}}
+    \texttt{git clone <url>}          & получить репозиторий целиком, с
+      историей \\[0.38em]
+    \texttt{git switch -c <branch>}   & новая ветка под задачу \\[0.38em]
+    \texttt{git status}, \texttt{git diff} & что я изменил \\[0.38em]
+    \texttt{git add}, \texttt{git commit}  & выбрать и записать снимок \\[0.38em]
+    \texttt{git push}                 & отправить ветку на сервер \\[0.38em]
+    \texttt{git pull}                 & забрать чужие изменения \\[0.38em]
+    \texttt{git log --oneline --graph} & прочитать историю \\[0.38em]
+    \texttt{git revert <commit>}      & \hi{отменить коммит новым
+      коммитом} \\[0.38em]
+    \texttt{git push --force} в общую ветку & \lo{переписать чужую историю
+      --- нельзя} \\
+  \end{tabular}}
+\end{frame}
+\note{Девять строк покрывают девяносто процентов дней. Revert, а не
+  переписывание: в общей истории ошибки исправляют вперёд. Force push в
+  общую ветку -- единственная команда на слайде, отмеченная кирпичным.}
+
+\begin{frame}{Чему в репозитории не место}
+  \slidetop
+  \claim{Git помнит всё \hi{навсегда}. Поэтому не всё в него кладут.}
+
+  \begin{tabular}{@{}p{4.6cm}p{8.6cm}@{}}
+    \textbf{\lo{результаты сборки}} & \texttt{bin}, \texttt{obj} ---
+      в \texttt{.gitignore}: они получаются из кода \\[0.55em]
+    \textbf{\lo{пароли и ключи}}    & никогда; попавший в историю секрет
+      считается украденным \\[0.55em]
+    \textbf{\lo{большие бинарные файлы}} & \hi{Git LFS}: в истории
+      лежит указатель, сам файл --- в отдельном хранилище \\
+  \end{tabular}
+
+  \slidegap
+  \aside{Удалить файл следующим коммитом --- не значит удалить его из
+    истории.}
+\end{frame}
+\note{Git хранит снимки, а бинарный файл не сжимается разницей: десять
+  версий видео -- десять полных копий у каждого, кто клонирует. Секрет:
+  не удалять коммитом, а отзывать и перевыпускать ключ.}
+
+% ================================================= 3. ORGANISATION =========
+\section{3. Организация репозитория и GitHub}
+
+\begin{frame}[plain]
+  \sectionopener{3}{Организация репозитория и GitHub}{Одному хватает Git.
+    Когда разработчиков много, нужно \hi{общее место} и \hi{правила}.}
+\end{frame}
+\note{Бюджет: 18 минут. Сначала -- где живёт общий репозиторий и что умеет
+  площадка, потом -- что в этом репозитории должно лежать.}
+
+\begin{frame}{Когда разработчиков много}
+  \slidetop
+  \claim{У каждого --- \hi{полная копия} с историей. Общая правда ---
+    \hi{одна}, на сервере.}
+
+  \begin{center}
+    \begin{tikzpicture}[font=\small,
+      dv/.style={box,minimum width=2.9cm,minimum height=1.0cm}]
+      \node[dv,draw=accent,line width=1.0pt,minimum width=3.6cm] (o)
+        at (0,2.1) {\hi{удалённый репозиторий}\\{\scriptsize\color{muted}origin}};
+      \node[dv] (a) at (-4.3,0) {ваш ноутбук};
+      \node[dv] (b) at ( 0.0,0) {коллега};
+      \node[dv] (c) at ( 4.3,0) {агент};
+      \draw[ar] (a.north) -- node[left=0.3em,font=\scriptsize\ttfamily]
+        {push} (o.south west);
+      \draw[ar] (o.south) -- node[right,font=\scriptsize\ttfamily]
+        {pull} (b.north);
+      \draw[ar] (o.south east) -- node[right=0.3em,font=\scriptsize\ttfamily]
+        {clone} (c.north);
+    \end{tikzpicture}
+  \end{center}
+
+  \slidegap
+  \aside{Никто не пересылает файлы друг другу. Все отправляют коммиты
+    \hi{в одно место} и забирают чужие оттуда же.}
+\end{frame}
+\note{Clone -- получить копию целиком. Push -- отправить свои коммиты.
+  Pull -- забрать чужие. Локальная копия у каждого полная, поэтому работать
+  можно без сети, а сервер -- это место встречи, а не единственное
+  хранилище.}
+
+\begin{frame}{GitHub --- это не Git}
+  \slidetop
+  \versus{Git}{%
+    \begin{cbul}{accent}
+      \item программа у вас на машине
+      \item коммиты, ветки, слияние
+      \item работает без сети
+      \item про людей \hi{ничего не знает}
+    \end{cbul}}{GitHub}{%
+    \begin{cbul}{alt}
+      \item площадка в сети
+      \item хранит удалённый репозиторий
+      \item задачи, pull request, проверки
+      \item знает, \lo{кому что можно}
+    \end{cbul}}
+
+  \slidegap
+  \aside{Git отвечает за историю. Всё, что касается \hi{совместной работы},
+    --- это площадка: GitHub, GitLab и другие.}
+\end{frame}
+\note{Частая путаница первого курса. Pull request, issue, права доступа --
+  этого в Git нет. Мы говорим про GitHub, потому что на нём живёт
+  большинство открытых проектов; идеи те же везде.}
+
+\begin{frame}{Issue}
+  \slidetop
+  \claim{Любая работа начинается с \hi{записи}: что не так или что нужно
+    сделать.}
+
+  \begin{tabular}{@{}p{4.6cm}p{8.6cm}@{}}
+    \textbf{\hi{номер}}       & \texttt{\#42} --- на него можно сослаться откуда
+      угодно \\[0.5em]
+    \textbf{\hi{обсуждение}}  & вопросы и ответы остаются под задачей,
+      а не в переписке \\[0.5em]
+    \textbf{\hi{метки}}       & ошибка, улучшение, документация \\[0.5em]
+    \textbf{\hi{исполнитель}} & видно, кто взял и взял ли кто-нибудь \\
+  \end{tabular}
+
+  \slidegap
+  \aside{Issue может завести кто угодно: разработчик, пользователь,
+    новичок, который не смог запустить проект.}
+\end{frame}
+\note{Коротко: это та самая жалоба в форме артефакта из первого раздела.
+  Как ставить задачи и как ими управлять -- следующая лекция.}
+
+\begin{frame}{Pull request}
   \slidetop
   \claim{В main никто не пишет напрямую. Туда попадают через \hi{pull
     request}.}
@@ -513,87 +759,59 @@ $ git log --oneline --graph
   \aside{Pull request --- это \hi{просьба}: <<возьмите мою ветку в main>>.
     Просьбу можно отклонить.}
 \end{frame}
-\note{PR -- не команда Git, а механизм площадки: GitHub, GitLab. Это место,
-  где встречаются автор, автоматика и тот, кто решает. Вторая половина
-  лекции -- про то, что происходит в квадрате <<проверки и review>>.}
+\note{PR -- не команда Git, а механизм площадки. Это место, где встречаются
+  автор, автоматика и тот, кто решает. В описании пишут <<Closes \#42>> --
+  и задача закроется сама, когда PR сольют.}
 
-\begin{frame}{Команды на каждый день}
+
+\begin{frame}{Actions}
   \slidetop
-  {\small
-  \begin{tabular}{@{}p{4.9cm}p{8.3cm}@{}}
-    \texttt{git clone <url>}          & получить репозиторий целиком, с
-      историей \\[0.38em]
-    \texttt{git switch -c <branch>}   & новая ветка под задачу \\[0.38em]
-    \texttt{git status}, \texttt{git diff} & что я изменил \\[0.38em]
-    \texttt{git add}, \texttt{git commit}  & выбрать и записать снимок \\[0.38em]
-    \texttt{git push}                 & отправить ветку на сервер \\[0.38em]
-    \texttt{git pull}                 & забрать чужие изменения \\[0.38em]
-    \texttt{git log --oneline --graph} & прочитать историю \\[0.38em]
-    \texttt{git revert <commit>}      & \hi{отменить коммит новым
-      коммитом} \\[0.38em]
-    \texttt{git push --force} в общую ветку & \lo{переписать чужую историю
-      --- нельзя} \\
-  \end{tabular}}
+  \claim{Площадка \hi{сама запускает проверки} --- на каждое изменение, на
+    чистой машине.}
+
+  \begin{center}
+    \begin{tikzpicture}[font=\small,
+      st/.style={box,minimum width=2.6cm,minimum height=1.1cm}]
+      \node[st] (a) {событие\\{\scriptsize\color{muted}открыт pull request}};
+      \node[st,right=0.9cm of a] (b) {workflow\\{\scriptsize\color{muted}файл в репозитории}};
+      \node[st,right=0.9cm of b] (c) {шаги\\{\scriptsize\color{muted}сборка, тесты}};
+      \node[st,right=0.9cm of c,minimum width=2.2cm] (d)
+        {\hi{прошло}\\\lo{не прошло}};
+      \foreach \x/\y in {a/b,b/c,c/d} \draw[ar] (\x) -- (\y);
+    \end{tikzpicture}
+  \end{center}
+
+  \slidegap
+  \aside{Результат виден прямо в pull request. Собирает не автор и не на
+    своём ноутбуке --- <<у меня работает>> здесь не проходит.}
 \end{frame}
-\note{Девять строк покрывают девяносто процентов дней. Revert, а не
-  переписывание: в общей истории ошибки исправляют вперёд. Force push в
-  общую ветку -- единственная команда на слайде, отмеченная кирпичным.}
+\note{GitHub Actions. Это и есть CI -- continuous integration. Сейчас
+  достаточно принципа: событие, сценарий, вердикт. Как строить сам сценарий
+  -- в разделе про защиту.}
 
-\begin{frame}[fragile]{Bisect: кто сломал?}
+\begin{frame}{Настройки и защиты}
   \slidetop
-  \claim{Восемь коммитов, один из них сломал программу. Git находит его
-    \hi{за три шага}.}
-\begin{lstlisting}[style=term]
-$ git bisect start HEAD HEAD~8
-Bisecting: 3 revisions left to test after this (roughly 2 steps)
-[483ad28c04d7713b25e9642744ff586a41b9c481] chore: step 4
-$ git bisect run ./check.sh
-running './check.sh'
-Bisecting: 1 revision left to test after this (roughly 1 step)
-[dde588aaee2d83eccb988fe25961674baa9dcc78] chore: step 6
-running './check.sh'
-Bisecting: 0 revisions left to test after this (roughly 0 steps)
-[c4c611bdf40224e4ee368df5f05c08ac30a0a357] chore: step 5
-running './check.sh'
-c4c611bdf40224e4ee368df5f05c08ac30a0a357 is the first bad commit
-\end{lstlisting}
-  \vspace{0.3em}
-  \aside{Двоичный поиск по истории. Работает, только если \hi{каждый коммит
-    собирается} и несёт одну мысль.}
-\end{frame}
-\note{Тысяча коммитов -- десять шагов. Вот зачем атомарные коммиты: если
-  половина истории не собирается, bisect бесполезен. Скрипт check.sh
-  возвращает ноль, если программа работает.}
-
-\begin{frame}{Чему в репозитории не место}
-  \slidetop
-  \claim{Git помнит всё \hi{навсегда}. Поэтому не всё в него кладут.}
+  \claim{Правила проекта --- это \hi{настройки репозитория}, а не
+    договорённости в чате.}
 
   \begin{tabular}{@{}p{4.6cm}p{8.6cm}@{}}
-    \textbf{\lo{результаты сборки}} & \texttt{bin}, \texttt{obj} ---
-      в \texttt{.gitignore}: они получаются из кода \\[0.55em]
-    \textbf{\lo{пароли и ключи}}    & никогда; попавший в историю секрет
-      считается украденным \\[0.55em]
-    \textbf{\lo{большие бинарные файлы}} & \hi{Git LFS}: в истории
-      лежит указатель, сам файл --- в отдельном хранилище \\
+    \textbf{\hi{роли}}            & кто читает, кто пишет, кто
+      управляет \\[0.5em]
+    \textbf{\hi{защита веток}}    & в main --- только через pull
+      request \\[0.5em]
+    \textbf{\hi{обязательные проверки}} & красный pull request слить
+      нельзя \\[0.5em]
+    \textbf{\hi{обязательное review}} & нужно одобрение ответственного \\[0.5em]
+    \textbf{\hi{секреты}}         & ключи хранит площадка, а не код \\
   \end{tabular}
 
   \slidegap
-  \aside{Удалить файл следующим коммитом --- не значит удалить его из
-    истории.}
+  \aside{Правило, записанное в настройках, \hi{нельзя забыть} и нельзя
+    обойти по дружбе.}
 \end{frame}
-\note{Git хранит снимки, а бинарный файл не сжимается разницей: десять
-  версий видео -- десять полных копий у каждого, кто клонирует. Секрет:
-  не удалять коммитом, а отзывать и перевыпускать ключ.}
-
-% ================================================= 3. ORGANISATION =========
-\section{3. Организация репозитория}
-
-\begin{frame}[plain]
-  \sectionopener{3}{Организация репозитория}{Git помнит всё, что вы в него
-    положили. Теперь --- \hi{что класть} и где.}
-\end{frame}
-\note{Бюджет: 15 минут.}
+\note{Settings: collaborators, rulesets, secrets. Показать вживую на своём
+  репозитории. Теперь, когда понятно, где репозиторий живёт и что умеет
+  площадка, -- что в нём должно лежать.}
 
 \begin{frame}[fragile]{Анатомия репозитория}
   \slidetop
@@ -693,7 +911,8 @@ HelloWorld/
   \sectionopener{4}{Защита}{\hi{Never trust the contributor.}\\[0.3em]
     Ни новичку, ни эксперту, ни агенту, ни себе.}
 \end{frame}
-\note{Бюджет: 20 минут. Это не про плохих людей. Ошибаются все; вопрос в
+\note{Бюджет: 20 минут. Настройки мы уже видели; теперь -- какими они
+  должны быть и почему. Это не про плохих людей. Ошибаются все; вопрос в
   том, где ошибка будет поймана. Вы должны быть жёсткими: дисциплина
   first.}
 

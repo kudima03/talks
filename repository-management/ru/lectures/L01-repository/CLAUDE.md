@@ -19,16 +19,30 @@ the numbers** — renumber the cues in the script, then re-derive the tags in
 
 ## Facts this lecture commits to
 
-- Section timings: **5 / 15 / 25 / 13 / 22** = 80 minutes.
-- **39 slides**, numbered 1–39 in order.
-- Git is one section of four (§2): the model, nine everyday commands, bisect.
-  It must not grow into a command reference.
-- The sample repository is `HelloWorld`. Every terminal listing (frames 17,
-  19, 20, 23) is real output of git 2.43.0 on a throwaway repository, author
-  `Student`; only the home directory is anonymised. Re-capture rather than
-  edit: the hashes on frames 14, 15, 17, 19, 20 and 23 belong to one history.
-- One `\statement` pair (frames 5, 35), one `\shout` (frame 39), three
-  `\keyline`s (frames 12, 29, 38).
+- Section timings: **5 / 15 / 22 / 18 / 20** = 80 minutes.
+- **45 slides**, numbered 1–45 in order.
+- Git is one section of four (§2): the model, the first commit, branching,
+  the three ways to merge, nine everyday commands. It must not grow into a
+  command reference. **Bisect was cut in review** — do not restore it.
+- **History is drawn, not pasted.** Frames 15 and 19–22 are vertical diagrams
+  (newest commit on top, main in teal, the task branch in brick); there is no
+  terminal listing left in §2. Commands are set in `\texttt` at body size.
+- **The hashes on the diagrams are real**, from git 2.43.0 on a throwaway
+  `HelloWorld` repository, author `Student`: `cb5849b`, `408319b`, `983e9ae`
+  on main; `3508968`, `c320998` on `feat/greet-by-name`; `845636a` the merge
+  commit; `5e77d87` the squash commit; `68fa711`, `bffa5e2` the rebased
+  pair. They belong to one history — re-run rather than edit.
+- §3 is **«Организация репозитория и GitHub»**: the remote repository and
+  the platform first (frames 26–31: remote, GitHub vs Git, Issue, Pull
+  request, Actions, settings and protections), then what the repository
+  holds (frames 32–35). §3 states what the platform can do; §4 says how it
+  must be set up, and carries the workflow file.
+- **«Pull request» and «issue» do not appear before §3** — not on a slide,
+  not in a note. First-year students may not know the words; frames 28 and
+  29 introduce them. Before that it is «задача в репозитории» and
+  «изменение».
+- One `\statement` pair (frames 5, 41), one `\shout` (frame 45), three
+  `\keyline`s (frames 12, 35, 44).
 
 ## Open items
 
