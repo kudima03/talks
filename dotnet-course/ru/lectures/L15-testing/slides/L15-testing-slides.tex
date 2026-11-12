@@ -1,0 +1,1075 @@
+% Л15 -- Тестирование и качество. Slides.
+%
+% Companion to the spoken script in ../L15-testing.md, which is the source of
+% truth: the slides carry diagrams, code, real terminal output and short
+% marks, and the delivery lives in the script only -- this deck carries no
+% speaker notes. Slide text is in Russian because that is the content;
+% everything else in this file is English.
+%
+% Build:  make          (latexmk -pdf; engine: pdflatex)
+%
+% The C# listings were compiled on dotnet SDK 10.0 in scratch projects
+% (`HelloWorld` + `HelloWorld.Tests`, a `Benchmarks` console project and the
+% lab reference solution); terminal output on the slides is captured from
+% runs of those projects. See ../CLAUDE.md for the verification table.
+%
+% House rules: ../CLAUDE.md and ../../../CLAUDE.md. Theme: ../../../../theme/.
+
+\documentclass[aspectratio=169,10pt,t]{beamer}
+
+\usetheme{dotnet}
+\usetikzlibrary{arrows.meta,positioning,calc,decorations.pathreplacing,fit}
+\usepackage{array}   % ragged-right table columns
+
+% A ragged-right paragraph column: justified cells in narrow columns hyphenate
+% badly, and a split word is the one thing the back row cannot read.
+\newcolumntype{L}[1]{>{\raggedright\arraybackslash}p{#1}}
+
+\dotnetlecture{Л15}
+
+\title[Л15. Тестирование и качество]{Тестирование и качество}
+\author{Дмитрий Курочкин}
+\date{}
+
+% Code sizes, one step down from \footnotesize. Smaller than 6.6pt does not
+% carry to the back of the room.
+\newcommand{\codesm}{\ttfamily\fontsize{7.6}{9.0}\selectfont}
+\newcommand{\codexs}{\ttfamily\fontsize{7.0}{8.3}\selectfont}
+\newcommand{\codexxs}{\ttfamily\fontsize{6.8}{7.8}\selectfont}
+\newcommand{\termsm}{\ttfamily\fontsize{6.6}{7.9}\selectfont}
+
+% A mark at the start of a listing line, for labels set beside the listing.
+% Used through the listing's escapechar; the labels are drawn by an overlay
+% picture after the listing, so the build needs two passes (latexmk does that).
+\newcommand{\mk}[1]{\tikz[remember picture,overlay]\coordinate (#1) at (0,0.55ex);}
+
+\tikzset{
+  rawbrace/.style={decorate,decoration={brace,amplitude=4pt},hairline,
+                   line width=0.8pt},
+  rawlab/.style={anchor=west,font=\footnotesize,inner sep=0pt},
+  box/.style={draw=hairline,line width=0.8pt,fill=codebg,inner sep=4pt,
+              align=center,minimum height=0.9cm},
+  arr/.style={-{Straight Barb[length=1.6mm]},muted,line width=0.7pt},
+  arra/.style={-{Straight Barb[length=1.8mm]},accent,line width=0.9pt},
+  arrl/.style={-{Straight Barb[length=1.8mm]},alt,line width=0.9pt},
+}
+
+\begin{document}
+\shorthandoff{"}
+
+% ------------------------------------------------------------------ title --
+% 1
+\begin{frame}[plain]
+  \titlepagednc{Лекция 15}{Тестирование и качество}{}{Дмитрий Курочкин}
+\end{frame}
+
+% ==================================================== 1. WHY AND WHICH ==
+\section{1. Зачем и какие бывают тесты}
+
+% 2
+\begin{frame}[plain]
+  \sectionopener{1}{Зачем и какие бывают тесты}{Код работает --- и код, про
+    который \hi{известно}, что он работает.}
+\end{frame}
+
+% 3
+\begin{frame}[plain]
+  \vote{Вы поменяли одну строку в сервисе заказов. Откуда вы знаете, что
+    ничего не сломалось?}
+\end{frame}
+
+% 4
+\begin{frame}{Что такое тест}
+  \slidetop
+  \claim{Тест --- код, который \hi{вызывает ваш код} и проверяет результат.}
+
+  \versus{Автоматический тест}{%
+    \begin{cbul}{accent}
+      \item выполняется каждый раз
+      \item бесплатно
+      \item не пропускает пунктов
+    \end{cbul}}{Проверка руками}{%
+    \begin{cbul}{alt}
+      \item выполняется один раз
+      \item минуты на каждую правку
+      \item «всё проверил» --- не всё
+    \end{cbul}}
+
+  \slidegap
+  \aside{Чек-лист пилота, который читает машина. Пункты пишете вы: чего в списке
+    нет, то не проверено.}
+\end{frame}
+
+% 5
+\begin{frame}{Зачем}
+  \slidetop
+  \claim{Не страх сломать, а \hi{выгода}.}
+
+  {\renewcommand{\arraystretch}{1.6}
+  \begin{tabular}{@{}L{4.4cm}L{8.4cm}@{}}
+    \hi{\textbf{скорость изменений}} & через минуту известно, что сломалось;
+      осторожность стоит дороже тестов \\
+    \hi{\textbf{документация}}       & утверждение о поведении, которое проверяется
+      каждый день \\
+    \hi{\textbf{дизайн}}             & тест --- первый потребитель кода: неудобно
+      ему --- неудобно всем \\
+    \hi{\textbf{рефакторинг}}        & зелёные до, зелёные после --- поведение то же \\
+  \end{tabular}}
+
+  \slidegap
+  \aside{Порядок «тест до кода» --- инструмент проектирования. Обязательно одно:
+    тест есть \hi{до} слияния в главную ветку.}
+\end{frame}
+
+% 6
+\begin{frame}{Пирамида}
+  \slidetop
+  \begin{center}
+    \begin{tikzpicture}[font=\footnotesize,
+      lv/.style={box,minimum height=0.82cm,font=\footnotesize\bfseries},
+      ds/.style={anchor=west,inner sep=0pt,text=muted}]
+      \node[lv,minimum width=5.6cm,draw=accent,line width=1.0pt] (u) at (0,0) {unit};
+      \node[lv,minimum width=4.4cm] (i) at (0,0.98) {integration};
+      \node[lv,minimum width=3.2cm] (e) at (0,1.96) {e2e};
+      \node[lv,minimum width=2.0cm] (l) at (0,2.94) {нагрузочные};
+      \node[ds] at (3.3,0)    {один класс · миллисекунды · \hi{тысячи}};
+      \node[ds] at (3.3,0.98) {несколько частей вместе · секунды · сотни};
+      \node[ds] at (3.3,1.96) {весь сервис снаружи · десятки секунд · десятки};
+      \node[ds] at (3.3,2.94) {под трафиком · минуты · единицы};
+      \draw[arrl] (-3.6,-0.35) -- (-3.6,3.3);
+      \node[anchor=east,inner sep=0pt,text=alt,font=\scriptsize\bfseries,align=right]
+        at (-3.8,1.47) {ЦЕНА};
+    \end{tikzpicture}
+  \end{center}
+
+  \slidegap
+  \aside{Чем выше --- тем \lo{медленнее, дороже и больше ложных падений}. Тест,
+    который падает раз в неделю без причины, перестают читать.}
+\end{frame}
+
+% 7
+\begin{frame}{Что ловит каждый уровень}
+  \slidetop
+  {\renewcommand{\arraystretch}{1.5}
+  \begin{tabular}{@{}L{3.2cm}L{9.6cm}@{}}
+    \hi{\textbf{unit}}        & ошибки в логике: условие, знак, статус. Ничего
+      о том, как части соединены \\
+    \textbf{integration}      & SQL, который не переводится; миграцию, которая не
+      применяется; порядок middleware \\
+    \textbf{e2e}              & развёртывание, конфигурацию, взаимодействие сервисов \\
+    \textbf{нагрузочные}      & голодание пула, утечки соединений, N+1 --- всё, что
+      видно только под трафиком \\
+  \end{tabular}}
+
+  \slidegap
+  \aside{Вне пирамиды: контрактные тесты между сервисами, дымовые --- после
+    выкладки, тесты устойчивости --- уронить базу нарочно.}
+\end{frame}
+
+% 8
+\begin{frame}[plain]
+  \vote{Что этот тест поймает, чего не поймает более дешёвый?}
+\end{frame}
+
+% 9
+\begin{frame}{Уровень теста}
+  \slidetop
+  \claim{Тест пишется там, где ошибка \hi{живёт}.}
+
+  {\renewcommand{\arraystretch}{1.6}
+  \begin{tabular}{@{}L{5.2cm}L{7.6cm}@{}}
+    расчёт скидки             & \hi{\textbf{unit}}: считается в памяти,
+      интеграционный ничего не добавит \\
+    запрос к базе через ORM   & \hi{\textbf{integration}}: с подменённым контекстом
+      проверен вызов, а \lo{не SQL} \\
+  \end{tabular}}
+
+  \slidegap
+  \hrulethin{0.42}
+  \rulegap
+  \aside{Покрытие --- \hi{карта}, а не оценка: сто процентов набираются тестами без
+    утверждений. В проекте без тестов --- сначала самый рискованный путь.}
+\end{frame}
+
+% 10
+\begin{frame}[plain]
+  \keyline{Тест --- проверка, которая выполняется бесплатно каждый раз.\\
+    Пишите его на самом дешёвом уровне, где ошибка видна.}
+\end{frame}
+
+% ============================================================ 2. TOOLS ==
+\section{2. Инструменты}
+
+% 11
+\begin{frame}[plain]
+  \sectionopener{2}{Инструменты}{Фреймворки отличаются \hi{моделью изоляции} и
+    атрибутами.}
+\end{frame}
+
+% 12
+\begin{frame}{Три фреймворка}
+  \slidetop
+  {\renewcommand{\arraystretch}{1.5}
+  \begin{tabular}{@{}L{2.4cm}L{5.4cm}L{5.0cm}@{}}
+    & \colhead{accent}{экземпляр класса} & \colhead{alt}{атрибуты} \\
+    \hi{\textbf{xUnit}} & \hi{новый на каждый тест}: конструктор и
+      \texttt{Dispose} & \texttt{Fact}, \texttt{Theory} \\
+    \textbf{NUnit}      & один на класс                 & \texttt{SetUp},
+      \texttt{TestCase} \\
+    \textbf{MSTest}     & встроен в инструменты         & \texttt{TestMethod},
+      \texttt{DataRow} \\
+  \end{tabular}}
+
+  \slidegap
+  \hrulethin{0.42}
+  \rulegap
+  \aside{В xUnit поле не переживает тест: зависимость между тестами
+    \hi{невозможна} случайно. Тяжёлая подготовка --- фикстура, один раз на класс.
+    Дальше всё на xUnit.}
+\end{frame}
+
+% 13
+\begin{frame}[fragile]{Тестовый проект}
+  \slidetop
+  \claim{Обычный проект, обычные пакеты, команда \hi{\texttt{test}}.}
+
+\begin{lstlisting}[style=bash,basicstyle=\codesm,escapechar=|]
+|\mk{t1}|dotnet new xunit --name HelloWorld.Tests
+|\mk{t2}|dotnet add HelloWorld.Tests reference HelloWorld
+|\mk{t3}|dotnet test
+|\mk{t4}|dotnet test --filter "FullyQualifiedName~OrderTests"
+\end{lstlisting}
+  \begin{tikzpicture}[remember picture,overlay,every node/.style={rawlab}]
+    \node at ([xshift=9.6cm]t1) {проект с тестами};
+    \node at ([xshift=9.6cm]t2) {ссылка на тестируемый};
+    \node[text=accent] at ([xshift=9.6cm]t3) {найти, выполнить, отчёт};
+    \node at ([xshift=9.6cm]t4) {подмножество};
+  \end{tikzpicture}
+
+  \slidegap
+  \aside{Обычно проектов два: unit --- на домен, секунды, после каждого сохранения;
+    интеграционный --- на веб-проект, с контейнерами, перед слиянием.}
+\end{frame}
+
+% ================================================= 3. ANATOMY OF A TEST ==
+\section{3. Как устроен тест}
+
+% 14
+\begin{frame}[plain]
+  \sectionopener{3}{Как устроен тест}{Тест --- микропрограмма: вход, действие,
+    \hi{одно} утверждение.}
+\end{frame}
+
+% 15
+\begin{frame}[fragile]{Три абзаца}
+  \slidetop
+  \claim{Подготовить, выполнить, проверить --- \hi{видно} в теле.}
+
+\begin{lstlisting}[style=csharp,basicstyle=\codexs,escapechar=|]
+public sealed class OrderTests
+{
+    [Fact]
+|\mk{a1}|    public void MarkPaid_FromNew_ChangesStatusToPaid()
+    {
+|\mk{a2}|        var order = new Order(new Email("a@b.c"));
+
+|\mk{a3}|        order.MarkPaid();
+
+|\mk{a4}|        Assert.Equal(OrderStatus.Paid, order.Status);
+    }
+}
+\end{lstlisting}
+  \begin{tikzpicture}[remember picture,overlay,every node/.style={rawlab}]
+    \node[text=accent] at ([xshift=9.6cm]a1) {что --- при чём --- что ждём};
+    \node at ([xshift=9.6cm]a2) {подготовка};
+    \node at ([xshift=9.6cm]a3) {действие};
+    \node at ([xshift=9.6cm]a4) {утверждение};
+  \end{tikzpicture}
+
+  \vspace{0.4em}
+  \aside{Имя читается без тела: упал --- и уже понятно, что сломалось.}
+\end{frame}
+
+% 16
+\begin{frame}[fragile]{Как читать падение}
+  \slidetop
+  \claim{Ожидаемое --- \hi{первым}, фактическое --- вторым.}
+
+\begin{lstlisting}[style=csharp,basicstyle=\codesm]
+Assert.Equal(order.Status, OrderStatus.New);   // actual first, expected second
+\end{lstlisting}
+
+\begin{lstlisting}[style=term,basicstyle=\termsm]
+$ dotnet test
+...
+  Failed HelloWorld.Tests.OrderTests.MarkPaid_FromNew_ChangesStatusToPaid [7 ms]
+  Error Message:
+   Assert.Equal() Failure: Values differ
+Expected: Paid
+Actual:   New
+...
+\end{lstlisting}
+
+  \aside{Здесь аргументы перепутаны, и сообщение \lo{говорит наоборот}: заказ
+    на самом деле \texttt{Paid}, а ждали \texttt{New}.}
+\end{frame}
+
+% 17
+\begin{frame}[fragile]{Одна логика, три входа}
+\begin{lstlisting}[style=csharp,basicstyle=\codexs,escapechar=|]
+|\mk{b1}|[Theory]
+|\mk{b2}|[InlineData(OrderStatus.Paid)]
+[InlineData(OrderStatus.Shipped)]
+|\mk{b3}|[InlineData(OrderStatus.Cancelled)]
+public void MarkPaid_FromNonNew_Throws(OrderStatus initial)
+{
+|\mk{b4}|    var order = OrderFactory.WithStatus(initial);
+
+|\mk{b5}|    Assert.Throws<InvalidTransitionException>(() => order.MarkPaid());
+}
+\end{lstlisting}
+  \begin{tikzpicture}[remember picture,overlay,every node/.style={rawlab}]
+    \node[text=accent] at ([xshift=10.6cm]b1) {тест с параметром};
+    \draw[rawbrace] ([xshift=10.35cm,yshift=0.35em]b2) -- ([xshift=10.35cm,yshift=-0.3em]b3);
+    \node at ([xshift=10.6cm]$(b2)!0.5!(b3)$) {три строки в отчёте};
+    \node at ([xshift=10.6cm]b4) {фабрика};
+    \node at ([xshift=10.6cm]b5) {исключение};
+  \end{tikzpicture}
+
+\begin{lstlisting}[style=term,basicstyle=\termsm]
+$ dotnet test --logger "console;verbosity=normal"
+...
+  Passed HelloWorld.Tests.OrderTests.MarkPaid_FromNonNew_Throws(initial: Cancelled) [5 ms]
+  Passed HelloWorld.Tests.OrderTests.MarkPaid_FromNonNew_Throws(initial: Shipped) [< 1 ms]
+  Passed HelloWorld.Tests.OrderTests.MarkPaid_FromNonNew_Throws(initial: Paid) [< 1 ms]
+  Passed HelloWorld.Tests.OrderTests.MarkPaid_FromNew_ChangesStatusToPaid [5 ms]
+...
+\end{lstlisting}
+\end{frame}
+
+% 18
+\begin{frame}[plain]
+  \vote{В тесте пять утверждений. Он упал. Что сломалось?}
+\end{frame}
+
+% 19
+\begin{frame}{Одна причина упасть}
+  \slidetop
+  \versus{Пять тестов}{%
+    \begin{cbul}{accent}
+      \item одно имя --- одна вещь
+      \item упал ровно тест про дату оплаты
+      \item остальные четыре выполнились
+    \end{cbul}}{Пять утверждений}{%
+    \begin{cbul}{alt}
+      \item одно имя --- пять причин
+      \item какое из пяти --- в отчёте
+      \item после первого остальные не выполнились
+    \end{cbul}}
+
+  \slidegap
+  \hrulethin{0.42}
+  \rulegap
+  \aside{Правило не про число вызовов \texttt{Assert}: «не пустой и содержит
+    элемент» --- \hi{одна} причина, два утверждения.}
+\end{frame}
+
+% 20
+\begin{frame}[plain]
+  \vote{Надо ли тестировать приватные методы?}
+\end{frame}
+
+% 21
+\begin{frame}{Признаки плохого теста}
+  \slidetop
+  {\renewcommand{\arraystretch}{1.5}
+  \begin{tabular}{@{}L{4.6cm}L{8.2cm}@{}}
+    \lo{\textbf{приватное через рефлексию}} & проверяйте то, что видно снаружи;
+      сложный приватный метод --- спрятанный класс \\
+    \lo{\textbf{подготовка на тридцать строк}} & длинный конструктор или нужна
+      фабрика тестовых данных \\
+    \lo{\textbf{логика внутри}}      & \texttt{if}, цикл, расчёт ожидаемого ---
+      тест и код неправы согласованно \\
+    \lo{\textbf{зависит от машины}}  & культура, часовой пояс, файл на диске \\
+  \end{tabular}}
+
+  \slidegap
+  \aside{Ожидаемое значение --- \hi{константа}, посчитанная вручную. Тест читается
+    как предложение, а не как программа.}
+\end{frame}
+
+% 22
+\begin{frame}[fragile]{Подстановки}
+  \vspace{0.3em}
+\begin{lstlisting}[style=csharp,basicstyle=\codexxs,escapechar=|]
+[Fact]
+public async Task Confirm_PaidOrder_SendsEmailToCustomer()
+{
+|\mk{m1}|    var repository = Substitute.For<IOrderRepository>();
+    var notifier = Substitute.For<INotifier>();
+|\mk{m2}|    var time = new FakeTimeProvider(
+        new DateTimeOffset(2026, 9, 13, 10, 0, 0, TimeSpan.Zero));
+|\mk{m3}|    repository.FindAsync(42, Arg.Any<CancellationToken>())
+        .Returns(OrderFactory.Paid(id: 42, email: "a@b.c"));
+|\mk{m4}|    var service = new OrderService(repository, notifier, time);
+
+    await service.ConfirmAsync(42, CancellationToken.None);
+
+|\mk{m5}|    await notifier.Received(1).SendAsync(
+        "a@b.c", Arg.Any<string>(), Arg.Any<CancellationToken>());
+}
+\end{lstlisting}
+  \begin{tikzpicture}[remember picture,overlay,every node/.style={rawlab}]
+    \node at ([xshift=10.2cm]m1) {реализация на лету};
+    \node at ([xshift=10.2cm]m2) {фиксированный момент};
+    \node at ([xshift=10.2cm]m3) {заготовленный ответ};
+    \node at ([xshift=10.2cm]m4) {собран руками};
+    \node[text=accent] at ([xshift=10.2cm]m5) {вызван с нужным адресом};
+  \end{tikzpicture}
+
+  \slidegap
+  \aside{Ни базы, ни почты, ни часов. Важно одно: письмо ушло \hi{покупателю}.}
+\end{frame}
+
+% 23
+\begin{frame}{Что заменяем}
+  \slidetop
+  \claim{Всё недетерминированное приходит \hi{снаружи}.}
+
+  {\renewcommand{\arraystretch}{1.45}
+  \begin{tabular}{@{}L{3.6cm}L{9.2cm}@{}}
+    \hi{\textbf{внешний сервис}} & медленный и ненадёжный \\
+    \hi{\textbf{база}}           & это интеграционный уровень \\
+    \hi{\textbf{время}}          & «сейчас» --- только через \texttt{TimeProvider}:
+      в тесте его ставят и двигают \\
+    \hi{\textbf{случайность}}    & генератор с фиксированным сидом \\
+  \end{tabular}}
+
+  \slidegap
+  \aside{Каждая подстановка --- утверждение о зависимости, которое \lo{никто не
+    проверяет}. Подстановки --- для границ, не для всего подряд.}
+\end{frame}
+
+% 24
+\begin{frame}{Подстановка или реализация в памяти}
+  \slidetop
+  \versus{Подстановка}{%
+    \begin{cbul}{accent}
+      \item «что-то произошло снаружи»
+      \item письмо ушло, событие опубликовано
+      \item проверяется факт вызова
+    \end{cbul}}{Реализация в памяти}{%
+    \begin{cbul}{alt}
+      \item «состояние стало таким»
+      \item после сохранения заказ находится
+      \item проверяется результат
+    \end{cbul}}
+
+  \slidegap
+  \hrulethin{0.42}
+  \rulegap
+  \aside{Хранилище на словаре живёт в тестовом проекте и служит десяткам тестов.
+    Проверка порядка внутренних вызовов \lo{ломается} при любом рефакторинге.}
+\end{frame}
+
+% 25
+\begin{frame}[plain]
+  \statement{Не управлять порядком тестов. \lo{Никогда}.}
+\end{frame}
+
+% 26
+\begin{frame}{Каждый тест готовит своё}
+  \slidetop
+  \versus{Сам, с нуля}{%
+    \begin{cbul}{accent}
+      \item нужен оплаченный заказ --- создал
+      \item запускается один
+      \item параллельно, в любом порядке
+      \item падает по своей причине
+    \end{cbul}}{Сценарий по шагам}{%
+    \begin{cbul}{alt}
+      \item второй оплачивает «тот самый»
+      \item один не запустить
+      \item порядок выбирает фреймворк
+      \item упал первый --- упали все
+    \end{cbul}}
+
+  \slidegap
+  \hrulethin{0.42}
+  \rulegap
+  \aside{Статические поля и общая база тест \lo{переживают}. В общей базе ---
+    уникальные данные, никакого «заказа номер один».}
+\end{frame}
+
+% 27
+\begin{frame}{Асинхронные тесты}
+  \slidetop
+  \claim{Тест возвращает \texttt{Task} и \hi{ждёт}.}
+
+  {\renewcommand{\arraystretch}{1.5}
+  \begin{tabular}{@{}L{4.4cm}L{8.4cm}@{}}
+    \hi{\textbf{\texttt{async Task}}}  & фреймворк ждёт задачу; исключение из неё
+      --- падение \\
+    \lo{\textbf{забытый \texttt{await}}} & тест проходит \lo{всегда}: проверять
+      нечего \\
+    \hi{\textbf{исключение}}           & асинхронный вариант утверждения:
+      \texttt{ThrowsAsync} \\
+    \hi{\textbf{отмена}}               & уже отменённый токен --- метод обязан
+      бросить, а не доработать \\
+  \end{tabular}}
+
+  \slidegap
+  \aside{Тест, который не ждёт задачу, --- тот же забытый \texttt{await}, что
+    ловит анализатор.}
+\end{frame}
+
+% 28
+\begin{frame}[plain]
+  \keyline{Вход, одно действие и одна причина упасть --- с именем, которое её
+    называет.\\ Подстановки --- только на границах.}
+\end{frame}
+
+% ============================================ 4. TESTING THE REAL SERVICE ==
+\section{4. Тесты настоящего сервиса}
+
+% 29
+\begin{frame}[plain]
+  \sectionopener{4}{Тесты настоящего сервиса}{Настоящий конвейер, настоящая
+    база; подменяется только \hi{внешнее}.}
+\end{frame}
+
+% 30
+\begin{frame}{Приложение в памяти теста}
+  \slidetop
+  \claim{Тот же файл запуска, тот же конвейер --- \hi{без сети}.}
+
+  \begin{center}
+    \begin{tikzpicture}[font=\scriptsize,
+      st/.style={box,minimum width=2.2cm,minimum height=1.1cm,inner sep=1pt}]
+      \node[st] (s1) at (0,0)     {\textbf{тест}};
+      \node[st] (s2) at (2.75,0)  {\textbf{клиент}\\от фабрики};
+      \node[st,draw=accent,line width=1.0pt] (s3) at (5.5,0) {\textbf{конвейер}\\middleware};
+      \node[st,draw=accent,line width=1.0pt] (s4) at (8.25,0) {\textbf{обработчик}\\и контейнер};
+      \node[st] (s5) at (11.0,0)  {\textbf{база}\\в контейнере};
+      \foreach \i [evaluate=\i as \j using int(\i+1)] in {1,...,4}
+        \draw[arr] (s\i) -- (s\j);
+      \draw[rawbrace] ([yshift=0.5em]s3.north west) -- ([yshift=0.5em]s4.north east)
+        node[midway,above=0.5em,font=\scriptsize\bfseries,text=accent]
+        {ХОСТ ЦЕЛИКОМ, В ПРОЦЕССЕ ТЕСТА};
+    \end{tikzpicture}
+  \end{center}
+
+  \slidegap
+  \aside{Сервер не слушает порт: запросы идут от клиента, который тест держит в
+    руках.}
+\end{frame}
+
+% 31
+\begin{frame}[plain]
+  \vote{Что в таком тесте настоящее, а что нет?}
+\end{frame}
+
+% 32
+\begin{frame}{Настоящее и подменённое}
+  \slidetop
+  \versus{Настоящее}{%
+    \begin{cbul}{accent}
+      \item конвейер и маршрутизация
+      \item привязка и валидация
+      \item обработчик ошибок, сериализация
+      \item контейнер и ваши обработчики
+    \end{cbul}}{Подменили сами}{%
+    \begin{cbul}{alt}
+      \item внешние сервисы
+      \item издатель токенов
+    \end{cbul}}
+
+  \slidegap
+  \hrulethin{0.42}
+  \rulegap
+  \aside{В памяти, а не отдельным процессом: хост поднимается \hi{за секунду},
+    тест может заменить регистрацию, точка останова срабатывает из теста.}
+\end{frame}
+
+% 33
+\begin{frame}{Настоящая база}
+  \slidetop
+  \claim{Того же типа, что в проде, --- \hi{в контейнере}, на время тестов.}
+
+  {\renewcommand{\arraystretch}{1.5}
+  \begin{tabular}{@{}L{4.6cm}L{8.2cm}@{}}
+    \lo{\textbf{подстановка хранилища}} & SQL, миграции и ORM не проверены \\
+    \lo{\textbf{база в памяти, SQLite}} & другой диалект: тест врёт \\
+    \hi{\textbf{контейнер}}             & случайный порт, строка подключения ---
+      в конфигурацию под тем же ключом \\
+  \end{tabular}}
+
+  \slidegap
+  \aside{Схема --- \hi{миграциями} с нуля, а не «создать по модели»: только так
+    забытая миграция находится до выкладки.}
+\end{frame}
+
+% 34
+\begin{frame}[fragile]{Фабрика приложения}
+\begin{lstlisting}[style=csharp,basicstyle=\ttfamily\fontsize{6.8}{7.6}\selectfont,escapechar=|]
+public sealed class ApiFactory : WebApplicationFactory<Program>, IAsyncLifetime
+{
+|\mk{f1}|    private readonly PostgreSqlContainer _db =
+        new PostgreSqlBuilder("postgres:17-alpine").Build();
+|\mk{f2}|    public Task InitializeAsync() => _db.StartAsync();
+    public new async Task DisposeAsync()
+    {
+        await _db.DisposeAsync();
+        await base.DisposeAsync();
+    }
+    protected override void ConfigureWebHost(IWebHostBuilder builder)
+    {
+|\mk{f3}|        builder.UseSetting(
+            "ConnectionStrings:Orders", _db.GetConnectionString());
+        builder.ConfigureTestServices(services =>
+        {
+|\mk{f4}|            services.RemoveAll<IRatesClient>();
+            services.AddSingleton(Substitute.For<IRatesClient>());
+        });
+    }
+}
+\end{lstlisting}
+  \begin{tikzpicture}[remember picture,overlay,every node/.style={rawlab}]
+    \node[text=accent] at ([xshift=10.4cm]f1) {настоящий PostgreSQL};
+    \node at ([xshift=10.4cm]f2) {старт --- раз на класс};
+    \node at ([xshift=10.4cm]f3) {своя строка подключения};
+    \node at ([xshift=10.4cm]f4) {подстановка клиента};
+  \end{tikzpicture}
+\end{frame}
+
+% 35
+\begin{frame}{Аутентификация в тестах}
+  \slidetop
+  \claim{Тоже \hi{замена регистрации}.}
+
+  \versus{Тестовая схема}{%
+    \begin{cbul}{accent}
+      \item имя и роли --- из заголовка
+      \item тест ставит заголовок
+      \item издатель не нужен
+    \end{cbul}}{Настоящие токены}{%
+    \begin{cbul}{alt}
+      \item токены от тестового инструмента
+      \item проверяется ещё и подпись
+      \item ключи в тестовой конфигурации
+    \end{cbul}}
+
+  \slidegap
+  \hrulethin{0.42}
+  \rulegap
+  \aside{Оба законны; первая проще. Без заголовка --- \hi{401}.}
+\end{frame}
+
+% 36
+\begin{frame}{Контейнер и чистка}
+  \slidetop
+  \claim{Контейнер --- на класс. Между тестами --- \hi{чистка}.}
+
+  {\renewcommand{\arraystretch}{1.5}
+  \begin{tabular}{@{}L{4.2cm}L{8.6cm}@{}}
+    \textbf{откат транзакции}       & быстро; \lo{не работает}, если код сам
+      открывает транзакции \\
+    \textbf{сброс таблиц}           & медленнее, зато честнее \\
+    \hi{\textbf{уникальные данные}} & чистка раз на класс --- самый быстрый
+      вариант \\
+  \end{tabular}}
+
+  \slidegap
+  \aside{Цена --- движок контейнеров у разработчика и на сборке. Нет движка ---
+    тесты пропускаются с понятным сообщением, а не падают.}
+\end{frame}
+
+% 37
+\begin{frame}[fragile]{Контрактный тест}
+  \vspace{0.2em}
+\begin{lstlisting}[style=csharp,basicstyle=\codexxs,escapechar=|]
+public sealed class CreateOrderTests(ApiFactory factory)
+    : IClassFixture<ApiFactory>
+{
+    [Fact]
+    public async Task Post_WithNegativeQuantity_Returns422WithFieldError()
+    {
+        var client = factory.CreateClient();
+        var body = new { customerEmail = "a@b.c",
+            items = new[] { new { productId = 1, quantity = -1 } } };
+
+|\mk{c1}|        var response = await client.PostAsJsonAsync("/orders", body);
+
+|\mk{c2}|        Assert.Equal(
+            HttpStatusCode.UnprocessableEntity, response.StatusCode);
+|\mk{c3}|        var error = await response.Content
+            .ReadFromJsonAsync<ErrorResponse>();
+|\mk{c4}|        Assert.Contains("items[0].quantity", error!.Errors.Keys);
+    }
+}
+\end{lstlisting}
+  \begin{tikzpicture}[remember picture,overlay,every node/.style={rawlab}]
+    \node[text=accent] at ([xshift=10.4cm]c1) {запрос как клиент};
+    \node at ([xshift=10.4cm]c2) {статус из контракта};
+    \node at ([xshift=10.4cm]c3) {тело в формате ошибки};
+    \node at ([xshift=10.4cm]c4) {имя поля};
+  \end{tikzpicture}
+\end{frame}
+
+% 38
+\begin{frame}{Почему контракт}
+  \slidetop
+  \claim{Запрос, статус, тело --- и \hi{ни одного} обращения к внутренностям.}
+
+  {\renewcommand{\arraystretch}{1.6}
+  \begin{tabular}{@{}L{4.2cm}L{8.6cm}@{}}
+    \hi{\textbf{это обещание}}       & его нарушение ломает клиентов; внутренности
+      вы вправе переписать \\
+    \hi{\textbf{проходит через всё}} & фильтр, валидатор, middleware, статус,
+      имена полей --- одним тестом \\
+    \hi{\textbf{документация}}       & список тестов --- список того, что сервис
+      обещает \\
+  \end{tabular}}
+
+  \slidegap
+  \aside{Переименовали поле --- тест упал: о ломающем изменении вы узнали
+    \hi{раньше} клиентов.}
+\end{frame}
+
+% 39
+\begin{frame}[plain]
+  \vote{Как проверить, что заказ действительно сохранился в базу?}
+\end{frame}
+
+% 40
+\begin{frame}{Через тот же контракт}
+  \slidetop
+  \begin{center}
+    \begin{tikzpicture}[font=\footnotesize,
+      tb/.style={box,minimum width=2.9cm,minimum height=1.0cm}]
+      \node[tb] (t1) at (0,0)    {\texttt{POST /orders}};
+      \node[tb] (t2) at (3.6,0)  {\textbf{201}\\\texttt{Location}};
+      \node[tb] (t3) at (7.2,0)  {\texttt{GET} по адресу};
+      \node[tb,draw=accent,line width=1.0pt] (t4) at (10.8,0)
+        {\textbf{200}\\то же содержимое};
+      \foreach \i [evaluate=\i as \j using int(\i+1)] in {1,...,3}
+        \draw[arr] (t\i) -- (t\j);
+    \end{tikzpicture}
+  \end{center}
+
+  \slidegap
+  \begin{cbul}{accent}
+    \item клиент делает ровно это: работает --- значит, \hi{сохранение работает}
+    \item в базу заглядывают, когда наружу не видно: фоновая задача пометила
+      заказы
+    \item фоновую задачу тест вызывает напрямую --- таймер не ждут никогда
+  \end{cbul}
+
+  \slidegap
+  \aside{Мигающий тест чинится или удаляется. Перезапуск «пока не пройдёт»
+    \lo{прячет} настоящую гонку.}
+\end{frame}
+
+% 41
+\begin{frame}[plain]
+  \keyline{Приложение поднимается в тесте целиком, база настоящая.\\
+    Проверяется контракт --- обещание, а не внутренности.}
+\end{frame}
+
+% ================================================ 5. RANDOM AND FUZZING ==
+\section{5. Рандом и фаззинг}
+
+% 42
+\begin{frame}[plain]
+  \sectionopener{5}{Рандом и фаззинг}{Тест придумывает входы сам, но \hi{сид}
+    печатается в отчёт.}
+\end{frame}
+
+% 43
+\begin{frame}{Свойство вместо примера}
+  \slidetop
+  \versus{Свойство}{%
+    \begin{cbul}{accent}
+      \item верно для \hi{любого} входа
+      \item сумма заказа --- сумма позиций
+      \item в JSON и обратно --- равный объект
+      \item сотни входов от генератора
+    \end{cbul}}{Пример}{%
+    \begin{cbul}{alt}
+      \item один конкретный вход
+      \item две позиции по сто рублей
+      \item случай, который вы вообразили
+      \item три входа, и они перечислены
+    \end{cbul}}
+
+  \slidegap
+  \hrulethin{0.42}
+  \rulegap
+  \aside{Для кода с алгоритмом: разбор, преобразования, расчёты. Фаззинг границы
+    сервиса: мусор в теле --- ответ четырёхсотый, \lo{не} пятисотый.}
+\end{frame}
+
+% 44
+\begin{frame}[plain]
+  \vote{Тест со случайными данными упал ночью в конвейере. Утром вы его
+    запустили --- он прошёл. Что делать?}
+\end{frame}
+
+% 45
+\begin{frame}{Сид}
+  \slidetop
+  \claim{Случайность без сида --- не тест, а \lo{лотерея}.}
+
+  \begin{cbul}{accent}
+    \item сид фиксируется в начале и \hi{печатается} при падении
+    \item тот же сид --- тот же вход: тест падает снова, ошибка найдена
+    \item хорошая библиотека сжимает вход до минимального: не «двести элементов»,
+      а «один отрицательный»
+  \end{cbul}
+
+  \slidegap
+  \aside{Место в пирамиде --- рядом с unit-тестами домена: чистая логика в памяти,
+    сотни входов за миллисекунды.}
+\end{frame}
+
+% ============================================== 6. PERFORMANCE TESTING ==
+\section{6. Перфоманс-тестирование}
+
+% 46
+\begin{frame}[plain]
+  \sectionopener{6}{Перфоманс-тестирование}{Секундомер врёт; мерит инструмент,
+    и только в \hi{Release}.}
+\end{frame}
+
+% 47
+\begin{frame}[plain]
+  \vote{Почему нельзя мерить секундомером: засечь время, вызвать метод,
+    вычесть?}
+\end{frame}
+
+% 48
+\begin{frame}{Шесть причин}
+  \slidetop
+  {\renewcommand{\arraystretch}{1.3}
+  \begin{tabular}{@{}L{4.4cm}L{8.4cm}@{}}
+    первый вызов          & вы измерили \lo{компиляцию} JIT \\
+    метод ещё не горячий  & вы измерили \lo{черновик} \\
+    сборщик мусора        & вы измерили \lo{паузу} \\
+    другой процесс        & вы измерили \lo{соседа} \\
+    один вызов            & одно число, а нужно \lo{распределение} \\
+    сборка в Debug        & код, которого в проде \lo{не существует} \\
+  \end{tabular}}
+
+  \slidegap
+  \aside{Каждая искажает результат \hi{в разы}.}
+\end{frame}
+
+% 49
+\begin{frame}[fragile]{Бенчмарк}
+\begin{lstlisting}[style=csharp,basicstyle=\codexxs,escapechar=|]
+|\mk{n1}|[MemoryDiagnoser]
+public class ParseBench
+{
+|\mk{n2}|    [Params(10, 1_000)]
+    public int Count;
+
+    private string[] _lines = [];
+
+|\mk{n3}|    [GlobalSetup]
+    public void Setup() => _lines = Enumerable.Range(0, Count)
+        .Select(i => $"2026-09-{i % 28 + 1:00};order-{i}").ToArray();
+
+|\mk{n4}|    [Benchmark(Baseline = true)]
+    public int Substring() => _lines.Sum(l => int.Parse(l.Substring(8, 2)));
+
+    [Benchmark]
+    public int Span() => _lines.Sum(l => int.Parse(l.AsSpan(8, 2)));
+}
+\end{lstlisting}
+  \begin{tikzpicture}[remember picture,overlay,every node/.style={rawlab}]
+    \node at ([xshift=11.3cm]n1) {диагностика памяти};
+    \node at ([xshift=11.3cm]n2) {размер данных};
+    \node at ([xshift=11.3cm]n3) {подготовка отдельно};
+    \node[text=accent] at ([xshift=11.3cm]n4) {базовый вариант};
+  \end{tikzpicture}
+
+  \aside{\texttt{dotnet run -c Release}: отдельный процесс, прогрев. В Debug
+    \lo{откажется}.}
+\end{frame}
+
+% 50
+\begin{frame}{Таблица}
+  \slidetop
+  \claim{Среднее, ошибка, отношение к базовому, \hi{аллокации}.}
+
+  {\renewcommand{\arraystretch}{1.3}\small
+  \begin{tabular}{@{}llrrrrr@{}}
+    \colhead{muted}{Method} & \colhead{muted}{Count} & \colhead{muted}{Mean} &
+      \colhead{muted}{Error} & \colhead{muted}{Ratio} & \colhead{muted}{Gen0} &
+      \colhead{muted}{Allocated} \\
+    \texttt{Substring} & 10    & 109.72 ns & 4.221 ns & 1.01 & 0.0224 & 352 B \\
+    \hi{\texttt{Span}} & 10    & 60.88 ns & 1.740 ns & 0.56 & --- & --- \\
+    \texttt{Substring} & 1000  & 9,850.62 ns & 195.516 ns & 1.00 & 2.0294 & 32032 B \\
+    \hi{\texttt{Span}} & 1000  & 5,228.62 ns & 103.725 ns & 0.53 & --- & --- \\
+  \end{tabular}}
+
+  \slidegap
+  \aside{Разница меньше ошибки --- разницы \lo{нет}. Здесь она есть: подстрока ---
+    новая строка в куче на каждый элемент, окно --- нет. Мерьте горячий путь и
+    сравнивайте \hi{варианты}, а не одно число.}
+\end{frame}
+
+% 51
+\begin{frame}[plain]
+  \statement{В третьей лекции вы угадывали.\\ Теперь вы \hi{мерите}.}
+\end{frame}
+
+% ========================================================= 7. ANALYZERS ==
+\section{7. Анализаторы}
+
+% 52
+\begin{frame}[plain]
+  \sectionopener{7}{Анализаторы}{Компилятор, который знает про ваши
+    \hi{типичные ошибки}.}
+\end{frame}
+
+% 53
+\begin{frame}[fragile]{Три строки}
+  \slidetop
+  \claim{Правила инженерии --- \hi{на каждой сборке}.}
+
+\begin{lstlisting}[style=xml,basicstyle=\codesm,escapechar=|]
+<PropertyGroup>
+|\mk{x1}|  <AnalysisLevel>latest-all</AnalysisLevel>
+|\mk{x2}|  <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+|\mk{x3}|  <EnforceCodeStyleInBuild>true</EnforceCodeStyleInBuild>
+</PropertyGroup>
+\end{lstlisting}
+  \begin{tikzpicture}[remember picture,overlay,every node/.style={rawlab}]
+    \node at ([xshift=10.3cm]x1) {все встроенные правила};
+    \node[text=accent] at ([xshift=10.3cm]x2) {предупреждения --- ошибки};
+    \node at ([xshift=10.3cm]x3) {стиль --- тоже при сборке};
+  \end{tikzpicture}
+
+  \slidegap
+  \aside{Предупреждение, которое не ломает сборку, через неделю \lo{никто не
+    видит}. Строгость каждого правила --- в \texttt{.editorconfig}, одном на
+    репозиторий.}
+\end{frame}
+
+% 54
+\begin{frame}[fragile]{Одно слово}
+  \slidetop
+\begin{lstlisting}[style=csharp,basicstyle=\codesm,escapechar=|]
+|\mk{r1}|var line = reader.ReadLine();
+|\mk{r2}|var line = await reader.ReadLineAsync(ct);
+\end{lstlisting}
+  \begin{tikzpicture}[remember picture,overlay,every node/.style={rawlab}]
+    \node[text=alt] at ([xshift=7.6cm]r1) {компилируется, работает, блокирует поток};
+    \node[text=accent] at ([xshift=7.6cm]r2) {то, что должно быть};
+  \end{tikzpicture}
+
+  \slidegap
+\begin{lstlisting}[style=term,basicstyle=\termsm,breaklines=true]
+$ dotnet build | grep -m1 CA1849
+/home/user/HelloWorld/Import.cs(8,20): error CA1849: 'StreamReader.ReadLine()' synchronously blocks. Await 'StreamReader.ReadLineAsync()' instead. (https://learn.microsoft.com/dotnet/fundamentals/code-analysis/quality-rules/ca1849) [/home/user/HelloWorld/HelloWorld.csproj]
+\end{lstlisting}
+
+  \rulegap
+  \aside{Модель написала правдоподобно. Тесты прошли. Под нагрузкой сервис встал.
+    Анализатор ловит это \hi{до коммита}.}
+\end{frame}
+
+% 55
+\begin{frame}{Что ловит и чего не ловит}
+  \slidetop
+  \versus{Анализатор}{%
+    \begin{cbul}{accent}
+      \item синхронный вызов в асинхронном методе
+      \item забытый \texttt{await}
+      \item не освобождённый объект
+      \item двойной перебор, интерполяция в логе
+    \end{cbul}}{Только тесты}{%
+    \begin{cbul}{alt}
+      \item неправильное условие в расчёте
+      \item неверный статус в ответе
+      \item SQL, который не переводится
+    \end{cbul}}
+
+  \slidegap
+  \hrulethin{0.42}
+  \rulegap
+  \aside{Включайте в \hi{первый день}. В старом проекте --- по одному правилу.
+    Подавление --- точечно и с обоснованием.}
+\end{frame}
+
+% ====================================================== 8. WHERE NEXT ==
+\section{8. Куда расти дальше}
+
+% 56
+\begin{frame}[plain]
+  \sectionopener{8}{Куда расти дальше}{Сборка по-настоящему --- отдельный доклад.
+    \hi{CI} --- условие слияния.}
+\end{frame}
+
+% 57
+\begin{frame}{Конвейер}
+  \slidetop
+  \claim{Хоть один шаг красный --- слияние \lo{запрещено}.}
+
+  \begin{center}
+    \begin{tikzpicture}
+      \foreach \i/\t in {1/{SDK\\нужной версии},2/{восстановить\\lock-файл},
+                         3/{сборка и\\анализаторы},4/{unit-тесты},
+                         5/{тесты в\\контейнерах}} {
+        \node[box,minimum width=1.95cm,minimum height=1.1cm,inner sep=1pt,font=\scriptsize]
+          (r\i) at ({(\i-1)*2.32},0) {\t};
+      }
+      \node[box,draw=accent,line width=1.0pt,minimum width=1.95cm,minimum height=1.1cm,
+            inner sep=1pt,font=\scriptsize\bfseries] (r6) at (11.6,0) {образ\\в реестр};
+      \foreach \i [evaluate=\i as \j using int(\i+1)] in {1,...,5}
+        \draw[arr] (r\i) -- (r\j);
+    \end{tikzpicture}
+  \end{center}
+
+  \slidegap
+  \begin{cbul}{accent}
+    \item каждый шаг --- команда, которую вы \hi{уже знаете}
+    \item то, что делали руками в лабораторных, --- записано один раз
+    \item запрещено настройкой репозитория, а не договорённостью
+  \end{cbul}
+\end{frame}
+
+% 58
+\begin{frame}[plain]
+  \keyline{Всё, что проверяет качество, выполняется без человека\\ и запрещает
+    слияние, если красное.}
+\end{frame}
+
+% 59
+\begin{frame}{Пятнадцать лекций}
+  \slidetop
+  \claim{У вас есть \hi{сервис} --- и понимание того, что под ним.}
+
+  {\renewcommand{\arraystretch}{1.3}
+  \begin{tabular}{@{}L{2.6cm}L{10.2cm}@{}}
+    \hi{\textbf{Л1--Л2}}   & от исходника до процесса: сборка, пакеты, память \\
+    \hi{\textbf{Л3--Л6}}   & язык: типы, коллекции, ресурсы, асинхронность \\
+    \hi{\textbf{Л7--Л9}}   & HTTP, хост и конвейер, контракт \\
+    \hi{\textbf{Л10--Л12}} & зависимости и настройки, безопасность, кэш и
+      наблюдаемость \\
+    \hi{\textbf{Л13--Л14}} & данные: драйвер и ORM \\
+    \hi{\textbf{Л15}}      & как убедиться, что всё это работает \\
+  \end{tabular}}
+
+  \slidegap
+  \aside{Мастер --- не тот, кто помнит все API. Тот, кто понимает, что под ними,
+    и у кого есть \hi{инструменты}, чтобы проверить.}
+\end{frame}
+
+% 60
+\begin{frame}[plain]
+  \shout{Продолжайте вскрывать}
+\end{frame}
+
+\end{document}
