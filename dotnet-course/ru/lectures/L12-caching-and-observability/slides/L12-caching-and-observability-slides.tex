@@ -1,0 +1,1190 @@
+% Л12 -- Кэширование, логирование и наблюдаемость. Slides.
+%
+% Companion to the spoken script in ../L12-caching-and-observability.md, which
+% is the source of truth: the slides carry diagrams, code, real terminal output
+% and short marks, and the delivery lives in the script only -- this deck
+% carries no speaker notes. Slide text is in Russian because that is the
+% content; everything else in this file is English.
+%
+% Build:  make          (latexmk -pdf; engine: pdflatex)
+%
+% The C# listings were compiled on dotnet SDK 10.0 in a scratch
+% `dotnet new web -n HelloWorld` (the AppHost listing in a scratch Aspire
+% solution); terminal output on the slides is captured from runs of that
+% project. See ../CLAUDE.md for the verification table.
+%
+% House rules: ../CLAUDE.md and ../../../CLAUDE.md. Theme: ../../../../theme/.
+
+\documentclass[aspectratio=169,10pt,t]{beamer}
+
+\usetheme{dotnet}
+\usetikzlibrary{arrows.meta,positioning,calc,decorations.pathreplacing,fit}
+\usepackage{array}   % ragged-right table columns
+
+% A ragged-right paragraph column: justified cells in narrow columns hyphenate
+% badly, and a split word is the one thing the back row cannot read.
+\newcolumntype{L}[1]{>{\raggedright\arraybackslash}p{#1}}
+
+\dotnetlecture{Л12}
+
+\title[Л12. Кэширование, логирование и наблюдаемость]{Кэширование, логирование
+  и наблюдаемость}
+\author{Дмитрий Курочкин}
+\date{}
+
+% Code sizes, one step down from \footnotesize. Smaller than 6.6pt does not
+% carry to the back of the room.
+\newcommand{\codesm}{\ttfamily\fontsize{7.6}{9.0}\selectfont}
+\newcommand{\codexs}{\ttfamily\fontsize{7.0}{8.3}\selectfont}
+\newcommand{\codexxs}{\ttfamily\fontsize{6.8}{7.8}\selectfont}
+\newcommand{\termsm}{\ttfamily\fontsize{6.6}{7.9}\selectfont}
+
+% A mark at the start of a listing line, for labels set beside the listing.
+% Used through the listing's escapechar; the labels are drawn by an overlay
+% picture after the listing, so the build needs two passes (latexmk does that).
+\newcommand{\mk}[1]{\tikz[remember picture,overlay]\coordinate (#1) at (0,0.55ex);}
+
+\tikzset{
+  rawbrace/.style={decorate,decoration={brace,amplitude=4pt},hairline,
+                   line width=0.8pt},
+  rawlab/.style={anchor=west,font=\footnotesize,inner sep=0pt},
+  box/.style={draw=hairline,line width=0.8pt,fill=codebg,inner sep=4pt,
+              align=center,minimum height=0.9cm},
+  arr/.style={-{Straight Barb[length=1.6mm]},muted,line width=0.7pt},
+  arra/.style={-{Straight Barb[length=1.8mm]},accent,line width=0.9pt},
+  arrl/.style={-{Straight Barb[length=1.8mm]},alt,line width=0.9pt},
+}
+
+\begin{document}
+\shorthandoff{"}
+
+% ------------------------------------------------------------------ title --
+% 1
+\begin{frame}[plain]
+  \titlepagednc{Лекция 12}{Кэширование, логирование и наблюдаемость}{}{Дмитрий
+    Курочкин}
+\end{frame}
+
+% ============================================================ 1. CACHING ==
+\section{1. Кэширование}
+
+% 2
+\begin{frame}[plain]
+  \sectionopener{1}{Кэширование}{От простого к \hi{распределённому}.}
+\end{frame}
+
+% 3
+\begin{frame}[plain]
+  \vote{Что такое кэш?}
+\end{frame}
+
+% 4
+\begin{frame}[plain]
+  \statement{Кэш --- это \hi{согласие} отдавать \lo{устаревшие} данные ради
+    скорости. Осознанное.}
+\end{frame}
+
+% 5
+\begin{frame}{Цена и выгода}
+  \slidetop
+  \versus{Получаем}{%
+    \begin{cbul}{accent}
+      \item микросекунды вместо миллисекунд
+      \item ни сети, ни соединения из пула
+      \item 100\,000 запросов к базе --- \hi{один} в минуту
+      \item разница в порядках
+    \end{cbul}}{Платим}{%
+    \begin{cbul}{alt}
+      \item устаревание
+      \item память
+      \item второй источник правды
+      \item ошибка «иногда, у части пользователей»
+    \end{cbul}}
+
+  \slidegap
+  \hrulethin{0.42}
+  \rulegap
+  \aside{Решили вы, понимая цену, --- это кэш. Случилось само --- это баг
+    «изменил, а вижу старое».}
+\end{frame}
+
+% 6
+\begin{frame}{Что кэшируют}
+  \slidetop
+  \versus{Кэшируют}{%
+    \begin{cbul}{accent}
+      \item читают часто, меняют редко
+      \item дорого вычислять
+      \item за чем ходят наружу
+    \end{cbul}}{Не кэшируют}{%
+    \begin{cbul}{alt}
+      \item записи
+      \item уникальное для запроса
+      \item то, что и так быстро
+    \end{cbul}}
+
+  \slidegap
+  \hrulethin{0.42}
+  \rulegap
+  \aside{Сначала измерить: кэшируется \hi{медленное, частое и одинаковое}. И
+    измерять после --- долю попаданий: 90\,\% --- база видит десятую часть
+    нагрузки, 10\,\% --- кэш надо убирать.}
+\end{frame}
+
+% 7
+\begin{frame}{Лестница}
+  \slidetop
+  {\renewcommand{\arraystretch}{1.55}
+  \begin{tabular}{@{}L{2.4cm}L{3.3cm}L{2.7cm}L{3.5cm}@{}}
+    & \colhead{accent}{где лежит} & \colhead{accent}{кто видит}
+      & \colhead{alt}{когда ломается} \\
+    \textbf{кэш ответа}   & ответ целиком, на границе & все клиенты
+      & ответ зависит от пользователя \\
+    \textbf{в памяти}     & куча процесса             & один экземпляр
+      & экземпляров два \\
+    \textbf{Redis}        & отдельный сервис          & все экземпляры
+      & сеть и сериализация \\
+    \hi{\textbf{гибридный}} & память поверх Redis     & экземпляр и все
+      & локальная копия отстала \\
+  \end{tabular}}
+
+  \slidegap
+  \aside{Четыре ступени --- четыре ответа на вопрос «где лежит и кто видит».}
+\end{frame}
+
+% 8
+\begin{frame}[fragile]{Кэш ответа}
+  \slidetop
+  \claim{Копия уходит в сокет, \hi{не доходя} до обработчика.}
+
+\begin{lstlisting}[style=csharp,basicstyle=\codesm,escapechar=|]
+|\mk{o1}|builder.Services.AddOutputCache();
+|\mk{o2}|app.UseOutputCache();
+
+app.MapGet("/products", () => catalog.All())
+   .CacheOutput(policy => policy
+|\mk{o3}|       .Expire(TimeSpan.FromMinutes(5))
+|\mk{o4}|       .SetVaryByQuery("page", "sort")
+|\mk{o5}|       .Tag("catalog"));
+\end{lstlisting}
+  \begin{tikzpicture}[remember picture,overlay,every node/.style={rawlab}]
+    \draw[rawbrace] ([xshift=8.15cm,yshift=0.35em]o1) -- ([xshift=8.15cm,yshift=-0.3em]o2);
+    \node at ([xshift=8.4cm]$(o1)!0.5!(o2)$) {регистрация и middleware};
+    \node at ([xshift=8.4cm]o3) {срок};
+    \node at ([xshift=8.4cm]o4) {от чего зависит ключ};
+    \node[text=accent] at ([xshift=8.4cm]o5) {сброс группой};
+  \end{tikzpicture}
+
+  \slidegap
+  \aside{Для того, что одинаково для всех. Запрос с заголовком
+    \texttt{Authorization} \lo{не кэшируется}: отдать чужой ответ --- утечка.}
+\end{frame}
+
+% 9
+\begin{frame}{Нулевая ступень: заголовки HTTP}
+  \slidetop
+  \claim{Кэш у клиента и прокси --- \hi{ни байта} вашей памяти.}
+
+  \begin{center}
+    \begin{tikzpicture}[font=\footnotesize]
+      \node[box,minimum width=2.6cm,minimum height=2.6cm] (c) at (0,0) {клиент\\или прокси};
+      \node[box,minimum width=2.6cm,minimum height=2.6cm] (s) at (9.4,0) {сервис};
+      \draw[arr] ([yshift=0.85cm]s.west) -- node[above] {\texttt{200} и тело,
+        \texttt{ETag: "v7"}} ([yshift=0.85cm]c.east);
+      \draw[arr] (c.east) -- node[above] {\texttt{If-None-Match: "v7"}} (s.west);
+      \draw[arra] ([yshift=-0.85cm]s.west) -- node[above,text=accent]
+        {\texttt{304 Not Modified}, без тела} ([yshift=-0.85cm]c.east);
+    \end{tikzpicture}
+  \end{center}
+
+  \slidegap
+  \aside{Экономия и на вычислении, и на передаче. Цена --- считать отпечаток:
+    нужна версия данных.}
+\end{frame}
+
+% 10
+\begin{frame}{Кэш в памяти}
+  \slidetop
+  \versus{Даёт}{%
+    \begin{cbul}{accent}
+      \item объект в той же куче
+      \item ссылка, ноль сериализации
+      \item «получить или создать»
+      \item срок: абсолютный или скользящий
+    \end{cbul}}{Требует}{%
+    \begin{cbul}{alt}
+      \item предел по числу записей
+      \item или короткий срок жизни
+      \item приоритет вытеснения
+      \item иначе --- утечка с отложенным взрывом
+    \end{cbul}}
+
+  \slidegap
+  \hrulethin{0.42}
+  \rulegap
+  \aside{Ключ на каждого пользователя за всё время --- куча растёт до потолка, а
+    на графике это выглядит как проблема сборщика мусора.}
+\end{frame}
+
+% 11
+\begin{frame}[plain]
+  \vote{Два экземпляра за балансировщиком. Профиль изменили на первом.
+    Следующий запрос попал на второй. Что он увидит?}
+\end{frame}
+
+% 12
+\begin{frame}{Состояние в памяти экземпляра}
+  \slidetop
+  \begin{center}
+    \begin{tikzpicture}[font=\footnotesize]
+      \node[box,minimum width=2.2cm,minimum height=1.0cm] (lb) at (0,0) {балансировщик};
+      \node[box,draw=accent,line width=1.0pt,minimum width=4.4cm,minimum height=1.1cm]
+        (a) at (5.2,0.95) {\textbf{экземпляр 1}\\кэш: профиль \hi{новый}};
+      \node[box,draw=alt,line width=1.0pt,minimum width=4.4cm,minimum height=1.1cm]
+        (b) at (5.2,-0.95) {\textbf{экземпляр 2}\\кэш: профиль \lo{старый}, ещё 5 минут};
+      \node[box,minimum width=1.8cm,minimum height=1.0cm] (db) at (10.0,0) {база};
+      \draw[arra] (lb.east) -- node[above,sloped,text=accent] {изменить} (a.west);
+      \draw[arrl] (lb.east) -- node[below,sloped,text=alt] {прочитать} (b.west);
+      \draw[arra] (a.east) -- (db.west);
+    \end{tikzpicture}
+  \end{center}
+
+  \slidegap
+  \begin{cbul}{accent}
+    \item пользователь видит своё изменение \lo{через раз}
+    \item это состояние в памяти --- то, что stateless запрещает
+    \item допустимо для того, что не меняется: справочник стран, настройки, шаблоны
+  \end{cbul}
+\end{frame}
+
+% 13
+\begin{frame}{Распределённый кэш: Redis}
+  \slidetop
+  \claim{Положил один --- прочитал \hi{любой}. Сбросил один --- нет ни у кого.}
+
+  {\renewcommand{\arraystretch}{1.5}
+  \begin{tabular}{@{}L{3.6cm}L{9.6cm}@{}}
+    \hi{\textbf{значение}}   & байты: объект сериализуется туда и обратно \\
+    \hi{\textbf{сеть}}       & не микросекунды, а доли миллисекунды \\
+    \hi{\textbf{соединение}} & долгоживущее, одно на приложение --- singleton \\
+    \hi{\textbf{роль кэша}}  & без сохранения на диск, вытеснение по памяти \\
+  \end{tabular}}
+
+  \slidegap
+  \aside{Состояние вынесено из процесса --- сервис снова stateless. Кэш --- то,
+    что \lo{можно потерять}.}
+\end{frame}
+
+% 14
+\begin{frame}{Гибридный кэш}
+  \slidetop
+  \claim{Локальный кэш в памяти \hi{поверх} распределённого.}
+
+  \begin{center}
+    \begin{tikzpicture}[font=\footnotesize,
+      tb/.style={box,minimum width=2.75cm,minimum height=1.1cm}]
+      \node[tb] (q) at (0,0) {\textbf{запрос}\\по ключу};
+      \node[tb,draw=accent,line width=1.0pt] (l1) at (3.55,0) {\textbf{память}\\микросекунды};
+      \node[tb] (l2) at (7.1,0) {\textbf{Redis}\\доли миллисекунды};
+      \node[tb] (src) at (10.65,0) {\textbf{источник}\\миллисекунды};
+      \draw[arr] (q) -- (l1);
+      \draw[arr] (l1) -- node[above,font=\scriptsize] {нет} (l2);
+      \draw[arr] (l2) -- node[above,font=\scriptsize] {нет} (src);
+      \draw[arra] (src.south) -- ++(0,-0.55) -| node[pos=0.25,below,text=accent,
+        font=\scriptsize] {положить в оба} (l1.south);
+    \end{tikzpicture}
+  \end{center}
+
+  \slidegap
+  \aside{Горячие ключи читают тысячи раз в секунду --- их выгоднее держать
+    локально. Цена --- снова состояние в памяти экземпляра.}
+\end{frame}
+
+% 15
+\begin{frame}[fragile]{HybridCache}
+  \vspace{0.3em}
+\begin{lstlisting}[style=csharp,basicstyle=\codexs,escapechar=|]
+public sealed class CatalogService(
+    HybridCache cache, ICatalogRepository repository)
+{
+    public ValueTask<IReadOnlyList<ProductDto>> GetForUserAsync(
+        string userId, CancellationToken ct) =>
+        cache.GetOrCreateAsync(
+|\mk{h1}|            key: $"catalog:v2:user:{userId}",
+|\mk{h2}|            factory: async token =>
+                await repository.LoadForUserAsync(userId, token),
+|\mk{h3}|            options: new HybridCacheEntryOptions
+                { Expiration = TimeSpan.FromMinutes(5) },
+|\mk{h4}|            tags: ["catalog"],
+            cancellationToken: ct);
+
+    public ValueTask InvalidateCatalogAsync(CancellationToken ct) =>
+|\mk{h5}|        cache.RemoveByTagAsync("catalog", ct);
+}
+\end{lstlisting}
+  \begin{tikzpicture}[remember picture,overlay,every node/.style={rawlab}]
+    \node[text=accent] at ([xshift=9.6cm]h1) {ключ с пользователем};
+    \node at ([xshift=9.6cm]h2) {фабрика: только если пусто};
+    \node at ([xshift=9.6cm]h3) {срок};
+    \node at ([xshift=9.6cm]h4) {теги};
+    \node[text=accent] at ([xshift=9.6cm]h5) {сброс по тегу};
+  \end{tikzpicture}
+
+  \aside{Первый вызов идёт в хранилище, следующие пять минут --- в кэш.}
+\end{frame}
+
+% 16
+\begin{frame}{Защита от лавины}
+  \slidetop
+  \claim{Тысяча одновременных промахов --- \hi{один} вызов фабрики.}
+
+  \versus{HybridCache}{%
+    \begin{cbul}{accent}
+      \item фабрика вызвана один раз
+      \item 999 запросов ждут её результат
+      \item база видит один запрос
+    \end{cbul}}{Наивный кэш}{%
+    \begin{cbul}{alt}
+      \item фабрика вызвана тысячу раз
+      \item тысяча одинаковых запросов
+      \item срок истёк --- кэш добивает базу
+    \end{cbul}}
+
+  \slidegap
+  \hrulethin{0.42}
+  \rulegap
+  \aside{В Redis лежат байты --- кладите DTO. В памяти лежит сам объект, один на
+    всех: \hi{record}, и никаких правок после получения.}
+\end{frame}
+
+% 17
+\begin{frame}{Ключ по частям}
+  \slidetop
+  \claim{Всё, от чего зависит ответ, --- \hi{в ключе}.}
+
+  \begin{center}
+    \begin{tikzpicture}[font=\footnotesize]
+      \node[font=\ttfamily\LARGE,inner sep=0pt,anchor=west] (k1) at (0,0) {catalog};
+      \node[font=\ttfamily\LARGE,inner sep=0pt,anchor=west,text=muted] (c1) at (k1.east) {:};
+      \node[font=\ttfamily\LARGE,inner sep=0pt,anchor=west] (k2) at (c1.east) {v2};
+      \node[font=\ttfamily\LARGE,inner sep=0pt,anchor=west,text=muted] (c2) at (k2.east) {:};
+      \node[font=\ttfamily\LARGE,inner sep=0pt,anchor=west,text=accent] (k3) at (c2.east)
+        {user:\{userId\}};
+      \draw[rawbrace] ([yshift=-0.7em]k1.south east) -- ([yshift=-0.7em]k1.south west);
+      \draw[rawbrace] ([yshift=-0.7em]k2.south east) -- ([yshift=-0.7em]k2.south west);
+      \draw[rawbrace,accent] ([yshift=-0.7em]k3.south east) -- ([yshift=-0.7em]k3.south west);
+      \node[below=1.5em,align=center] at (k1.south) {что это};
+      \node[below=1.5em,align=center] at (k2.south) {версия\\формата};
+      \node[below=1.5em,align=center,text=accent] at (k3.south) {для кого};
+    \end{tikzpicture}
+  \end{center}
+
+  \slidegap
+  \begin{cbul}{accent}
+    \item версия: новый код читает по новым ключам --- выкладка без лавины
+    \item имена читаемые: в Redis их будут смотреть глазами
+    \item Redis общий --- ключ начинается с имени сервиса
+  \end{cbul}
+\end{frame}
+
+% 18
+\begin{frame}[plain]
+  \vote{Ключ \texttt{catalog}, без пользователя. Менеджер видит закупочные цены,
+    клиент --- нет. Что произойдёт?}
+\end{frame}
+
+% 19
+\begin{frame}{Чужой ответ}
+  \slidetop
+  \claim{Авторизация отработала правильно. Утечку устроил \lo{ключ}.}
+
+  \begin{center}
+    \begin{tikzpicture}[font=\footnotesize,
+      tb/.style={box,minimum width=3.4cm,minimum height=1.1cm}]
+      \node[tb] (m) at (0,0) {\textbf{менеджер}\\запросил первым};
+      \node[tb,draw=alt,line width=1.0pt] (k) at (4.8,0) {\textbf{ключ \texttt{catalog}}\\ответ менеджера, 5 минут};
+      \node[tb] (u) at (9.6,0) {\textbf{все клиенты}\\видят закупочные цены};
+      \draw[arr] (m) -- (k);
+      \draw[arrl] (k) -- (u);
+    \end{tikzpicture}
+  \end{center}
+
+  \slidegap
+  \begin{cbul}{accent}
+    \item ответ зависит от того, кто спрашивает, --- \hi{он в ключе}, всегда
+    \item кэш стоит \hi{после} авторизации, не до неё
+  \end{cbul}
+\end{frame}
+
+% 20
+\begin{frame}{Инвалидация: три стратегии}
+  \slidetop
+  {\renewcommand{\arraystretch}{1.55}
+  \begin{tabular}{@{}L{2.8cm}L{4.8cm}L{5.2cm}@{}}
+    & \colhead{accent}{даёт} & \colhead{alt}{цена} \\
+    \textbf{по времени} & просто и предсказуемо & устаревает ровно на срок \\
+    \textbf{по событию} & изменение видно сразу & знать все места, где данные
+      меняются \\
+    \textbf{по версии}  & ничего не нужно сбрасывать & версию надо где-то взять;
+      старое живёт до срока \\
+  \end{tabular}}
+
+  \slidegap
+  \aside{Их сочетают: короткий срок как \hi{страховка}, сброс по событию --- где
+    изменения известны, версия --- где она и так есть. Идеального ответа нет.}
+\end{frame}
+
+% 21
+\begin{frame}{Слои, а не альтернативы}
+  \slidetop
+  \begin{center}
+    \begin{tikzpicture}[font=\footnotesize,
+      tb/.style={box,minimum width=2.75cm,minimum height=1.15cm}]
+      \node[tb] (a) at (0,0)    {\textbf{клиент, прокси}\\заголовки HTTP};
+      \node[tb] (b) at (3.55,0) {\textbf{кэш ответа}\\до обработчика};
+      \node[tb] (c) at (7.1,0)  {\textbf{гибридный кэш}\\память и Redis};
+      \node[tb,draw=accent,line width=1.0pt] (d) at (10.65,0) {\textbf{база}\\малая часть};
+      \draw[arr] (a) -- (b);
+      \draw[arr] (b) -- (c);
+      \draw[arr] (c) -- (d);
+      \node[below=0.5em,text=muted,font=\scriptsize] at (a.south) {запрос не пришёл};
+      \node[below=0.5em,text=muted,font=\scriptsize] at (b.south) {не дошёл до кода};
+      \node[below=0.5em,text=muted,font=\scriptsize] at (c.south) {не дошёл до базы};
+    \end{tikzpicture}
+  \end{center}
+
+  \slidegap
+  \claim{Каждый слой ловит \hi{свою долю} запросов.}
+
+  \aside{Ошибка на любом слое одна и та же --- старое или чужое. И лечится
+    одним и тем же: \hi{ключом и сроком}.}
+\end{frame}
+
+% 22
+\begin{frame}{Границы}
+  \slidetop
+  {\renewcommand{\arraystretch}{1.5}
+  \begin{tabular}{@{}L{4.2cm}L{9.0cm}@{}}
+    \hi{\textbf{«не найдено»}}     & да, но секунды: объект может появиться \\
+    \lo{\textbf{ошибка}}           & нет: это не результат, а его отсутствие \\
+    \lo{\textbf{создание заказа}}  & нет: кэшируются только безопасные чтения \\
+    \hi{\textbf{гонка с записью}}  & короткий срок: старое живёт минуту, а не сутки \\
+    \hi{\textbf{холодный старт}}   & прогреть до того, как экземпляр скажет «готов» \\
+  \end{tabular}}
+
+  \slidegap
+  \aside{Идемпотентность и кэшируемость --- два свойства одной оси.}
+\end{frame}
+
+% 23
+\begin{frame}[plain]
+  \keyline{Кэш --- согласие на устаревшие данные ради скорости.\\
+    Осознанное: измерено, выбрана ступень, в ключе всё, решён срок.}
+\end{frame}
+
+% ============================================================ 2. LOGGING ==
+\section{2. Логирование}
+
+% 24
+\begin{frame}[plain]
+  \sectionopener{2}{Логирование}{Лог пишут не на всякий случай, а чтобы
+    ответить на вопрос в \hi{три часа ночи}.}
+\end{frame}
+
+% 25
+\begin{frame}[plain]
+  \vote{Три часа ночи. Пользователь говорит, что его заказ пропал. Какой
+    вопрос вы задаёте логам?}
+\end{frame}
+
+% 26
+\begin{frame}{Четыре вопроса}
+  \slidetop
+  \begin{center}
+    \begin{tikzpicture}[font=\small,
+      tb/.style={box,minimum width=3.05cm,minimum height=1.9cm}]
+      \node[tb] (a) at (0,0)     {\textbf{что пришло}\\[0.3em]\footnotesize запрос, от кого,\\\footnotesize параметры};
+      \node[tb,draw=accent,line width=1.0pt] (b) at (3.45,0)   {\textbf{что решили}\\[0.3em]\footnotesize ветка логики,\\\footnotesize что нашли};
+      \node[tb] (c) at (6.9,0)   {\textbf{чем ответили}\\[0.3em]\footnotesize статус,\\\footnotesize что отдали};
+      \node[tb] (d) at (10.35,0)  {\textbf{сколько заняло}\\[0.3em]\footnotesize где потратили\\\footnotesize время};
+    \end{tikzpicture}
+  \end{center}
+
+  \slidegap
+  \claim{Каждая строка лога отвечает на \hi{один из них} --- иначе её не должно
+    быть.}
+
+  \aside{У шума есть цена: система логов берёт деньги за объём, а в три ночи вы
+    ищете четыре строки среди тысяч.}
+\end{frame}
+
+% 27
+\begin{frame}{Решения, а не действия}
+  \slidetop
+  \versus{Решение}{%
+    \begin{cbul}{accent}
+      \item «Заказ 42 не найден для пользователя 7»
+      \item отвечает на «что решили»
+      \item объясняет, \hi{почему} сервис так сделал
+    \end{cbul}}{Действие}{%
+    \begin{cbul}{alt}
+      \item «Вошёл в метод X»
+      \item не отвечает ни на один вопрос
+      \item стоит денег и внимания
+    \end{cbul}}
+
+  \slidegap
+  \hrulethin{0.42}
+  \rulegap
+  \aside{Не найден, не прошёл проверку, выбрана такая-то ветка, внешний сервис
+    ответил вот что.}
+\end{frame}
+
+% 28
+\begin{frame}[fragile]{Категория}
+  \slidetop
+  \claim{Тип логгера --- это \hi{категория}: по ней фильтруют.}
+
+\begin{lstlisting}[style=csharp,basicstyle=\codesm,escapechar=|]
+namespace OrdersService.Orders;
+
+|\mk{l1}|public sealed class OrderService(ILogger<OrderService> logger)
+\end{lstlisting}
+  \begin{tikzpicture}[remember picture,overlay,every node/.style={rawlab}]
+    \node[text=accent] at ([xshift=10.6cm]l1) {через конструктор};
+  \end{tikzpicture}
+
+\begin{lstlisting}[style=term,basicstyle=\termsm]
+info: OrdersService.Orders.OrderService[0]
+      Order 42 created for user 7 in 1.9518 ms
+\end{lstlisting}
+
+  \rulegap
+  \aside{Имя класса целиком, с пространством имён, --- и переименуется вместе с
+    классом. Статическое поле логгера --- \lo{спрятанная} зависимость: в тесте
+    не подменить.}
+\end{frame}
+
+% 29
+\begin{frame}{Уровни}
+  \slidetop
+  {\renewcommand{\arraystretch}{1.25}
+  \begin{tabular}{@{}L{3.2cm}L{10.0cm}@{}}
+    \texttt{Trace}            & всё подряд, для отладки конкретной проблемы \\
+    \texttt{Debug}            & подробности, полезные разработчику \\
+    \hi{\texttt{Information}} & обычный ход дел: те самые четыре вопроса \\
+    \texttt{Warning}          & сервис справился, но не так, как ожидал --- их
+      \hi{считают} \\
+    \lo{\texttt{Error}}       & операция не удалась --- на него ставится оповещение \\
+    \texttt{Critical}         & сервис не может продолжать \\
+  \end{tabular}}
+
+  \slidegap
+  \aside{Уровень --- это порог: всё ниже отбрасывается до форматирования. Строка
+    не стоит того, чтобы разбудить дежурного, --- это \lo{не} \texttt{Error}.}
+\end{frame}
+
+% 30
+\begin{frame}[fragile]{Уровни --- в конфигурации}
+  \slidetop
+\begin{lstlisting}[style=json,basicstyle=\codesm,escapechar=|]
+{
+  "Logging": {
+    "LogLevel": {
+|\mk{c1}|      "Default": "Information",
+|\mk{c2}|      "Microsoft.AspNetCore": "Warning",
+|\mk{c3}|      "OrdersService.Orders": "Debug"
+    }
+  }
+}
+\end{lstlisting}
+  \begin{tikzpicture}[remember picture,overlay,every node/.style={rawlab}]
+    \node at ([xshift=8.2cm]c1) {умолчание};
+    \node at ([xshift=8.2cm]c2) {категория фреймворка тише};
+    \node[text=accent] at ([xshift=8.2cm]c3) {своя категория громче};
+  \end{tikzpicture}
+
+\begin{lstlisting}[style=bash,basicstyle=\codesm]
+Logging__LogLevel__Default=Debug dotnet run
+\end{lstlisting}
+
+  \rulegap
+  \aside{Тот же ключ переменной окружения, через двойное подчёркивание: отладка
+    на час --- \hi{без пересборки} и выкладки.}
+\end{frame}
+
+% 31
+\begin{frame}[fragile]{Было и стало}
+  \slidetop
+\begin{lstlisting}[style=csharp,basicstyle=\codesm,escapechar=|]
+|\mk{s1}|logger.LogInformation(
+    $"Order {order.Id} created for user {userId} in {ms} ms");
+
+|\mk{s2}|logger.LogInformation(
+    "Order {OrderId} created for user {UserId} in {ElapsedMs} ms",
+|\mk{s3}|    order.Id, userId, ms);
+\end{lstlisting}
+  \begin{tikzpicture}[remember picture,overlay,every node/.style={rawlab}]
+    \node[text=alt] at ([xshift=10.4cm]s1) {было: одна строка};
+    \node[text=accent] at ([xshift=10.4cm]s2) {стало: шаблон с именами};
+    \node at ([xshift=10.4cm]s3) {значения отдельно};
+  \end{tikzpicture}
+
+  \slidegap
+  \versus{Шаблон}{%
+    \begin{cbul}{accent}
+      \item уровень выключен --- не делает ничего
+      \item в записи поля: \texttt{OrderId}, \texttt{UserId}
+    \end{cbul}}{Интерполяция}{%
+    \begin{cbul}{alt}
+      \item строка собрана до вызова, всегда
+      \item в записи текст: только читать глазами
+    \end{cbul}}
+\end{frame}
+
+% 32
+\begin{frame}[fragile]{Запись --- это данные}
+  \slidetop
+  \claim{Лог перестаёт быть текстом: его можно \hi{искать и считать}.}
+
+\begin{lstlisting}[style=term,basicstyle=\termsm]
+$ jq -c 'select(.State.UserId == "7") | .State | del(."{OriginalFormat}")' app.log
+{"OrderId":42,"UserId":"7","ElapsedMs":2.9927}
+{"OrderId":42,"UserId":"7","ElapsedMs":2.9927}
+$ jq '.State.ElapsedMs | numbers' app.log | jq -s 'add / length'
+2.9927
+\end{lstlisting}
+
+  \rulegap
+  \begin{cbul}{accent}
+    \item «все записи, где \texttt{UserId} равен 7» --- запрос по полю
+    \item «среднее \texttt{ElapsedMs} за час» --- агрегация по полю
+    \item \texttt{OrderId} и \texttt{OrderID} --- \lo{два разных} поля: имена ---
+      часть контракта
+  \end{cbul}
+\end{frame}
+
+% 33
+\begin{frame}[fragile]{Генератор кода}
+  \slidetop
+\begin{lstlisting}[style=csharp,basicstyle=\codesm,escapechar=|]
+static partial class Log
+{
+|\mk{m1}|    [LoggerMessage(Level = LogLevel.Information,
+        Message = "Order {OrderId} created for user {UserId} in {ElapsedMs} ms")]
+|\mk{m2}|    public static partial void OrderCreated(
+        this ILogger logger, int orderId, string userId, double elapsedMs);
+}
+
+|\mk{m3}|logger.OrderCreated(order.Id, userId, ms);
+\end{lstlisting}
+  \begin{tikzpicture}[remember picture,overlay,every node/.style={rawlab}]
+    \node at ([xshift=9.2cm]m1) {объявлено один раз};
+    \node[text=accent] at ([xshift=9.2cm]m2) {тело пишет компилятор};
+    \node at ([xshift=9.2cm]m3) {вызов --- одно слово};
+  \end{tikzpicture}
+
+  \slidegap
+  \begin{cbul}{accent}
+    \item проверка уровня и форматирование без промежуточных объектов
+    \item все сообщения в одном месте --- перечень того, что сервис \hi{умеет сказать}
+    \item у сообщения может быть номер события: ищут по номеру, а не по фразе
+  \end{cbul}
+\end{frame}
+
+% 34
+\begin{frame}{Что в логе и чего в нём нет}
+  \slidetop
+  \versus{Логировать}{%
+    \begin{cbul}{accent}
+      \item запрос: метод, путь, статус, длительность
+      \item решения
+      \item исключение --- объектом, один раз, на границе
+      \item старт: версия, окружение, адреса
+    \end{cbul}}{Никогда}{%
+    \begin{cbul}{alt}
+      \item секреты, токены, пароли
+      \item заголовок авторизации
+      \item персональные данные: имя, почта, телефон
+      \item тело запроса целиком
+    \end{cbul}}
+
+  \slidegap
+  \hrulethin{0.42}
+  \rulegap
+  \aside{Идентификатор пользователя можно: это число. Имя нельзя: лог год
+    хранится у третьей стороны.}
+\end{frame}
+
+% 35
+\begin{frame}[plain]
+  \vote{На уровне отладки логируется объект пользователя целиком. В проде
+    отладка выключена. Всё безопасно?}
+\end{frame}
+
+% 36
+\begin{frame}{Десять строк, один запрос}
+  \slidetop
+  {\renewcommand{\arraystretch}{1.2}\small
+  \begin{tabular}{@{}L{2.4cm}L{3.6cm}L{6.9cm}@{}}
+    \colhead{muted}{Trace Id} & \colhead{muted}{категория} & \colhead{muted}{сообщение} \\
+    \texttt{9c1e\ldots}      & middleware        & GET /orders/17 --- 200 за 12 мс \\
+    \hi{\texttt{ada2\ldots}} & \hi{обработчик}   & \hi{заказ 42 запрошен} \\
+    \texttt{51b7\ldots}      & клиент курсов     & повтор 1 из 3 \\
+    \hi{\texttt{ada2\ldots}} & \hi{сервис}       & \hi{заказ 42 не найден для пользователя 7} \\
+    \texttt{9c1e\ldots}      & сервис            & заказ 17 отдан из кэша \\
+    \hi{\texttt{ada2\ldots}} & \hi{обработчик ошибок} & \hi{GET /orders/42 --- 404 за 3 мс} \\
+    \texttt{51b7\ldots}      & клиент курсов     & ответ за 240 мс \\
+  \end{tabular}}
+
+  \slidegap
+  \aside{Сто запросов одновременно --- строки вперемешку. Фильтр по одному полю
+    --- и вот \hi{история одного запроса}. Клиент присылает этот идентификатор
+    из ответа об ошибке.}
+\end{frame}
+
+% 37
+\begin{frame}[fragile]{Область}
+  \slidetop
+\begin{lstlisting}[style=csharp,basicstyle=\codesm,escapechar=|]
+|\mk{b1}|using (logger.BeginScope(
+    new Dictionary<string, object> { ["OrderId"] = orderId }))
+{
+|\mk{b2}|    logger.OrderCreated(orderId, userId, ms);
+}
+\end{lstlisting}
+  \begin{tikzpicture}[remember picture,overlay,every node/.style={rawlab}]
+    \node[text=accent] at ([xshift=9.6cm]b1) {поле для всех строк внутри};
+    \node at ([xshift=9.6cm]b2) {любой класс, любой уровень};
+  \end{tikzpicture}
+
+\begin{lstlisting}[style=term,basicstyle=\termsm,escapechar=`]
+$ jq -c 'select(.EventId == 0) | .Scopes[] | del(.Message, .ParentId)' app.log
+`\mk{b3}`{"SpanId":"abc15d1efe7e7268","TraceId":"ada2952ebd54d8219ea277f76698308f"}
+{"ConnectionId":"0HNQ0G6CDUHAJ"}
+`\mk{b4}`{"RequestId":"0HNQ0G6CDUHAJ:00000001","RequestPath":"/orders/42"}
+`\mk{b5}`{"OrderId":42}
+\end{lstlisting}
+  \begin{tikzpicture}[remember picture,overlay,every node/.style={rawlab}]
+    \draw[rawbrace] ([xshift=10.35cm,yshift=0.35em]b3) -- ([xshift=10.35cm,yshift=-0.3em]b4);
+    \node at ([xshift=10.6cm]$(b3)!0.5!(b4)$) {открыл фреймворк};
+    \node[text=accent] at ([xshift=10.6cm]b5) {открыли вы};
+  \end{tikzpicture}
+
+  \aside{Область переживает \texttt{await}: она течёт с асинхронной цепочкой, а
+    не с потоком. Область на запрос и на операцию --- не на итерацию цикла.}
+\end{frame}
+
+% 38
+\begin{frame}{Куда всё это пишется}
+  \slidetop
+  \claim{Логи --- это \hi{поток событий}, а не файлы.}
+
+  \begin{center}
+    \begin{tikzpicture}[font=\footnotesize,
+      tb/.style={box,minimum width=3.2cm,minimum height=1.1cm}]
+      \node[tb,draw=accent,line width=1.0pt] (s) at (0,0) {\textbf{сервис}\\стандартный вывод};
+      \node[tb] (e) at (5.1,0) {\textbf{среда}\\оркестратор, агент};
+      \node[tb] (l) at (10.2,0) {\textbf{система логов}\\индекс по полям};
+      \draw[arra] (s) -- node[above,font=\scriptsize,text=accent] {JSON, строка} (e);
+      \draw[arr] (e) -- (l);
+    \end{tikzpicture}
+  \end{center}
+
+  \slidegap
+  \begin{cbul}{accent}
+    \item сервис не знает адреса системы логов и не держит с ней соединение
+    \item файл в контейнере исчезнет вместе с ним; ротация --- \lo{не ваша} забота
+    \item время --- всемирное; аудит --- отдельный поток со своим хранением
+  \end{cbul}
+\end{frame}
+
+% 39
+\begin{frame}[plain]
+  \keyline{Лог отвечает на четыре вопроса.\\
+    Он структурный, связан областями, и в нём нет ничего, что нельзя показать
+    незнакомцу.}
+\end{frame}
+
+% ====================================================== 3. OBSERVABILITY ==
+\section{3. Наблюдаемость}
+
+% 40
+\begin{frame}[plain]
+  \sectionopener{3}{Наблюдаемость}{\hi{Логи} --- что случилось, \hi{метрики} ---
+    сколько и как часто, \hi{трейсы} --- где потратили время.}
+\end{frame}
+
+% 41
+\begin{frame}[plain]
+  \vote{Запрос занял три секунды. Где именно?}
+\end{frame}
+
+% 42
+\begin{frame}{Три сигнала}
+  \slidetop
+  {\renewcommand{\arraystretch}{1.55}
+  \begin{tabular}{@{}L{1.9cm}L{3.2cm}L{3.6cm}L{3.3cm}@{}}
+    & \colhead{accent}{вопрос} & \colhead{accent}{что это} & \colhead{alt}{цена} \\
+    \textbf{логи}    & что случилось       & события с контекстом
+      & дорогие в хранении \\
+    \textbf{метрики} & сколько и как часто & числа, накопленные во времени
+      & дешёвые: число на интервал \\
+    \textbf{трейсы}  & где потратили время & запрос как дерево отрезков
+      & объект и экспорт на отрезок \\
+  \end{tabular}}
+
+  \slidegap
+  \aside{Считать миллионы строк ради одного числа --- медленно, дорого и
+    приблизительно. Нужны \hi{все три}: они отвечают на разные вопросы.}
+\end{frame}
+
+% 43
+\begin{frame}{Водопад}
+  \slidetop
+  \claim{Вопрос «где» отвечается \hi{картинкой}, а не арифметикой по строкам.}
+
+  \begin{center}
+    \begin{tikzpicture}[font=\scriptsize,x=3.1cm,y=0.62cm]
+      \foreach \x in {0,1,2,3} {
+        \draw[hairline,line width=0.4pt] (\x,0.6) -- (\x,-3.7);
+        \node[text=muted,above] at (\x,0.6) {\x\ с};
+      }
+      \fill[codebg,draw=hairline,line width=0.6pt] (0,0.25) rectangle (3,-0.25);
+      \node[anchor=east] at (-0.05,0) {\texttt{GET /orders/42}};
+      \fill[codebg,draw=hairline,line width=0.6pt] (0.03,-0.75) rectangle (2.97,-1.25);
+      \node[anchor=east] at (-0.05,-1) {обработчик};
+      \fill[accent] (0.06,-1.75) rectangle (0.26,-2.25);
+      \node[anchor=east] at (-0.05,-2) {\texttt{SELECT orders}};
+      \node[anchor=west,text=accent] at (0.28,-2) {0,2 с};
+      \fill[alt] (0.3,-2.75) rectangle (2.8,-3.25);
+      \node[anchor=east] at (-0.05,-3) {\texttt{GET rates}};
+      \node[anchor=west,text=alt] at (2.82,-3) {\textbf{2,5 с}};
+    \end{tikzpicture}
+  \end{center}
+
+  \aside{Отрезок --- span, дерево --- trace. У отрезков стандартные атрибуты:
+    метод, путь, статус, адрес базы --- одинаковые для всех языков.}
+\end{frame}
+
+% 44
+\begin{frame}{Мониторинг и наблюдаемость}
+  \slidetop
+  \versus{Наблюдаемость}{%
+    \begin{cbul}{accent}
+      \item вопросы, которые вы \hi{не задавали}
+      \item данные с контекстом, резать в любом направлении
+      \item переходы между сигналами по \texttt{TraceId}
+      \item от симптома --- к причине
+    \end{cbul}}{Мониторинг}{%
+    \begin{cbul}{alt}
+      \item вопросы, заданные заранее
+      \item график и порог оповещения
+      \item ловит известное
+      \item часть наблюдаемости
+    \end{cbul}}
+
+  \slidegap
+  \hrulethin{0.42}
+  \rulegap
+  \aside{Оповещение $\to$ график $\to$ трейсы за этот момент $\to$ логи по
+    \texttt{TraceId}. Причина найдена за пять минут, без «добавим логов и
+    перевыложим».}
+\end{frame}
+
+% 45
+\begin{frame}{OpenTelemetry}
+  \slidetop
+  \claim{Инструментируем \hi{один раз}, экспортируем куда угодно.}
+
+  \begin{center}
+    \begin{tikzpicture}[font=\footnotesize,
+      tb/.style={box,minimum width=2.7cm,minimum height=0.8cm}]
+      \node[tb] (c1) at (0,0.95)  {ваш код};
+      \node[tb] (c2) at (0,0)     {ASP.NET Core, HttpClient};
+      \node[tb] (c3) at (0,-0.95) {драйвер базы, рантайм};
+      \node[box,draw=accent,line width=1.0pt,minimum width=3.0cm,minimum height=2.7cm]
+        (o) at (4.3,0) {\textbf{OpenTelemetry}\\[0.3em]модель\\инструментирование\\экспорт};
+      \node[tb,minimum width=2.2cm] (k) at (8.0,0) {коллектор};
+      \node[tb,minimum width=2.0cm] (s1) at (11.0,0.95)  {система A};
+      \node[tb,minimum width=2.0cm] (s2) at (11.0,0)     {система B};
+      \node[tb,minimum width=2.0cm] (s3) at (11.0,-0.95) {система C};
+      \foreach \n in {c1,c2,c3} \draw[arr] (\n.east) -- (\n.east -| o.west);
+      \draw[arra] (o) -- node[above,font=\scriptsize,text=accent] {OTLP} (k);
+      \foreach \n in {s1,s2,s3} \draw[arr] (k.east) -- (\n.west);
+    \end{tikzpicture}
+  \end{center}
+
+  \slidegap
+  \aside{Куда уезжают сигналы, решает конфигурация: адрес получателя. Сменили
+    систему хранения --- поменяли адрес, код \hi{не тронут}.}
+\end{frame}
+
+% 46
+\begin{frame}[fragile]{Регистрация}
+  \vspace{0.3em}
+\begin{lstlisting}[style=csharp,basicstyle=\codexs,escapechar=|]
+builder.Services.AddOpenTelemetry()
+|\mk{t1}|    .ConfigureResource(r => r.AddService("orders-service"))
+    .WithTracing(tracing => tracing
+|\mk{t2}|        .AddAspNetCoreInstrumentation()
+|\mk{t3}|        .AddHttpClientInstrumentation()
+|\mk{t4}|        .AddSource("OrdersService")
+|\mk{t5}|        .AddOtlpExporter())
+    .WithMetrics(metrics => metrics
+        .AddAspNetCoreInstrumentation()
+        .AddHttpClientInstrumentation()
+|\mk{t6}|        .AddRuntimeInstrumentation()
+|\mk{t7}|        .AddMeter("OrdersService")
+        .AddOtlpExporter());
+
+|\mk{t8}|builder.Logging.AddOpenTelemetry(
+    logging => logging.AddOtlpExporter());
+\end{lstlisting}
+  \begin{tikzpicture}[remember picture,overlay,every node/.style={rawlab}]
+    \node at ([xshift=9.6cm]t1) {имя сервиса};
+    \node at ([xshift=9.6cm]t2) {входящие запросы};
+    \node at ([xshift=9.6cm]t3) {исходящие вызовы};
+    \node at ([xshift=9.6cm]t4) {свои отрезки};
+    \node[text=accent] at ([xshift=9.6cm]t5) {адрес --- из окружения};
+    \node at ([xshift=9.6cm]t6) {рантайм};
+    \node at ([xshift=9.6cm]t7) {свои метрики};
+    \node[text=accent] at ([xshift=9.6cm]t8) {и логи туда же};
+  \end{tikzpicture}
+
+  \aside{Ни строки в вашем коде: запрос --- отрезок, вызов клиента ---
+    \hi{дочерний} отрезок.}
+\end{frame}
+
+% 47
+\begin{frame}{Цена}
+  \slidetop
+  \versus{Трейсы сэмплируют}{%
+    \begin{cbul}{accent}
+      \item отрезок --- объект и экспорт по сети
+      \item записывают долю: скажем, 10\,\%
+      \item решение в начале --- на всю цепочку
+      \item в конце: все медленные и с ошибками
+    \end{cbul}}{Метрики: кардинальность}{%
+    \begin{cbul}{alt}
+      \item сочетание атрибутов --- отдельный ряд
+      \item тип оплаты --- три ряда
+      \item идентификатор пользователя --- миллион
+      \item в атрибутах --- десятки значений
+    \end{cbul}}
+
+  \slidegap
+  \hrulethin{0.42}
+  \rulegap
+  \aside{Метрики не сэмплируют никогда. Идентификаторы пользователей и заказов
+    живут в логах и трейсах, а \lo{не} в метриках.}
+\end{frame}
+
+% 48
+\begin{frame}[fragile]{Свои отрезки и метрики}
+  \vspace{0.3em}
+\begin{lstlisting}[style=csharp,basicstyle=\codexxs,escapechar=|]
+static class Telemetry
+{
+|\mk{y1}|    public static readonly ActivitySource Source =
+        new("OrdersService");
+    public static readonly Meter Meter = new("OrdersService");
+    public static readonly Counter<long> OrdersCreated =
+        Meter.CreateCounter<long>("orders.created");
+}
+
+|\mk{y2}|using (var activity =
+    Telemetry.Source.StartActivity("pricing.calculate"))
+{
+|\mk{y3}|    activity?.SetTag("order.id", orderId);
+    // ...
+|\mk{y4}|    Telemetry.OrdersCreated.Add(1,
+        new KeyValuePair<string, object?>("payment", "card"));
+}
+\end{lstlisting}
+  \begin{tikzpicture}[remember picture,overlay,every node/.style={rawlab}]
+    \node at ([xshift=9.6cm]y1) {один на сервис};
+    \node[text=accent] at ([xshift=9.6cm]y2) {отрезок вокруг логики};
+    \node at ([xshift=9.6cm]y3) {\texttt{?}: отрезка может не быть};
+    \node at ([xshift=9.6cm]y4) {счётчик с атрибутом};
+  \end{tikzpicture}
+
+  \aside{Только типы платформы: OpenTelemetry подхватывает их \hi{по именам}.}
+\end{frame}
+
+% 49
+\begin{frame}[plain]
+  \vote{Заказы вызвали курсы, курсы --- справочники. Медленно. Как понять, что
+    три отрезка в трёх сервисах --- один запрос пользователя?}
+\end{frame}
+
+% 50
+\begin{frame}{Распространение контекста}
+  \slidetop
+  \begin{center}
+    \begin{tikzpicture}[font=\footnotesize,
+      tb/.style={box,minimum width=2.6cm,minimum height=1.0cm}]
+      \node[tb] (a) at (0,0)   {\textbf{заказы}};
+      \node[tb] (b) at (5.2,0) {\textbf{курсы}};
+      \node[tb] (c) at (10.4,0) {\textbf{справочники}};
+      \draw[arra] (a) -- node[above,font=\scriptsize\ttfamily,text=accent] {traceparent} (b);
+      \draw[arra] (b) -- node[above,font=\scriptsize\ttfamily,text=accent] {traceparent} (c);
+      \node[font=\small\ttfamily,below=1.0em] at (b.south)
+        {traceparent: 00-\hi{ada2952ebd54d8219ea277f76698308f}-abc15d1efe7e7268-01};
+      \node[font=\scriptsize,text=accent,below=2.9em] at (b.south)
+        {идентификатор трейса --- один на всю цепочку};
+    \end{tikzpicture}
+  \end{center}
+
+  \slidegap
+  \begin{cbul}{accent}
+    \item клиент из фабрики добавляет заголовок \hi{сам}; сервер продолжает тот же трейс
+    \item очередь: идентификатор кладут в сообщение и восстанавливают
+    \item багаж виден всем по пути --- \lo{ничего} чувствительного
+  \end{cbul}
+\end{frame}
+
+% 51
+\begin{frame}{Какой сигнал}
+  \slidetop
+  {\renewcommand{\arraystretch}{1.5}
+  \begin{tabular}{@{}L{2.6cm}L{3.8cm}L{6.4cm}@{}}
+    \hi{\textbf{метрика}} & «что-то не так»  & счётчик ошибок: дёшево, мгновенно,
+      оповещение \\
+    \hi{\textbf{лог}}     & «что именно»     & какие ошибки, когда счётчик подскочил \\
+    \hi{\textbf{трейс}}   & «где»            & на каком отрезке и в каком сервисе \\
+  \end{tabular}}
+
+  \slidegap
+  \hrulethin{0.42}
+  \rulegap
+  \eyebrow{четыре золотых сигнала}\par
+  \vspace{0.5em}
+  {\large \hi{задержка} \quad \hi{трафик} \quad \hi{ошибки} \quad \hi{насыщение}}
+
+  \vspace{0.5em}
+  \aside{Четыре графика на одной панели, одинаковой для всех сервисов.}
+\end{frame}
+
+% 52
+\begin{frame}[plain]
+  \keyline{Три сигнала, один идентификатор, одна разметка.\\
+    Наблюдаемость --- когда от любого симптома можно дойти до причины.}
+\end{frame}
+
+% ============================================================= 4. ASPIRE ==
+\section{4. Оркестрация локального окружения}
+
+% 53
+\begin{frame}[plain]
+  \sectionopener{4}{Оркестрация локального окружения}{Сервис, база и Redis
+    \hi{одной командой} --- и всё это видно в одном окне.}
+\end{frame}
+
+% 54
+\begin{frame}[plain]
+  \vote{Что нужно поднять, чтобы запустить наш сервис локально?}
+\end{frame}
+
+% 55
+\begin{frame}[fragile]{Хост приложения}
+  \slidetop
+  \claim{Система описана \hi{кодом}, в отдельном проекте.}
+
+\begin{lstlisting}[style=csharp,basicstyle=\codesm,escapechar=|]
+var builder = DistributedApplication.CreateBuilder(args);
+
+|\mk{a1}|var cache = builder.AddRedis("cache");
+|\mk{a2}|var database = builder.AddPostgres("postgres")
+    .AddDatabase("orders");
+
+builder.AddProject<Projects.OrdersService>("orders")
+|\mk{a3}|    .WithReference(cache)
+|\mk{a4}|    .WithReference(database);
+
+|\mk{a5}|builder.Build().Run();
+\end{lstlisting}
+  \begin{tikzpicture}[remember picture,overlay,every node/.style={rawlab}]
+    \node at ([xshift=9.4cm]a1) {Redis как ресурс};
+    \node at ([xshift=9.4cm]a2) {база как ресурс};
+    \draw[rawbrace] ([xshift=9.15cm,yshift=0.35em]a3) -- ([xshift=9.15cm,yshift=-0.3em]a4);
+    \node[text=accent] at ([xshift=9.4cm]$(a3)!0.5!(a4)$) {сервис ссылается};
+    \node at ([xshift=9.4cm]a5) {одна команда};
+  \end{tikzpicture}
+
+  \aside{Сервис не знает портов и адресов: строки подключения \texttt{cache} и
+    \texttt{orders} приходят через окружение.}
+\end{frame}
+
+% 56
+\begin{frame}{Что делает хост}
+  \slidetop
+  \claim{Всё, что вы делали бы руками в пяти терминалах.}
+
+  \begin{cbul}{accent}
+    \item поднимает контейнеры, порты выбирает сам
+    \item запускает проекты сервисов как обычные процессы
+    \item передаёт каждому сервису \hi{переменные окружения}
+    \item следит за состоянием и останавливает всё вместе с собой
+  \end{cbul}
+
+  \slidegap
+  {\renewcommand{\arraystretch}{1.2}\small
+  \begin{tabular}{@{}L{6.2cm}L{7.0cm}@{}}
+    \texttt{ConnectionStrings\_\_cache}        & строка подключения к ресурсу \\
+    \texttt{OTEL\_EXPORTER\_OTLP\_ENDPOINT}    & адрес панели для экспорта сигналов \\
+    \texttt{OTEL\_SERVICE\_NAME}               & имя сервиса \\
+  \end{tabular}}
+\end{frame}
+
+% 57
+\begin{frame}[fragile]{Умолчания и интеграции}
+  \slidetop
+\begin{lstlisting}[style=csharp,basicstyle=\codesm,escapechar=|]
+|\mk{d1}|builder.AddServiceDefaults();
+|\mk{d2}|builder.AddRedisDistributedCache("cache");
+\end{lstlisting}
+  \begin{tikzpicture}[remember picture,overlay,every node/.style={rawlab}]
+    \node at ([xshift=8.4cm]d1) {проект умолчаний};
+    \node[text=accent] at ([xshift=8.4cm]d2) {интеграция: имя как в хосте};
+  \end{tikzpicture}
+
+  \slidegap
+  \versus{Проект умолчаний}{%
+    \begin{cbul}{accent}
+      \item OpenTelemetry: трейсы, метрики, логи
+      \item проверки здоровья
+      \item устойчивость клиентов
+    \end{cbul}}{Пакет интеграции}{%
+    \begin{cbul}{alt}
+      \item клиент приходит из контейнера
+      \item строка подключения настроена
+      \item проверка здоровья и разметка трейсов
+    \end{cbul}}
+\end{frame}
+
+% 58
+\begin{frame}{Панель}
+  \slidetop
+  \claim{Трейсы своего сервиса --- на \hi{второй минуте}, без инфраструктуры.}
+
+  {\renewcommand{\arraystretch}{1.4}
+  \begin{tabular}{@{}L{3.0cm}L{10.2cm}@{}}
+    \hi{\textbf{ресурсы}} & все ли работают; консольный вывод с ошибкой старта \\
+    \hi{\textbf{логи}}    & структурные, с полями, фильтр по уровню и тексту \\
+    \hi{\textbf{трейсы}}  & водопад запроса с отрезками Redis и базы \\
+    \hi{\textbf{метрики}} & длительность запросов, память, пул потоков, ваш счётчик \\
+  \end{tabular}}
+
+  \slidegap
+  \aside{Aspire --- про локальную разработку, \lo{не про прод}: там нужна
+    настоящая система хранения сигналов. И нужен запущенный движок контейнеров.}
+\end{frame}
+
+% 59
+\begin{frame}[plain]
+  \keyline{Система описана кодом и поднята одной командой.\\
+    Наблюдаемость --- с первого дня, а не после первого инцидента.}
+\end{frame}
+
+\end{document}
