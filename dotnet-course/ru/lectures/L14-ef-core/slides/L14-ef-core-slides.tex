@@ -1,0 +1,1186 @@
+% Л14 -- EF Core: модель, миграции, запросы. Slides.
+%
+% Companion to the spoken script in ../L14-ef-core.md, which is the source of
+% truth: the slides carry diagrams, code, real terminal output and short
+% marks, and the delivery lives in the script only -- this deck carries no
+% speaker notes. Slide text is in Russian because that is the content;
+% everything else in this file is English.
+%
+% Build:  make          (latexmk -pdf; engine: pdflatex)
+%
+% Every C# listing was compiled on dotnet SDK 10.0 in a scratch
+% `dotnet new console -n HelloWorld` with EF Core 10 and the Npgsql provider;
+% SQL and tool output on the slides is captured from runs of that project
+% against PostgreSQL 17. See ../CLAUDE.md for the verification table.
+%
+% House rules: ../CLAUDE.md and ../../../CLAUDE.md. Theme: ../../../../theme/.
+
+\documentclass[aspectratio=169,10pt,t]{beamer}
+
+\usetheme{dotnet}
+\usetikzlibrary{arrows.meta,positioning,calc,decorations.pathreplacing,fit}
+\usepackage{array}   % ragged-right table columns
+
+% A ragged-right paragraph column: justified cells in narrow columns hyphenate
+% badly, and a split word is the one thing the back row cannot read.
+\newcolumntype{L}[1]{>{\raggedright\arraybackslash}p{#1}}
+
+\dotnetlecture{Л14}
+
+\title[Л14. EF Core: модель, миграции, запросы]{EF Core: модель, миграции, запросы}
+\author{Дмитрий Курочкин}
+\date{}
+
+% Code sizes, one step down from \footnotesize. Smaller than 6.6pt does not
+% carry to the back of the room.
+\newcommand{\codesm}{\ttfamily\fontsize{7.6}{9.0}\selectfont}
+\newcommand{\codexs}{\ttfamily\fontsize{7.0}{8.3}\selectfont}
+\newcommand{\codexxs}{\ttfamily\fontsize{6.8}{7.8}\selectfont}
+\newcommand{\termsm}{\ttfamily\fontsize{6.6}{7.9}\selectfont}
+
+% A mark at the start of a listing line, for labels set beside the listing.
+% Used through the listing's escapechar; the labels are drawn by an overlay
+% picture after the listing, so the build needs two passes (latexmk does that).
+\newcommand{\mk}[1]{\tikz[remember picture,overlay]\coordinate (#1) at (0,0.55ex);}
+
+\tikzset{
+  rawbrace/.style={decorate,decoration={brace,amplitude=4pt},hairline,
+                   line width=0.8pt},
+  rawlab/.style={anchor=west,font=\footnotesize,inner sep=0pt},
+  box/.style={draw=hairline,line width=0.8pt,fill=codebg,inner sep=4pt,
+              align=center,minimum height=0.9cm},
+  arr/.style={-{Straight Barb[length=1.6mm]},muted,line width=0.7pt},
+  arra/.style={-{Straight Barb[length=1.8mm]},accent,line width=0.9pt},
+  arrl/.style={-{Straight Barb[length=1.8mm]},alt,line width=0.9pt},
+  tbl/.style={draw=hairline,line width=0.8pt,fill=codebg,inner sep=3pt,
+              align=left,font=\scriptsize\ttfamily,minimum width=2.2cm},
+}
+
+\begin{document}
+\shorthandoff{"}
+
+% ------------------------------------------------------------------ title --
+% 1
+\begin{frame}[plain]
+  \titlepagednc{Лекция 14}{EF Core: модель, миграции, запросы}{}{Дмитрий Курочкин}
+\end{frame}
+
+% ============================================ 1. WHERE EF CORE BELONGS ==
+\section{1. Место EF Core в приложении}
+
+% 2
+\begin{frame}[plain]
+  \sectionopener{1}{Место EF Core в приложении}{Генератор кода, который вы
+    \hi{обязаны проверять}.}
+\end{frame}
+
+% 3
+\begin{frame}[plain]
+  \vote{Что EF Core берёт на себя?}
+\end{frame}
+
+% 4
+\begin{frame}{Чем EF Core не является}
+  \slidetop
+  \claim{От неё ждут трёх вещей, которых она \lo{не делает}.}
+
+  {\renewcommand{\arraystretch}{1.6}
+  \begin{tabular}{@{}L{4.4cm}L{8.4cm}@{}}
+    \lo{\textbf{не кэш}}                 & загруженный объект живёт в контексте
+      один запрос \\
+    \lo{\textbf{не проектирование базы}} & индексы, ограничения, нормализация ---
+      ваши решения \\
+    \lo{\textbf{не замена SQL}}          & SQL пишете не вы, а проверяете --- вы \\
+  \end{tabular}}
+\end{frame}
+
+% 5
+\begin{frame}{Что берёт и что требует}
+  \slidetop
+  \versus{Берёт на себя}{%
+    \begin{cbul}{accent}
+      \item маппинг строк в объекты и обратно
+      \item SQL из LINQ
+      \item отслеживание изменений
+      \item миграции схемы
+    \end{cbul}}{Требует взамен}{%
+    \begin{cbul}{alt}
+      \item понимать SQL, который получился
+      \item не считать базу деталью реализации
+    \end{cbul}}
+
+  \slidegap
+  \hrulethin{0.42}
+  \rulegap
+  {\large ORM пишет SQL \hi{за вас}, но не \lo{вместо вас}.}
+\end{frame}
+
+% 6
+\begin{frame}{Где доверять, где проверять}
+  \slidetop
+  \versus{Доверять}{%
+    \begin{cbul}{accent}
+      \item создание
+      \item чтение по ключу
+      \item обновление одной сущности
+      \item удаление
+    \end{cbul}}{Проверять каждый раз}{%
+    \begin{cbul}{alt}
+      \item запросы со связями
+      \item группировки
+      \item проекции с вычислениями
+      \item больше одного оператора после \texttt{Where}
+    \end{cbul}}
+
+  \slidegap
+  \hrulethin{0.42}
+  \rulegap
+  \aside{Ядро ORM общее, провайдер переводит в диалект: для PostgreSQL --- поверх
+    драйвера Npgsql.}
+\end{frame}
+
+% ================================================ 2. MODEL AND CONFIG ==
+\section{2. Модель и её конфигурация}
+
+% 7
+\begin{frame}[plain]
+  \sectionopener{2}{Модель и её конфигурация}{Сущность --- обычный класс; всё
+    про базу --- в \hi{отдельном классе} конфигурации.}
+\end{frame}
+
+% 8
+\begin{frame}{Три слова}
+  \slidetop
+  {\renewcommand{\arraystretch}{1.6}
+  \begin{tabular}{@{}L{4.0cm}L{8.8cm}@{}}
+    \hi{\textbf{сущность}}        & класс, отображённый на таблицу; идентичность
+      по ключу \\
+    \hi{\textbf{DTO}}             & то, что уходит клиенту: без идентичности и без
+      правил \\
+    \hi{\textbf{доменная модель}} & сущности и типы-значения с правилами \\
+  \end{tabular}}
+
+  \slidegap
+  \aside{Сущность ORM и доменная сущность в курсе --- \hi{один класс}; в больших
+    системах их разделяют. DTO --- всегда отдельный тип, и наружу уходит только он.}
+\end{frame}
+
+% 9
+\begin{frame}{Атрибуты или класс}
+  \slidetop
+  \versus{Класс конфигурации}{%
+    \begin{cbul}{accent}
+      \item домен не знает о хранении
+      \item один класс --- одна таблица
+      \item лежит в проекте данных
+      \item подхватывается из сборки сам
+    \end{cbul}}{Атрибуты на сущности}{%
+    \begin{cbul}{alt}
+      \item домен ссылается на пакет ORM
+      \item мешают второму хранилищу
+      \item тест домена тянет ORM
+      \item цена видна не сразу
+    \end{cbul}}
+
+  \slidegap
+  \hrulethin{0.42}
+  \rulegap
+  \aside{Цена приходит со вторым хранилищем и с тестом домена без ORM. Правило
+    принимают \hi{заранее}.}
+\end{frame}
+
+% 10
+\begin{frame}[fragile]{Сущность без атрибутов}
+  \vspace{0.3em}
+\begin{lstlisting}[style=csharp,basicstyle=\codexs,escapechar=|]
+public sealed class Order
+{
+|\mk{e1}|    public int Id { get; private set; }
+    public Email CustomerEmail { get; private set; } = null!;
+    public decimal Total { get; private set; }
+    public OrderStatus Status { get; private set; }
+|\mk{e2}|    public List<OrderItem> Items { get; private set; } = [];
+
+|\mk{e3}|    private Order() { }
+|\mk{e4}|    public Order(Email customerEmail) =>
+        CustomerEmail = customerEmail;
+
+|\mk{e5}|    public void MarkPaid() => Status = Status == OrderStatus.New
+        ? OrderStatus.Paid
+        : throw new InvalidTransitionException(Status);
+}
+\end{lstlisting}
+  \begin{tikzpicture}[remember picture,overlay,every node/.style={rawlab}]
+    \node at ([xshift=10.4cm]e1) {запись закрыта};
+    \node at ([xshift=10.4cm]e2) {позиции заказа};
+    \node at ([xshift=10.4cm]e3) {для ORM: чтение из базы};
+    \node at ([xshift=10.4cm]e4) {для домена};
+    \node[text=accent] at ([xshift=10.4cm]e5) {правило перехода};
+  \end{tikzpicture}
+
+  \rulegap
+  \aside{Ни одного слова про базу: домен \hi{не ссылается} на пакет ORM.}
+\end{frame}
+
+% 11
+\begin{frame}[fragile]{Конфигурация --- отдельный класс}
+  \vspace{0.3em}
+\begin{lstlisting}[style=csharp,basicstyle=\codexs,escapechar=|]
+public sealed class OrderConfiguration : IEntityTypeConfiguration<Order>
+{
+    public void Configure(EntityTypeBuilder<Order> builder)
+    {
+|\mk{k1}|        builder.ToTable("orders");
+        builder.HasKey(o => o.Id);
+|\mk{k2}|        builder.Property(o => o.Total).HasPrecision(18, 2);
+|\mk{k3}|        builder.Property(o => o.Status)
+            .HasConversion<string>().HasMaxLength(32);
+|\mk{k4}|        builder.Property(o => o.CustomerEmail)
+            .HasConversion(e => e.Value, v => new Email(v))
+            .HasMaxLength(320);
+|\mk{k5}|        builder.HasIndex(o => o.CustomerEmail);
+|\mk{k6}|        builder.HasMany(o => o.Items).WithOne()
+            .HasForeignKey(i => i.OrderId)
+            .OnDelete(DeleteBehavior.Cascade);
+    }
+}
+\end{lstlisting}
+  \begin{tikzpicture}[remember picture,overlay,every node/.style={rawlab}]
+    \node at ([xshift=10.6cm]k1) {таблица и ключ};
+    \node at ([xshift=10.6cm]k2) {точность суммы};
+    \node at ([xshift=10.6cm]k3) {статус строкой};
+    \node[text=accent] at ([xshift=10.6cm]k4) {конвертер};
+    \node at ([xshift=10.6cm]k5) {индекс};
+    \node at ([xshift=10.6cm]k6) {один ко многим};
+  \end{tikzpicture}
+\end{frame}
+
+% 12
+\begin{frame}{Соглашения}
+  \slidetop
+  \versus{Задаём явно}{%
+    \begin{cbul}{accent}
+      \item ключ
+      \item связь и правило удаления
+      \item обязательность
+      \item точность суммы
+      \item длина строки, индекс
+    \end{cbul}}{Соглашение сделает молча}{%
+    \begin{cbul}{alt}
+      \item \texttt{Id} --- ключ
+      \item \texttt{OrderId} --- внешний ключ
+      \item тип без \texttt{?} --- \texttt{NOT NULL}
+      \item \texttt{decimal} --- точность базы
+      \item \texttt{string} --- без длины
+    \end{cbul}}
+
+  \slidegap
+  \hrulethin{0.42}
+  \rulegap
+  \aside{Соглашения удобны и опасны тем же: они \lo{невидимы}. Конфигурация
+    читается как описание таблицы.}
+\end{frame}
+
+% 13
+\begin{frame}[fragile]{Теневые свойства и глобальный фильтр}
+  \slidetop
+  \claim{Правило, которое нельзя обойти \hi{забывчивостью}.}
+
+\begin{lstlisting}[style=csharp,basicstyle=\codesm,escapechar=|]
+|\mk{s1}|builder.Property<DateTime>("UpdatedAt")
+    .HasDefaultValueSql("now()");
+
+|\mk{s2}|builder.HasQueryFilter(o => !o.IsDeleted);
+\end{lstlisting}
+  \begin{tikzpicture}[remember picture,overlay,every node/.style={rawlab}]
+    \node at ([xshift=8.6cm]s1) {есть в таблице, нет в классе};
+    \node[text=accent] at ([xshift=8.6cm]s2) {условие в каждом запросе};
+  \end{tikzpicture}
+
+  \slidegap
+  \begin{cbul}{accent}
+    \item теневое свойство заполняет перехватчик сохранения --- один на контекст
+    \item так же ведут автора изменения и мягкое удаление
+    \item фильтр отключается на одном запросе явно: \texttt{IgnoreQueryFilters()}
+  \end{cbul}
+\end{frame}
+
+% 14
+\begin{frame}[fragile]{Владеемый тип}
+  \slidetop
+  \claim{Одно свойство в коде --- \hi{две колонки} той же таблицы.}
+
+\begin{lstlisting}[style=csharp,basicstyle=\codesm,escapechar=|]
+|\mk{w1}|public record Money(decimal Amount, string Currency);
+
+|\mk{w2}|builder.OwnsOne(o => o.Delivery, money =>
+{
+|\mk{w3}|    money.Property(m => m.Amount).HasPrecision(18, 2);
+|\mk{w4}|    money.Property(m => m.Currency).HasMaxLength(3);
+});
+\end{lstlisting}
+  \begin{tikzpicture}[remember picture,overlay,every node/.style={rawlab}]
+    \node at ([xshift=9.4cm]w1) {доменный тип из двух полей};
+    \node[text=accent] at ([xshift=9.4cm]w2) {живёт внутри сущности};
+    \node at ([xshift=9.4cm]w3) {\texttt{delivery\_amount}};
+    \node at ([xshift=9.4cm]w4) {\texttt{delivery\_currency}};
+  \end{tikzpicture}
+
+  \slidegap
+  \aside{Ни отдельной таблицы, ни ключа. Конвертер --- для типа из одного поля,
+    владеемый тип --- из нескольких.}
+\end{frame}
+
+% 15
+\begin{frame}[fragile]{Имена}
+  \slidetop
+  \claim{PostgreSQL приводит имена без кавычек к \hi{нижнему регистру}.}
+
+  \eyebrow{по умолчанию}
+\begin{lstlisting}[style=term,basicstyle=\termsm]
+SELECT o."Id", o."CustomerEmail", o."Status", o."Total"
+FROM orders AS o
+WHERE o."CustomerEmail" = @email
+\end{lstlisting}
+
+  \rulegap
+  \eyebrow{Use Snake Case Naming Convention}
+\begin{lstlisting}[style=term,basicstyle=\termsm]
+SELECT o.id, o.customer_email, o.status, o.total
+FROM orders AS o
+WHERE o.customer_email = @email
+\end{lstlisting}
+
+  \rulegap
+  \aside{Одна строка на всю модель. Вручную имя задают только исключениям ---
+    и только в конфигурации.}
+\end{frame}
+
+% 16
+\begin{frame}{Как генерируется ключ}
+  \slidetop
+  {\renewcommand{\arraystretch}{1.5}
+  \begin{tabular}{@{}L{3.6cm}L{4.7cm}L{4.5cm}@{}}
+    & \colhead{accent}{даёт} & \colhead{alt}{цена} \\
+    \textbf{автоинкремент}      & просто и компактно           & известен только
+      после вставки \\
+    \textbf{последовательность} & номер можно взять заранее    & ещё одна поездка
+      к базе \\
+    \textbf{на клиенте}         & известен до сохранения, не раскрывает количество
+      & длиннее; случайный --- хуже для индекса \\
+  \end{tabular}}
+
+  \slidegap
+  \aside{В курсе --- \hi{автоинкремент}. Суррогатный ключ из одной колонки на
+    каждой таблице; естественная уникальность --- отдельный уникальный индекс.}
+\end{frame}
+
+% 17
+\begin{frame}{Три вида связей}
+  \slidetop
+  \begin{center}
+    \begin{tikzpicture}
+      % 1:1
+      \node[tbl] (a1) at (0,0) {orders\\\textbf{id}};
+      \node[tbl] (a2) at (0,-1.7) {invoices\\\textbf{order\_id}};
+      \draw[arra] (a2) -- (a1);
+      \node[font=\footnotesize\bfseries,text=accent] at (0,1.0) {1 : 1};
+      % 1:many
+      \node[tbl] (b1) at (4.6,0) {orders\\\textbf{id}};
+      \node[tbl] (b2) at (4.6,-1.7) {order\_items\\id\\\textbf{order\_id}};
+      \draw[arra] (b2) -- (b1);
+      \node[font=\footnotesize\bfseries,text=accent] at (4.6,1.0) {1 : many};
+      % many:many
+      \node[tbl] (c1) at (8.2,0) {orders\\\textbf{id}};
+      \node[tbl] (c3) at (11.6,0) {tags\\\textbf{id}};
+      \node[tbl] (c2) at (9.9,-1.7) {order\_tag\\\textbf{order\_id}\\\textbf{tag\_id}};
+      \draw[arra] (c2) -- (c1);
+      \draw[arra] (c2) -- (c3);
+      \node[font=\footnotesize\bfseries,text=accent] at (9.9,1.0) {many : many};
+    \end{tikzpicture}
+  \end{center}
+
+  \slidegap
+  {\small
+  \begin{tabular}{@{}L{4.0cm}L{3.9cm}L{4.6cm}@{}}
+    ключ одной --- внешний ключ на другую & внешний ключ в таблице «многих» &
+      промежуточная таблица с двумя внешними ключами \\
+  \end{tabular}}
+\end{frame}
+
+% 18
+\begin{frame}[fragile]{Один ко многим}
+  \slidetop
+  \claim{Правило удаления --- \hi{решение}, а не умолчание.}
+
+\begin{lstlisting}[style=csharp,basicstyle=\codesm,escapechar=|]
+|\mk{m1}|builder.HasMany(o => o.Items)
+|\mk{m2}|    .WithOne()
+|\mk{m3}|    .HasForeignKey(i => i.OrderId)
+|\mk{m4}|    .OnDelete(DeleteBehavior.Cascade);
+\end{lstlisting}
+  \begin{tikzpicture}[remember picture,overlay,every node/.style={rawlab}]
+    \node at ([xshift=7.6cm]m1) {коллекция у заказа};
+    \node at ([xshift=7.6cm]m2) {обратной навигации нет};
+    \node at ([xshift=7.6cm]m3) {\texttt{int} без \texttt{?} --- связь обязательна};
+    \node[text=accent] at ([xshift=7.6cm]m4) {позиции без заказа не живут};
+  \end{tikzpicture}
+
+  \slidegap
+  \begin{cbul}{alt}
+    \item удалили покупателя --- каскадом ушли его заказы и \lo{история}
+    \item навигация «на всякий случай» --- цикл для сериализатора
+  \end{cbul}
+\end{frame}
+
+% 19
+\begin{frame}[plain]
+  \vote{Почта --- не строка, а тип с проверкой. В базе колонка почты ---
+    текст. Что делать?}
+\end{frame}
+
+% 20
+\begin{frame}[fragile]{Конвертер}
+  \slidetop
+  \claim{Свойство --- \hi{доменный тип}, колонка --- примитив.}
+
+\begin{lstlisting}[style=csharp,basicstyle=\codesm,escapechar=|]
+builder.Property(o => o.CustomerEmail)
+|\mk{c1}|    .HasConversion(e => e.Value, v => new Email(v));
+
+|\mk{c2}|context.Orders.Where(o => o.CustomerEmail == email)
+\end{lstlisting}
+  \begin{tikzpicture}[remember picture,overlay,every node/.style={rawlab}]
+    \node[text=accent] at ([xshift=9.2cm]c1) {в базу и из базы};
+    \node at ([xshift=9.2cm]c2) {сравнение по доменному типу};
+  \end{tikzpicture}
+
+\begin{lstlisting}[style=term,basicstyle=\termsm]
+-- @email='anna@example.com' (Nullable = false)
+SELECT o.id, o.customer_email, o.status, o.total
+FROM orders AS o
+WHERE o.customer_email = @email
+\end{lstlisting}
+
+  \rulegap
+  \aside{Равенство переводится в SQL. Операция \lo{внутри} значения --- «заканчивается
+    на домен» --- по доменному типу не переводится.}
+\end{frame}
+
+% 21
+\begin{frame}[plain]
+  \keyline{Сущность --- обычный класс без атрибутов.\\ Всё про базу --- в классе
+    конфигурации, по одному на сущность.}
+\end{frame}
+
+% ========================================================= 3. DBCONTEXT ==
+\section{3. DbContext}
+
+% 22
+\begin{frame}[plain]
+  \sectionopener{3}{DbContext}{Сессия работы с базой на \hi{один запрос}, и
+    ничего больше.}
+\end{frame}
+
+% 23
+\begin{frame}[fragile]{Контекст целиком}
+  \vspace{0.3em}
+\begin{lstlisting}[style=csharp,basicstyle=\codexs,escapechar=|]
+public sealed class OrdersDbContext(DbContextOptions<OrdersDbContext> options)
+    : DbContext(options)
+{
+|\mk{x1}|    public DbSet<Order> Orders => Set<Order>();
+    public DbSet<Customer> Customers => Set<Customer>();
+
+    protected override void OnModelCreating(ModelBuilder modelBuilder) =>
+|\mk{x2}|        modelBuilder.ApplyConfigurationsFromAssembly(
+            typeof(OrdersDbContext).Assembly);
+}
+
+|\mk{x3}|services.AddDbContext<OrdersDbContext>(options =>
+|\mk{x4}|    options.UseNpgsql(configuration.GetConnectionString("Orders"))
+|\mk{x5}|           .UseSnakeCaseNamingConvention());
+\end{lstlisting}
+  \begin{tikzpicture}[remember picture,overlay,every node/.style={rawlab}]
+    \node at ([xshift=10.6cm]x1) {набор на таблицу};
+    \node[text=accent] at ([xshift=10.6cm]x2) {все конфигурации разом};
+    \node at ([xshift=10.6cm]x3) {scoped};
+    \node at ([xshift=10.6cm]x4) {строка из конфигурации};
+    \node at ([xshift=10.6cm]x5) {змеиный регистр};
+  \end{tikzpicture}
+
+  \slidegap
+  \aside{Единица работы: всё изменённое в одном контексте сохраняется одной
+    транзакцией, \hi{одним вызовом}.}
+\end{frame}
+
+% 24
+\begin{frame}{Чего в контексте нет}
+  \slidetop
+  \claim{Наборы и подключение конфигураций. \hi{Всё.}}
+
+  {\renewcommand{\arraystretch}{1.6}
+  \begin{tabular}{@{}L{4.0cm}L{8.8cm}@{}}
+    \lo{\textbf{бизнес-логики}} & можно ли отменить заказ, решает сущность или
+      сервис \\
+    \lo{\textbf{запросов}}      & в хранилище: методы названы по сценариям,
+      параметры простые \\
+    \lo{\textbf{конфигураций}}  & в отдельных классах, по одному на сущность \\
+  \end{tabular}}
+
+  \slidegap
+  \aside{Тонкое хранилище прячет ORM \hi{от домена}, а не от вас. «Хранилище чего
+    угодно» с лямбдой в параметре --- ORM через заднюю дверь.}
+\end{frame}
+
+% 25
+\begin{frame}[plain]
+  \vote{Контекст регистрируется как scoped. Почему не singleton --- он же
+    дорогой?}
+\end{frame}
+
+% 26
+\begin{frame}{Время жизни}
+  \slidetop
+  {\renewcommand{\arraystretch}{1.6}
+  \begin{tabular}{@{}L{3.2cm}L{9.6cm}@{}}
+    \lo{\textbf{singleton}} & одно соединение на всех; отслеживаемые объекты
+      копятся вечно; не потокобезопасен \\
+    \lo{\textbf{transient}} & два хранилища в запросе --- два контекста --- две
+      транзакции \\
+    \hi{\textbf{scoped}}    & один на запрос: одна единица работы, все хранилища
+      получают его же \\
+  \end{tabular}}
+
+  \slidegap
+  \aside{Контекст не дорогой: дорогая модель, и она строится один раз. Где
+    запроса нет --- область на итерацию или фабрика контекстов.}
+\end{frame}
+
+% 27
+\begin{frame}[fragile]{Раскладка проекта}
+  \vspace{0.3em}
+\begin{lstlisting}[style=plain,basicstyle=\codexs,escapechar=|]
+OrdersService.Data/
+|\mk{r1}|    OrdersDbContext.cs
+|\mk{r2}|    Configurations/
+        OrderConfiguration.cs
+        OrderItemConfiguration.cs
+        CustomerConfiguration.cs
+|\mk{r3}|    Migrations/
+        20260901120000_Initial.cs
+        20260910093000_AddOrderStatusIndex.cs
+        OrdersDbContextModelSnapshot.cs
+|\mk{r4}|    Repositories/
+        IOrderRepository.cs
+        OrderRepository.cs
+|\mk{r5}|    DataModule.cs
+\end{lstlisting}
+  \begin{tikzpicture}[remember picture,overlay,every node/.style={rawlab}]
+    \node at ([xshift=7.6cm]r1) {контекст в корне};
+    \node at ([xshift=7.6cm]r2) {по файлу на сущность};
+    \node[text=accent] at ([xshift=7.6cm]r3) {генерирует инструмент; коммитятся};
+    \node at ([xshift=7.6cm]r4) {интерфейс может жить в домене};
+    \node at ([xshift=7.6cm]r5) {регистрация одной строкой};
+  \end{tikzpicture}
+
+  \slidegap
+  \aside{Три проекта: домен, доступ к данным, веб. Ссылки --- \hi{в одну сторону}:
+    домен не ссылается ни на что.}
+\end{frame}
+
+% 28
+\begin{frame}[plain]
+  \keyline{Контекст --- наборы плюс подключение конфигураций.\\ Scoped, один на
+    запрос, и ничего больше.}
+\end{frame}
+
+% ======================================================== 4. MIGRATIONS ==
+\section{4. Миграции}
+
+% 29
+\begin{frame}[plain]
+  \sectionopener{4}{Миграции}{Схема как код: изменение базы живёт \hi{рядом} с
+    изменением модели.}
+\end{frame}
+
+% 30
+\begin{frame}{Как устроены миграции}
+  \slidetop
+  \begin{center}
+    \begin{tikzpicture}[font=\footnotesize,
+      tb/.style={box,minimum width=2.9cm,minimum height=1.1cm}]
+      \node[tb] (m1) at (0,0)    {\textbf{модель}\\сущности и конфигурации};
+      \node[tb] (m2) at (0,-1.6) {\textbf{снимок}\\модель в прошлый раз};
+      \node[tb,draw=accent,line width=1.0pt] (m3) at (4.9,-0.8)
+        {\textbf{класс миграции}\\\texttt{Up} и \texttt{Down}};
+      \node[tb] (m4) at (9.8,-0.8) {\textbf{таблица истории}\\что уже применено};
+      \draw[arr] (m1.east) -- (m3.west);
+      \draw[arr] (m2.east) -- (m3.west);
+      \draw[arra] (m3) -- node[above,font=\scriptsize,text=accent] {применить} (m4);
+      \node[font=\scriptsize,text=muted] at (2.45,-0.8) {разница};
+    \end{tikzpicture}
+  \end{center}
+
+  \slidegap
+  \begin{cbul}{accent}
+    \item класс и снимок коммитятся \hi{вместе} с изменением сущности
+    \item применить --- выполнить все, которых нет в таблице истории, по порядку
+    \item снимок руками не редактируют: конфликт --- пересоздать миграцию
+  \end{cbul}
+\end{frame}
+
+% 31
+\begin{frame}[fragile]{Рабочий цикл}
+  \slidetop
+\begin{lstlisting}[style=term,basicstyle=\termsm]
+$ dotnet ef migrations add AddOrderStatusIndex
+Build started...
+Build succeeded.
+Done. To undo this action, use 'ef migrations remove'
+$ dotnet ef migrations list
+Build started...
+Build succeeded.
+20261112060351_Initial
+20261112060513_AddOrderStatusIndex (Pending)
+\end{lstlisting}
+
+\begin{lstlisting}[style=csharp,basicstyle=\codexs]
+migrationBuilder.CreateIndex(
+    name: "ix_orders_status", table: "orders", column: "status");
+\end{lstlisting}
+
+  \rulegap
+  \aside{Изменили модель --- добавили --- \hi{прочитали} --- применили. Имя ---
+    описание изменения. Применённую миграцию \lo{не редактируют}.}
+\end{frame}
+
+% 32
+\begin{frame}[fragile]{Что здесь не так?}
+  \slidetop
+\begin{lstlisting}[style=csharp,basicstyle=\codesm]
+public partial class AddOrderArchive : Migration
+{
+    protected override void Up(MigrationBuilder migrationBuilder)
+    {
+        migrationBuilder.AddColumn<string>(
+            name: "metadata", table: "orders", type: "jsonb", nullable: true);
+
+        migrationBuilder.Sql(
+            "ALTER TABLE orders ADD COLUMN archived_at TIMESTAMPTZ; " +
+            "CREATE INDEX CONCURRENTLY ix_orders_archived ON orders (archived_at);");
+    }
+
+    protected override void Down(MigrationBuilder migrationBuilder) { /* ... */ }
+}
+\end{lstlisting}
+\end{frame}
+
+% 33
+\begin{frame}[fragile]{Три ошибки}
+  \vspace{0.3em}
+\begin{lstlisting}[style=csharp,basicstyle=\codexs]
+migrationBuilder.AddColumn<string>(
+    name: "metadata", table: "orders", type: "jsonb", nullable: true);
+migrationBuilder.Sql(
+    "ALTER TABLE orders ADD COLUMN archived_at TIMESTAMPTZ; " +
+    "CREATE INDEX CONCURRENTLY ix_orders_archived ON orders (archived_at);");
+\end{lstlisting}
+
+\begin{lstlisting}[style=term,basicstyle=\termsm,breaklines=true,breakatwhitespace=true,breakindent=4em]
+$ dotnet ef database update
+...
+Npgsql.PostgresException (0x80004005): 25001: CREATE INDEX CONCURRENTLY cannot run inside a transaction block
+\end{lstlisting}
+
+  \rulegap
+  {\renewcommand{\arraystretch}{1.3}
+  \begin{tabular}{@{}L{3.2cm}L{9.6cm}@{}}
+    \lo{\textbf{тип строкой}} & \texttt{jsonb} --- тип одной базы: миграция
+      привязана к провайдеру \\
+    \lo{\textbf{сырой SQL}}   & диалект; колонка не попадёт в снимок --- модель
+      разойдётся со схемой \\
+    \lo{\textbf{транзакция}}  & миграция идёт в транзакции --- падает и на
+      PostgreSQL \\
+  \end{tabular}}
+\end{frame}
+
+% 34
+\begin{frame}{Как правильно}
+  \slidetop
+  \versus{В конфигурации}{%
+    \begin{cbul}{accent}
+      \item тип колонки --- средствами провайдера
+      \item индекс --- \texttt{HasIndex}
+      \item миграция выводится из модели
+      \item всё попадает в снимок
+    \end{cbul}}{Сырой SQL}{%
+    \begin{cbul}{alt}
+      \item только то, чего построитель не умеет
+      \item перенос данных, справочник
+      \item по стандарту SQL
+      \item диалект --- под проверкой провайдера
+    \end{cbul}}
+
+  \slidegap
+  \hrulethin{0.42}
+  \rulegap
+  \aside{Миграция быстрая. Заполнить колонку на ста миллионах строк --- фоновая
+    задача, порциями, после выкладки.}
+\end{frame}
+
+% 35
+\begin{frame}[plain]
+  \vote{При старте приложение само применяет миграции. Что не так?}
+\end{frame}
+
+% 36
+\begin{frame}{Кто применяет миграции}
+  \slidetop
+  \versus{Шаг поставки}{%
+    \begin{cbul}{accent}
+      \item один раз, до выкладки
+      \item из конвейера сборки
+      \item SQL-скрипт или исполняемый файл
+      \item роль с правом менять схему
+    \end{cbul}}{Приложение на старте}{%
+    \begin{cbul}{alt}
+      \item два экземпляра --- две попытки
+      \item вторая падает или удваивает данные
+      \item приложению нужны права на схему
+      \item ошибка в коде --- ошибка в схеме
+    \end{cbul}}
+
+  \slidegap
+  \hrulethin{0.42}
+  \rulegap
+  \aside{Приложение стартует уже на новой схеме, с ролью, которая умеет
+    \hi{только данные}.}
+\end{frame}
+
+% 37
+\begin{frame}[fragile]{Идемпотентный скрипт}
+  \slidetop
+\begin{lstlisting}[style=term,basicstyle=\termsm,breaklines=true,breakatwhitespace=true,breakindent=4em]
+$ dotnet ef migrations script Initial --idempotent
+Build started...
+Build succeeded.
+START TRANSACTION;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "migration_id" = '20261112060513_AddOrderStatusIndex') THEN
+    CREATE INDEX ix_orders_status ON orders (status);
+    END IF;
+END $EF$;
+\end{lstlisting}
+
+  \rulegap
+  \begin{cbul}{accent}
+    \item скрипт можно \hi{прочитать} и отдать администратору базы
+    \item \texttt{migrations bundle} --- исполняемый файл: без исходников и SDK
+    \item \texttt{has-pending-model-changes} --- забытая миграция не пройдёт
+  \end{cbul}
+\end{frame}
+
+% 38
+\begin{frame}{Выкладка без остановки}
+  \slidetop
+  \claim{Пока идёт выкладка, старый код живёт на \hi{новой схеме}.}
+
+  {\renewcommand{\arraystretch}{1.5}
+  \begin{tabular}{@{}L{4.4cm}L{8.4cm}@{}}
+    \hi{\textbf{добавить колонку}}      & старый код не ломает \\
+    \textbf{новая обязательная}         & три шага: допускает \texttt{null} ---
+      заполнить --- обязательная \\
+    \textbf{переименовать}              & четыре шага, две выкладки: добавить,
+      копировать, переключить код, удалить \\
+    \lo{\textbf{удалить колонку}}       & две выкладки: код перестал использовать
+      --- миграция удалила \\
+  \end{tabular}}
+
+  \slidegap
+  \aside{Инструмент сгенерирует переименование одной командой --- и об этом
+    \lo{не знает}. Читайте миграции глазами.}
+\end{frame}
+
+% 39
+\begin{frame}[plain]
+  \keyline{Миграция выводится из модели и не знает провайдера.\\ Применяется
+    отдельным шагом до выкладки, а не на старте.}
+\end{frame}
+
+% =========================================================== 5. QUERIES ==
+\section{5. Запросы и загрузка данных}
+
+% 40
+\begin{frame}[plain]
+  \sectionopener{5}{Запросы и загрузка данных}{Чтение --- девяносто процентов
+    работы с базой и \hi{сто} процентов сюрпризов.}
+\end{frame}
+
+% 41
+\begin{frame}{Три способа загрузить связи}
+  \slidetop
+  {\renewcommand{\arraystretch}{1.6}
+  \begin{tabular}{@{}L{2.6cm}L{4.4cm}L{5.8cm}@{}}
+    \hi{\textbf{eager}}  & вместе, одним запросом   & \texttt{Include} --- вы знаете
+      заранее, что нужно \\
+    \textbf{explicit}    & потом, отдельным вызовом & нужно ли --- решается по ходу \\
+    \lo{\textbf{lazy}}   & сама, при обращении      & свойство идёт в базу:
+      \lo{N+1} \\
+  \end{tabular}}
+
+  \slidegap
+  \aside{\texttt{Include} умеет вложенность и фильтр: условие уходит в
+    соединение, а не в память.}
+\end{frame}
+
+% 42
+\begin{frame}[plain]
+  \vote{Загрузили сто заказов и в цикле обратились к позициям каждого. Сколько
+    запросов уйдёт в базу при ленивой загрузке?}
+\end{frame}
+
+% 43
+\begin{frame}[fragile]{N+1}
+  \slidetop
+  \claim{Обращение к свойству выглядит как \lo{чтение поля}.}
+
+\begin{lstlisting}[style=csharp,basicstyle=\codesm,escapechar=|]
+|\mk{n1}|var orders = await context.Orders.ToListAsync(ct);
+
+int items = 0;
+foreach (var order in orders)
+|\mk{n2}|    items += order.Items.Count;
+\end{lstlisting}
+  \begin{tikzpicture}[remember picture,overlay,every node/.style={rawlab}]
+    \node at ([xshift=8.8cm]n1) {один запрос за заказами};
+    \node[text=alt] at ([xshift=8.8cm]n2) {и по одному на каждый заказ};
+  \end{tikzpicture}
+
+  \rulegap
+  {\renewcommand{\arraystretch}{1.3}
+  \begin{tabular}{@{}L{3.4cm}l@{}}
+    \lo{ленивая загрузка}       & {\codexs orders: 100, items: 200, commands: 101} \\
+    \hi{\texttt{Include}}       & {\codexs orders: 100, items: 200, commands: 1} \\
+  \end{tabular}}
+
+  \rulegap
+  \aside{На дашборде --- гребёнка одинаковых отрезков. Ленивую загрузку в сервисе
+    \lo{не включать}.}
+\end{frame}
+
+% 44
+\begin{frame}[fragile]{Две коллекции в Include}
+  \slidetop
+  \claim{Соединение двух коллекций --- \lo{декартово произведение}.}
+
+\begin{lstlisting}[style=csharp,basicstyle=\codesm,escapechar=|]
+context.Orders
+|\mk{u1}|    .Include(o => o.Items)
+|\mk{u2}|    .Include(o => o.Tags)
+|\mk{u3}|    .AsSplitQuery()
+\end{lstlisting}
+  \begin{tikzpicture}[remember picture,overlay,every node/.style={rawlab}]
+    \node at ([xshift=7.6cm]u1) {10 позиций};
+    \node[text=alt] at ([xshift=7.6cm]u2) {и 5 тегов --- 50 строк на заказ};
+    \node[text=accent] at ([xshift=7.6cm]u3) {запрос на коллекцию, без умножения};
+  \end{tikzpicture}
+
+  \slidegap
+  \begin{cbul}{accent}
+    \item тысяча позиций и сотня тегов --- сто тысяч строк ради тысячи ста
+    \item одна коллекция в \texttt{Include} --- обычный запрос; несколько ---
+      \hi{разделённый}
+  \end{cbul}
+\end{frame}
+
+% 45
+\begin{frame}[fragile]{Проекция вместо сущности}
+  \vspace{0.3em}
+\begin{lstlisting}[style=csharp,basicstyle=\codexs,escapechar=|]
+|\mk{p1}|var orders = await context.Orders
+|\mk{p2}|    .Include(o => o.Items)
+    .Where(o => o.CustomerEmail == email)
+|\mk{p3}|    .ToListAsync(ct);
+var summaries = orders
+|\mk{p4}|    .Select(o => new OrderSummaryDto(o.Id, o.Status, o.Items.Count))
+    .ToList();
+
+|\mk{p5}|var summaries = await context.Orders
+    .Where(o => o.CustomerEmail == email)
+|\mk{p6}|    .Select(o => new OrderSummaryDto(o.Id, o.Status, o.Items.Count))
+    .ToListAsync(ct);
+\end{lstlisting}
+  \begin{tikzpicture}[remember picture,overlay,every node/.style={rawlab}]
+    \node[text=alt] at ([xshift=10.8cm]p1) {\textbf{было}};
+    \node at ([xshift=10.8cm]p2) {все позиции целиком};
+    \node at ([xshift=10.8cm]p3) {всё отслеживается};
+    \node at ([xshift=10.8cm]p4) {DTO --- в памяти};
+    \node[text=accent] at ([xshift=10.8cm]p5) {\textbf{стало}};
+    \node at ([xshift=10.8cm]p6) {DTO --- в запросе};
+  \end{tikzpicture}
+
+  \slidegap
+  \aside{Читаете, чтобы показать, --- \hi{проецируйте}. Сущность целиком --- только
+    чтобы её менять.}
+\end{frame}
+
+% 46
+\begin{frame}[fragile]{Два SQL}
+  \slidetop
+  \eyebrow{было}
+\begin{lstlisting}[style=term,basicstyle=\termsm]
+SELECT o.id, o.customer_email, o.status, o.total, o0.id, o0.order_id, o0.quantity, o0.sku
+FROM orders AS o
+LEFT JOIN order_items AS o0 ON o.id = o0.order_id
+WHERE o.customer_email = @email
+ORDER BY o.id
+\end{lstlisting}
+
+  \rulegap
+  \eyebrow{стало}
+\begin{lstlisting}[style=term,basicstyle=\termsm]
+SELECT o.id, o.status, (
+    SELECT count(*)::int
+    FROM order_items AS o0
+    WHERE o.id = o0.order_id)
+FROM orders AS o
+WHERE o.customer_email = @email
+\end{lstlisting}
+
+  \rulegap
+  \aside{Разница в SQL --- и есть разница в \hi{нагрузке на базу}.}
+\end{frame}
+
+% 47
+\begin{frame}[fragile]{Читаем --- не отслеживаем}
+  \slidetop
+\begin{lstlisting}[style=csharp,basicstyle=\codesm,escapechar=|]
+var paid = context.Orders
+|\mk{a1}|    .AsNoTracking()
+    .Where(o => o.Status == OrderStatus.Paid)
+|\mk{a2}|    .OrderBy(o => o.Id)
+|\mk{a3}|    .AsAsyncEnumerable();
+
+|\mk{a4}|await foreach (var order in paid.WithCancellation(ct))
+    Console.WriteLine(order.Id);
+\end{lstlisting}
+  \begin{tikzpicture}[remember picture,overlay,every node/.style={rawlab}]
+    \node[text=accent] at ([xshift=9.2cm]a1) {без отслеживателя};
+    \node at ([xshift=9.2cm]a2) {порядок однозначный};
+    \node at ([xshift=9.2cm]a3) {по строке, а не списком};
+    \node at ([xshift=9.2cm]a4) {токен доходит до базы};
+  \end{tikzpicture}
+
+  \slidegap
+  \begin{cbul}{accent}
+    \item для запросов на чтение \texttt{AsNoTracking} --- норма
+    \item без отслеживания нет тождественности: одна строка --- \lo{два объекта}
+    \item запрос без токена доработает и после ухода клиента
+  \end{cbul}
+\end{frame}
+
+% 48
+\begin{frame}[plain]
+  \vote{У набора есть «найти по ключу». Чем он отличается от «первый, у кого
+    идентификатор равен»?}
+\end{frame}
+
+% 49
+\begin{frame}{Три способа увидеть SQL}
+  \slidetop
+  \claim{Написали запрос --- посмотрели SQL --- \hi{сравнили} с ожиданием.}
+
+  {\renewcommand{\arraystretch}{1.6}
+  \begin{tabular}{@{}L{3.6cm}L{9.2cm}@{}}
+    \hi{\textbf{лог}}                    & категория команд базы на уровне
+      \texttt{Information}: текст, параметры, длительность \\
+    \hi{\textbf{\texttt{ToQueryString()}}} & текст SQL до выполнения: в отладчике и
+      в тесте \\
+    \hi{\textbf{дашборд}}                & отрезок на каждый запрос; видно, сколько
+      их на один HTTP-запрос \\
+  \end{tabular}}
+
+  \slidegap
+  \aside{Значения параметров в логе --- только в разработке: это персональные
+    данные. SQL верный, а запрос медленный --- это \lo{план}, а не ORM.}
+\end{frame}
+
+% 50
+\begin{frame}[plain]
+  \keyline{Проецируйте в DTO в запросе, сущности загружайте для изменения.\\
+    Смотрите SQL после каждого нового запроса.}
+\end{frame}
+
+% ============================================= 6. RULES AND ALTERNATIVES ==
+\section{6. Правила, грабли и альтернативы}
+
+% 51
+\begin{frame}[plain]
+  \sectionopener{6}{Правила, грабли и альтернативы}{Шесть тем о том, где
+    ORM начинает \lo{мешать}.}
+\end{frame}
+
+% 52
+\begin{frame}{Отслеживание изменений}
+  \slidetop
+  \claim{Состояние живёт \lo{между строчками} вашего кода.}
+
+  \begin{cbul}{alt}
+    \item метод изменил заказ и не сохранил --- сохранил другой метод, вместе со
+      своим
+    \item объект отдали наружу --- чужое изменение «на всякий случай» сохранилось
+    \item загрузили без отслеживания, изменили --- не сохранилось
+  \end{cbul}
+
+  \slidegap
+  \hrulethin{0.42}
+  \rulegap
+  {\large Изменение и сохранение --- \hi{в одном методе}, рядом.}
+
+  \rulegap
+  \aside{Меняют методом сущности с правилом, а не сеттером. Record --- для DTO:
+    \texttt{with} создаёт новый объект, отслеживатель следит за старым.}
+\end{frame}
+
+% 53
+\begin{frame}[fragile]{Транзакции и гонки}
+  \slidetop
+  \claim{Условие «где версия та же» --- тихая перезапись \hi{невозможна}.}
+
+\begin{lstlisting}[style=csharp,basicstyle=\codesm]
+builder.Property<uint>("Version").IsRowVersion();
+\end{lstlisting}
+
+\begin{lstlisting}[style=term,basicstyle=\termsm]
+      UPDATE orders SET status = @p0
+      WHERE id = @p1 AND xmin = @p2
+      RETURNING xmin;
+\end{lstlisting}
+
+  \rulegap
+  \begin{cbul}{accent}
+    \item условие не сработало --- \texttt{DbUpdateConcurrencyException}, наружу
+      \hi{409}
+    \item сохранение --- одна транзакция: проходит целиком или не проходит
+    \item несколько сохранений --- транзакция явно, на контексте
+    \item уровень изоляции --- по сценарию, а не «самый строгий на всякий случай»
+  \end{cbul}
+\end{frame}
+
+% 54
+\begin{frame}[fragile]{Массовые операции}
+  \vspace{0.3em}
+\begin{lstlisting}[style=csharp,basicstyle=\codexxs,escapechar=|]
+|\mk{z1}|var stale = await context.Orders
+    .Where(o => o.Status == OrderStatus.New && o.CreatedAt < cutoff)
+    .ToListAsync(ct);
+foreach (var order in stale) order.Cancel();
+|\mk{z2}|await context.SaveChangesAsync(ct);
+
+|\mk{z3}|await context.Orders
+    .Where(o => o.Status == OrderStatus.New && o.CreatedAt < cutoff)
+    .ExecuteUpdateAsync(
+        s => s.SetProperty(o => o.Status, OrderStatus.Cancelled), ct);
+
+|\mk{z4}|options.UseNpgsql(cs, npgsql => npgsql.EnableRetryOnFailure());
+\end{lstlisting}
+  \begin{tikzpicture}[remember picture,overlay,every node/.style={rawlab}]
+    \node[text=alt] at ([xshift=10.2cm]z1) {\textbf{было}: N объектов};
+    \node at ([xshift=10.2cm]z2) {и N команд};
+    \node[text=accent] at ([xshift=10.2cm]z3) {\textbf{стало}: одна команда};
+    \node at ([xshift=10.2cm]z4) {повтор при сбое базы};
+  \end{tikzpicture}
+
+\begin{lstlisting}[style=term,basicstyle=\termsm]
+      UPDATE orders AS o
+      SET status = @p
+      WHERE o.status = 'New' AND o.created_at < @cutoff
+\end{lstlisting}
+
+  \aside{Команда идёт \lo{мимо отслеживателя}: не смешивайте в одном контексте.}
+\end{frame}
+
+% 55
+\begin{frame}{AOT}
+  \slidetop
+  \versus{Известно при сборке}{%
+    \begin{cbul}{accent}
+      \item модель: компилируется заранее
+      \item старт быстрее в разы
+      \item запрос, написанный в одном месте
+      \item предкомпиляция --- экспериментальная
+    \end{cbul}}{Только при выполнении}{%
+    \begin{cbul}{alt}
+      \item запрос из необязательных фильтров
+      \item условия внутри выражений
+      \item вызовы методов в условиях
+      \item перевод дерева выражений
+    \end{cbul}}
+
+  \slidegap
+  \hrulethin{0.42}
+  \rulegap
+  {\large Пишите запросы \hi{просто}: дайте провайдеру перевести.}
+\end{frame}
+
+% 56
+\begin{frame}[plain]
+  \statement{ORM превращает объекты в \lo{мешки данных}, а поведение уезжает в
+    сервисы.\par\rulegap
+    {\normalsize\color{muted}Егор Бугаенко, «ORM Is an Offensive Anti-Pattern»}}
+\end{frame}
+
+% 57
+\begin{frame}{Что с этим делать}
+  \slidetop
+  \versus{Чтение}{%
+    \begin{cbul}{accent}
+      \item проекция в DTO
+      \item без сущностей вовсе
+      \item без отслеживания
+    \end{cbul}}{Запись}{%
+    \begin{cbul}{alt}
+      \item загрузить агрегат целиком
+      \item вызвать метод с правилом
+      \item сохранить рядом
+    \end{cbul}}
+
+  \slidegap
+  \hrulethin{0.42}
+  \rulegap
+  {\large ORM --- генератор SQL и маппинга, \hi{а не архитектура}.}
+
+  \rulegap
+  \aside{Агрегат --- то, что меняется вместе: заказ с позициями. Границы агрегата
+    --- границы транзакции.}
+\end{frame}
+
+% 58
+\begin{frame}{Альтернативы}
+  \slidetop
+  {\renewcommand{\arraystretch}{1.5}
+  \begin{tabular}{@{}L{3.0cm}L{4.9cm}L{4.9cm}@{}}
+    & \colhead{accent}{что это} & \colhead{alt}{когда} \\
+    \hi{\textbf{EF Core}} & LINQ, отслеживание, миграции      & запросов мало, и они
+      простые \\
+    \textbf{Dapper}       & вы пишете SQL, он делает маппинг  & отчёты, аналитика,
+      оконные функции \\
+    \textbf{linq2db}      & тот же LINQ, ближе к SQL, без отслеживания & команда живёт
+      в SQL и не хочет магии \\
+  \end{tabular}}
+
+  \slidegap
+  \aside{Часто вместе: EF Core --- запись и простое чтение, Dapper --- сложное.
+    Все работают через \hi{один драйвер}.}
+\end{frame}
+
+% 59
+\begin{frame}[plain]
+  \keyline{Меняйте и сохраняйте рядом, массовое --- одной командой, запросы
+    пишите просто.\\ ORM --- генератор, а не архитектура.}
+\end{frame}
+
+\end{document}
