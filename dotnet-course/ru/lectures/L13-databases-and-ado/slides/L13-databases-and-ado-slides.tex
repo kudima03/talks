@@ -1,0 +1,1191 @@
+% Л13 -- Данные: семейства баз и ADO.NET. Slides.
+%
+% Companion to the spoken script in ../L13-databases-and-ado.md, which is the
+% source of truth: the slides carry diagrams, code, real terminal output and
+% short marks, and the delivery lives in the script only -- this deck carries
+% no speaker notes. Slide text is in Russian because that is the content;
+% everything else in this file is English.
+%
+% Build:  make          (latexmk -pdf; engine: pdflatex)
+%
+% Every C# listing was compiled on dotnet SDK 10.0 in a scratch
+% `dotnet new console -n HelloWorld` with Npgsql 10.0.3; terminal output on
+% the slides is captured from runs of that project against PostgreSQL 18 in
+% a container. See ../CLAUDE.md for the verification table.
+%
+% House rules: ../CLAUDE.md and ../../../CLAUDE.md. Theme: ../../../../theme/.
+
+\documentclass[aspectratio=169,10pt,t]{beamer}
+
+\usetheme{dotnet}
+\usetikzlibrary{arrows.meta,positioning,calc,decorations.pathreplacing,fit}
+\usepackage{array}   % ragged-right table columns
+
+% A ragged-right paragraph column: justified cells in narrow columns hyphenate
+% badly, and a split word is the one thing the back row cannot read.
+\newcolumntype{L}[1]{>{\raggedright\arraybackslash}p{#1}}
+
+\dotnetlecture{Л13}
+
+\title[Л13. Данные: семейства баз и ADO.NET]{Данные: семейства баз и ADO.NET}
+\author{Дмитрий Курочкин}
+\date{}
+
+% Code sizes, one step down from \footnotesize. Smaller than 6.6pt does not
+% carry to the back of the room.
+\newcommand{\codesm}{\ttfamily\fontsize{7.6}{9.0}\selectfont}
+\newcommand{\codexs}{\ttfamily\fontsize{7.0}{8.3}\selectfont}
+\newcommand{\codexxs}{\ttfamily\fontsize{6.8}{7.8}\selectfont}
+\newcommand{\termsm}{\ttfamily\fontsize{6.6}{7.9}\selectfont}
+
+% A mark at the start of a listing line, for labels set beside the listing.
+% Used through the listing's escapechar; the labels are drawn by an overlay
+% picture after the listing, so the build needs two passes (latexmk does that).
+\newcommand{\mk}[1]{\tikz[remember picture,overlay]\coordinate (#1) at (0,0.55ex);}
+
+\tikzset{
+  rawbrace/.style={decorate,decoration={brace,amplitude=4pt},hairline,
+                   line width=0.8pt},
+  rawlab/.style={anchor=west,font=\footnotesize,inner sep=0pt},
+  box/.style={draw=hairline,line width=0.8pt,fill=codebg,inner sep=4pt,
+              align=center,minimum height=0.9cm},
+  arr/.style={-{Straight Barb[length=1.6mm]},muted,line width=0.7pt},
+  arra/.style={-{Straight Barb[length=1.8mm]},accent,line width=0.9pt},
+  arrl/.style={-{Straight Barb[length=1.8mm]},alt,line width=0.9pt},
+}
+
+\begin{document}
+\shorthandoff{"}
+
+% ------------------------------------------------------------------ title --
+% 1
+\begin{frame}[plain]
+  \titlepagednc{Лекция 13}{Данные: семейства баз и ADO.NET}{}{Дмитрий Курочкин}
+\end{frame}
+
+% ==================================================== 1. DATABASE FAMILIES ==
+\section{1. Какие бывают базы}
+
+% 2
+\begin{frame}[plain]
+  \sectionopener{1}{Какие бывают базы}{Выбор базы \hi{переживёт} весь
+    остальной код.}
+\end{frame}
+
+% 3
+\begin{frame}[plain]
+  \vote{Какие базы данных вы знаете? И чем они отличаются?}
+\end{frame}
+
+% 4
+\begin{frame}{Пять семейств}
+  \slidetop
+  \claim{Семейство --- это \hi{форма данных} и вопросы к ним.}
+
+  \begin{center}
+    \begin{tikzpicture}
+      \foreach \i/\t/\s/\e in {
+          1/реляционные/{таблицы\\и связи}/{PostgreSQL\\MySQL, SQLite},
+          2/документные/{JSON-\\документы}/{MongoDB\\CouchDB},
+          3/ключ-значение/{словарь}/{Redis},
+          4/колоночные/{столбцы для\\аналитики}/{ClickHouse\\Cassandra},
+          5/графовые/{узлы\\и рёбра}/{Neo4j}} {
+        \node[box,minimum width=2.45cm,minimum height=1.5cm,inner sep=2pt,
+              font=\scriptsize] (f\i) at ({(\i-1)*2.78},0)
+          {{\footnotesize\bfseries \t}\\[0.3em]\s};
+        \node[font=\scriptsize,text=muted,align=center,below=0.35em] at (f\i.south) {\e};
+      }
+      \node[box,draw=accent,line width=1.0pt,minimum width=2.45cm,
+            minimum height=1.5cm,inner sep=2pt,font=\scriptsize] at (0,0)
+        {{\footnotesize\bfseries реляционные}\\[0.3em]таблицы\\и связи};
+    \end{tikzpicture}
+  \end{center}
+
+  \slidegap
+  \aside{«Чем отличаются?» --- «синтаксисом» --- это разница \lo{внутри} одного
+    семейства. Не знаете, что нужно, --- нужно \hi{реляционное}.}
+\end{frame}
+
+% 5
+\begin{frame}{Реляционные и документные}
+  \slidetop
+  \versus{Реляционные}{%
+    \begin{cbul}{accent}
+      \item таблицы со строгой схемой
+      \item связь --- ссылкой по ключу
+      \item SQL и транзакции
+      \item любой вопрос поперёк данных
+    \end{cbul}}{Документные}{%
+    \begin{cbul}{alt}
+      \item документ со своей структурой
+      \item связь --- вложенностью
+      \item читается целиком, одним куском
+      \item поперёк документов --- трудно
+    \end{cbul}}
+
+  \slidegap
+  \hrulethin{0.42}
+  \rulegap
+  \aside{Граница размыта: PostgreSQL хранит JSON в колонке, с индексом и запросами
+    внутрь. Часто это \hi{одна} база вместо двух.}
+\end{frame}
+
+% 6
+\begin{frame}{Схема есть всегда}
+  \slidetop
+  \claim{«Без схемы» не значит «без \lo{структуры}».}
+
+  \versus{Схема в базе}{%
+    \begin{cbul}{accent}
+      \item записана и проверяется
+      \item меняется миграцией
+      \item старых форм не остаётся
+    \end{cbul}}{Схема в коде}{%
+    \begin{cbul}{alt}
+      \item размазана по тем, кто читает
+      \item меняется неявно
+      \item код читает обе формы
+    \end{cbul}}
+\end{frame}
+
+% 7
+\begin{frame}{Остальные семейства}
+  \slidetop
+  {\renewcommand{\arraystretch}{1.5}\small
+  \begin{tabular}{@{}L{3.5cm}L{5.6cm}L{3.7cm}@{}}
+    & \colhead{accent}{быстро} & \colhead{alt}{не для этого} \\
+    \textbf{ключ-значение}      & кэш, сессии, счётчики
+      & поиск по данным \\
+    \textbf{аналитические}      & сумма по миллиардам строк
+      & один заказ целиком \\
+    \textbf{широкостолбцовые}   & запись на много узлов: события
+      & соединения \\
+    \textbf{графовые}           & «друзья друзей», кратчайший путь
+      & таблицы и отчёты \\
+    \textbf{поисковые}          & морфология, опечатки, ранжирование
+      & источник правды \\
+    \textbf{векторные}          & «похожее по смыслу»
+      & точное совпадение \\
+  \end{tabular}}
+
+  \slidegap
+  \aside{Каждое семейство --- ответ на вопрос, который реляционная база решает
+    \lo{плохо}.}
+\end{frame}
+
+% 8
+\begin{frame}{Четыре вопроса выбора}
+  \slidetop
+  \claim{Выбор базы --- решение про \hi{запросы}, а не про моду.}
+
+  {\renewcommand{\arraystretch}{1.5}
+  \begin{tabular}{@{}L{4.6cm}L{8.2cm}@{}}
+    \textbf{какой формы данные}       & таблицы, документы, пары, сеть связей,
+      измерения во времени \\
+    \hi{\textbf{какие будут запросы}} & главный: что мы будем \hi{спрашивать} \\
+    \textbf{какая согласованность}    & деньги или лайки \\
+    \textbf{как масштабировать}       & одна большая машина или много узлов \\
+  \end{tabular}}
+\end{frame}
+
+% 9
+\begin{frame}{Одни данные, разная цена}
+  \slidetop
+  \claim{Заказы: номер, клиент, дата, сумма, позиции.}
+
+  {\renewcommand{\arraystretch}{1.5}\small
+  \begin{tabular}{@{}L{3.9cm}L{2.9cm}L{2.9cm}L{2.9cm}@{}}
+    & \colhead{accent}{реляционная} & \colhead{alt}{документная}
+      & \colhead{alt}{ключ-значение} \\
+    заказ по номеру            & быстро & быстро & быстро \\
+    сумма по клиентам за квартал & \hi{группировка по индексу} & обход всех
+      документов & \lo{перебор всех ключей} \\
+    заказы с товаром X         & \hi{соединение по индексу} & индекс по массиву,
+      если есть & \lo{перебор всех ключей} \\
+  \end{tabular}}
+
+  \slidegap
+  \aside{Стоимость вопросов различается в \lo{тысячи} раз --- и вы платите её
+    каждый день.}
+\end{frame}
+
+% 10
+\begin{frame}{Согласованность}
+  \slidetop
+  \versus{Транзакции}{%
+    \begin{cbul}{accent}
+      \item всё или ничего
+      \item промежуточного никто не видит
+      \item сохранил --- вижу, всегда
+      \item для денег
+    \end{cbul}}{Доступность}{%
+    \begin{cbul}{alt}
+      \item запись принял один узел
+      \item остальные узнают потом
+      \item сохранил --- \lo{не вижу}, секунды
+      \item для лайков
+    \end{cbul}}
+
+  \slidegap
+  \hrulethin{0.42}
+  \rulegap
+  \aside{Реплика для чтения отстаёт так же. Своё только что записанное читают
+    оттуда, \hi{куда писали}.}
+\end{frame}
+
+% 11
+\begin{frame}{Масштабирование}
+  \slidetop
+  \claim{Сначала \hi{измерить}, потом менять.}
+
+  {\renewcommand{\arraystretch}{1.6}
+  \begin{tabular}{@{}L{4.4cm}L{8.4cm}@{}}
+    \hi{\textbf{реляционная}}    & одна большая машина и реплики для чтения ---
+      на этом \hi{долго} \\
+    \lo{\textbf{распределённая}} & много узлов по построению --- ценой
+      согласованности \\
+    \lo{\textbf{«на вырост»}}    & сложность каждый день за проблему, которой
+      может не быть \\
+  \end{tabular}}
+
+  \slidegap
+  \aside{Переезд, когда метрики показали предел, --- проект на месяцы, но с
+    понятной причиной.}
+\end{frame}
+
+% 12
+\begin{frame}[plain]
+  \vote{Интернет-магазин: товары, заказы, клиенты, отчёты для бухгалтерии.
+    Какая база?}
+\end{frame}
+
+% 13
+\begin{frame}{Два ответа}
+  \slidetop
+  \versus{Магазин}{%
+    \begin{cbul}{accent}
+      \item отчёты поперёк заказов
+      \item клиент в тысяче заказов
+      \item запросы заранее не все известны
+      \item \hi{реляционная}
+    \end{cbul}}{Лента игры}{%
+    \begin{cbul}{alt}
+      \item миллион записей в секунду
+      \item игрок --- ключ
+      \item только «последние сто по игроку»
+      \item \lo{широкостолбцовая}
+    \end{cbul}}
+
+  \slidegap
+  \hrulethin{0.42}
+  \rulegap
+  \aside{Модный ответ выбирают по статье, правильный --- по запросам. Спросите:
+    какие отчёты, по чему искать, что хранить как историю.}
+\end{frame}
+
+% 14
+\begin{frame}{Базы сочетают}
+  \slidetop
+  \begin{center}
+    \begin{tikzpicture}[font=\footnotesize]
+      \node[box,draw=accent,line width=1.0pt,minimum width=3.6cm,
+            minimum height=1.2cm] (pg) at (0,0)
+        {\textbf{PostgreSQL}\\источник правды};
+      \node[box,minimum width=3.6cm] (r) at (7.4,1.25)  {\textbf{Redis}\\кэш};
+      \node[box,minimum width=3.6cm] (s) at (7.4,0)     {\textbf{поисковая}\\полнотекстовый поиск};
+      \node[box,minimum width=3.6cm] (a) at (7.4,-1.25) {\textbf{аналитическая}\\отчёты};
+      \draw[arr] (pg.east) -- (r.west);
+      \draw[arr] (pg.east) -- node[above,font=\scriptsize,text=muted] {копия данных} (s.west);
+      \draw[arr] (pg.east) -- (a.west);
+    \end{tikzpicture}
+  \end{center}
+
+  \slidegap
+  \begin{cbul}{alt}
+    \item каждая база --- копии, обновления, мониторинг и человек, который её
+      понимает
+    \item транзакции между двумя базами \lo{не бывает}: согласованность ---
+      на вас
+  \end{cbul}
+\end{frame}
+
+% 15
+\begin{frame}{Почему PostgreSQL}
+  \slidetop
+  \claim{Выбор \hi{по умолчанию}, если нет причины иначе.}
+
+  \begin{cbul}{accent}
+    \item открытый и бесплатный
+    \item следует стандарту SQL строже большинства
+    \item JSON, полнотекстовый поиск, расширения
+    \item его знает любая инфраструктура и любое облако
+  \end{cbul}
+
+  \slidegap
+  \aside{SQLite --- база в одном файле, для локальных утилит. В проде ---
+    управляемый сервис: код тот же, копии и обновления делает провайдер.}
+\end{frame}
+
+% 16
+\begin{frame}[plain]
+  \keyline{Семейства отличаются тем, что они делают быстро.\\
+    Базу выбирают по запросам, а не по моде.}
+\end{frame}
+
+% ==================================================== 2. RELATIONAL MODEL ==
+\section{2. Реляционная модель}
+
+% 17
+\begin{frame}[plain]
+  \sectionopener{2}{Реляционная модель}{Пять минут, чтобы \hi{договориться
+    о словах}.}
+\end{frame}
+
+% 18
+\begin{frame}[fragile]{Одна схема}
+  \slidetop
+  \begin{center}
+    \begin{tikzpicture}[font=\footnotesize,
+      tbl/.style={box,align=left,minimum width=3.9cm,inner sep=5pt}]
+      \node[tbl] (c) at (0,0)
+        {\textbf{customers}\\\ttfamily \hi{id} \ \ \ \ PK\\\ttfamily email UNIQUE\\\ttfamily name};
+      \node[tbl] (o) at (7.6,0)
+        {\textbf{orders}\\\ttfamily \hi{id} \ \ \ \ \ \ \ \ \ \ PK\\\ttfamily \lo{customer\_id} FK\\\ttfamily total};
+      \draw[arrl] (o.west) -- node[above,font=\scriptsize,text=alt] {внешний ключ}
+        node[below,font=\scriptsize,text=muted] {индекс по \texttt{customer\_id}} (c.east);
+    \end{tikzpicture}
+  \end{center}
+
+\begin{lstlisting}[style=plain,basicstyle=\codesm]
+select o.id, o.total, c.name
+from orders o
+join customers c on c.id = o.customer_id
+where o.customer_id = 42;
+\end{lstlisting}
+
+  \rulegap
+  \aside{Связь --- \lo{ссылкой}, а не вложенностью. SQL говорит «что»; «как» ---
+    решает планировщик.}
+\end{frame}
+
+% 19
+\begin{frame}{Словарь}
+  \slidetop
+  {\renewcommand{\arraystretch}{1.36}\small
+  \begin{tabular}{@{}L{3.3cm}L{9.5cm}@{}}
+    \hi{\textbf{ключи}}        & первичный определяет строку, внешний ссылается на
+      неё \\
+    \hi{\textbf{индекс}}       & находит строки, не читая таблицу; ускоряет
+      чтение, \lo{замедляет} запись \\
+    \hi{\textbf{план}}         & как база выполнит запрос: первый инструмент,
+      когда медленно \\
+    \hi{\textbf{соединение}}   & строки двух таблиц по условию --- тот же
+      \texttt{Join} \\
+    \hi{\textbf{транзакция}}   & все операции или ни одной; фиксация ждёт диск \\
+    \hi{\textbf{нормализация}} & каждый факт хранится один раз \\
+    \hi{\textbf{диалект}}      & свои типы и синтаксис поверх стандарта SQL \\
+  \end{tabular}}
+
+  \rulegap
+  \aside{Запрос без индекса по большой таблице --- полное сканирование.}
+\end{frame}
+
+% 20
+\begin{frame}{Ограничения}
+  \slidetop
+  \claim{Ограничения --- \hi{последняя линия}: их нельзя обойти.}
+
+  \versus{Валидация в сервисе}{%
+    \begin{cbul}{accent}
+      \item проверяет запрос на границе
+      \item только свой сервис
+      \item два запроса сразу --- \lo{обойдут}
+    \end{cbul}}{Ограничение в базе}{%
+    \begin{cbul}{alt}
+      \item проверяет данные при записи
+      \item сервис, скрипт, другой сервис
+      \item два запроса сразу --- один откажет
+    \end{cbul}}
+
+  \slidegap
+  \aside{\texttt{not null}, \texttt{unique}, \texttt{check}, внешний ключ.
+    Уникальность почты --- ограничение, а не только проверка в коде.}
+\end{frame}
+
+% ============================================================ 3. ADO.NET ==
+\section{3. ADO.NET без магии}
+
+% 21
+\begin{frame}[plain]
+  \sectionopener{3}{ADO.NET --- как оно работает без магии}{Под любой ORM лежит
+    \hi{ровно это}.}
+\end{frame}
+
+% 22
+\begin{frame}{Что под ORM}
+  \slidetop
+  \begin{center}
+    \begin{tikzpicture}
+      \foreach \i/\t in {1/{ваш код},2/{\textbf{ADO.NET}\\общие абстракции},
+                         3/{\textbf{драйвер}\\Npgsql},4/{сетевой\\протокол},5/{база}} {
+        \node[box,minimum width=2.55cm,minimum height=1.1cm,inner sep=2pt,
+              font=\footnotesize] (l\i) at ({(\i-1)*2.85},0) {\t};
+      }
+      \foreach \i [evaluate=\i as \j using int(\i+1)] in {1,...,4}
+        \draw[arr] (l\i) -- (l\j);
+      \node[box,draw=accent,line width=1.0pt,minimum width=2.55cm,
+            minimum height=1.1cm,inner sep=2pt,font=\footnotesize] at (2.85,0)
+        {\textbf{ADO.NET}\\общие абстракции};
+    \end{tikzpicture}
+  \end{center}
+
+  \slidegap
+  \begin{cbul}{accent}
+    \item пять абстракций: соединение, команда, параметр, читатель, транзакция
+    \item драйвер реализует их и говорит с базой по её протоколу
+    \item ORM внутри делает то, что сегодня сделаем \hi{руками}
+  \end{cbul}
+\end{frame}
+
+% 23
+\begin{frame}[plain]
+  \vote{Открыть соединение, выполнить запрос, закрыть соединение. Что дорогого
+    произошло при «открыть»?}
+\end{frame}
+
+% 24
+\begin{frame}{Пул соединений}
+  \slidetop
+  \begin{center}
+    \begin{tikzpicture}[font=\footnotesize]
+      \node[box,minimum width=2.5cm,minimum height=1.9cm] (code) at (0,0) {ваш код};
+      \node[draw=accent,line width=1.0pt,fill=codebg,minimum width=4.4cm,
+            minimum height=1.9cm] (pool) at (5.9,0) {};
+      \node[font=\scriptsize\bfseries,text=accent,above=0.25em] at (pool.north) {ПУЛ};
+      \foreach \i in {1,...,4}
+        \node[draw=hairline,line width=0.8pt,fill=paper,minimum width=0.7cm,
+              minimum height=0.7cm] (s\i) at ({3.95+\i*0.78},0) {};
+      \node[box,minimum width=2.3cm,minimum height=1.9cm] (db) at (11.5,0) {база};
+      \draw[arra] ([yshift=0.45cm]code.east) -- node[above,font=\scriptsize,text=accent]
+        {\texttt{Open}: взять} ([yshift=0.45cm]pool.west);
+      \draw[arr] ([yshift=-0.45cm]pool.west) -- node[below,font=\scriptsize,text=muted]
+        {\texttt{Close}: вернуть} ([yshift=-0.45cm]code.east);
+      \draw[muted,line width=1.4pt] (pool.east) -- node[above,font=\scriptsize,text=muted]
+        {TCP, TLS,} node[below,font=\scriptsize,text=muted] {вход} (db.west);
+    \end{tikzpicture}
+  \end{center}
+
+  \slidegap
+  {\large Настоящее соединение живёт \hi{долго}, ваш объект --- \lo{секунды}.}
+
+  \rulegap
+  \aside{Пул включён по умолчанию; предел --- порядка ста соединений на процесс,
+    задаётся в строке подключения.}
+\end{frame}
+
+% 25
+\begin{frame}{Пул конечен}
+  \slidetop
+  \claim{Пул --- на строку подключения и на \hi{процесс}.}
+
+  {\renewcommand{\arraystretch}{1.6}
+  \begin{tabular}{@{}L{4.6cm}L{8.2cm}@{}}
+    \textbf{три экземпляра сервиса} & три пула: $3 \times 100 = 300$ соединений \\
+    \lo{\textbf{предел базы}}       & свой, и у PostgreSQL по умолчанию невелик \\
+    \hi{\textbf{сверяют при развёртывании}} & сумма пулов $\le$ предела базы \\
+    \textbf{экземпляров много}      & внешний пул между сервисами и базой \\
+  \end{tabular}}
+
+  \slidegap
+  \aside{При возврате драйвер сбрасывает транзакцию и параметры сессии: каждое
+    открытие --- \hi{чистое} соединение.}
+\end{frame}
+
+% 26
+\begin{frame}{Два правила}
+  \slidetop
+  \versus{Открывать поздно, закрывать рано}{%
+    \begin{cbul}{accent}
+      \item взять ровно перед запросом
+      \item вернуть сразу после
+      \item не держать весь HTTP-запрос
+    \end{cbul}}{Всегда using}{%
+    \begin{cbul}{alt}
+      \item \texttt{Dispose} --- это возврат в пул
+      \item забыли --- не вернётся
+      \item сто забытых --- пул пуст
+    \end{cbul}}
+
+  \slidegap
+  \hrulethin{0.42}
+  \rulegap
+  \aside{Такси вызывают на поездку и отпускают по приезде. Машину у подъезда
+    «на всякий случай» отнимают у ста других вызовов.}
+\end{frame}
+
+% 27
+\begin{frame}[fragile]{Утечка}
+  \slidetop
+\begin{lstlisting}[style=csharp,basicstyle=\codesm]
+for (int i = 1; ; i++)
+{
+    var c = await small.OpenConnectionAsync();   // no using
+    Console.WriteLine($"opened {i}");
+}
+\end{lstlisting}
+
+\begin{lstlisting}[style=term,basicstyle=\termsm]
+$ dotnet run -- leak
+opened 1
+opened 2
+opened 3
+NpgsqlException: The connection pool has been exhausted, either raise 'Max Pool Size' (currently 3)
+or 'Timeout' (currently 3 seconds) in your connection string.
+\end{lstlisting}
+
+  \rulegap
+  \aside{Выглядит как «база тормозит», хотя база \lo{свободна}. Метрика пула
+    «занято» на уровне предела --- подпись утечки.}
+\end{frame}
+
+% 28
+\begin{frame}[fragile]{Одно значение}
+  \vspace{0.3em}
+\begin{lstlisting}[style=csharp,basicstyle=\codexs,escapechar=|]
+|\mk{c1}|public sealed class OrderCounter(NpgsqlDataSource dataSource)
+{
+    public async Task<long> CountForCustomerAsync(
+        int customerId, CancellationToken ct)
+    {
+|\mk{c2}|        await using var connection =
+            await dataSource.OpenConnectionAsync(ct);
+        await using var command = new NpgsqlCommand(
+            "select count(*) from orders " +
+|\mk{c3}|            "where customer_id = @customerId", connection);
+        command.Parameters.AddWithValue("customerId", customerId);
+
+|\mk{c4}|        var result = await command.ExecuteScalarAsync(ct);
+        return (long)result!;
+    }
+}
+\end{lstlisting}
+  \begin{tikzpicture}[remember picture,overlay,every node/.style={rawlab}]
+    \node at ([xshift=10.3cm]c1) {источник --- singleton};
+    \node at ([xshift=10.3cm]c2) {открыть перед запросом};
+    \node[text=accent] at ([xshift=10.3cm]c3) {параметр, не склейка};
+    \node at ([xshift=10.3cm]c4) {одно значение};
+  \end{tikzpicture}
+
+  \aside{\texttt{await using} возвращает соединение в пул --- при \hi{любом}
+    выходе.}
+\end{frame}
+
+% 29
+\begin{frame}[fragile]{Что стоит за строками}
+  \slidetop
+  {\renewcommand{\arraystretch}{1.4}\small
+  \begin{tabular}{@{}L{3.9cm}L{8.9cm}@{}}
+    \hi{\textbf{источник данных}}   & один на приложение, владеет пулом \\
+    \hi{\textbf{строка подключения}} & адрес, база, пользователь, пул; с паролем
+      --- \lo{секрет} \\
+    \hi{\textbf{токен}}             & клиент ушёл --- драйвер шлёт базе отмену
+      запроса \\
+    \hi{\textbf{тип параметра}}     & выводится из значения; \texttt{null} ---
+      это \texttt{DBNull.Value} \\
+    \hi{\textbf{\texttt{(long)}}}   & \texttt{count} --- восьмибайтовое целое \\
+  \end{tabular}}
+
+  \rulegap
+\begin{lstlisting}[style=term,basicstyle=\termsm]
+$ dotnet run -- count
+2
+InvalidCastException: Unable to cast object of type 'System.Int64' to type 'System.Int32'.
+\end{lstlisting}
+
+  \aside{С \texttt{(int)} --- исключение при выполнении, а \lo{не} ошибка
+    компиляции.}
+\end{frame}
+
+% 30
+\begin{frame}{Три вида выполнения}
+  \slidetop
+  \claim{Выбор метода --- это выбор \hi{формы результата}.}
+
+  {\renewcommand{\arraystretch}{1.6}
+  \begin{tabular}{@{}L{4.4cm}L{3.4cm}L{5.0cm}@{}}
+    \texttt{ExecuteScalarAsync}   & одно значение   & \texttt{count}, \texttt{max},
+      \texttt{returning id} \\
+    \hi{\texttt{ExecuteReaderAsync}} & \hi{поток строк} & всё, что возвращает
+      строки \\
+    \texttt{ExecuteNonQueryAsync} & сколько строк затронуто & \texttt{insert},
+      \texttt{update}, \texttt{delete} \\
+  \end{tabular}}
+
+  \slidegap
+  \aside{\texttt{update} по идентификатору затронул \lo{ноль} строк --- это «не
+    найдено». Синхронных версий в сервисе нет ни одной.}
+\end{frame}
+
+% 31
+\begin{frame}[fragile]{Два null}
+  \slidetop
+  \claim{Строк нет --- \texttt{null}. Строка есть, значение пустое ---
+    \lo{\texttt{DBNull}}.}
+
+\begin{lstlisting}[style=plain,basicstyle=\codesm]
+select max(shipped_at) from orders where customer_id = 2   -- no shipped orders
+select shipped_at from orders where customer_id = 99       -- no such customer
+\end{lstlisting}
+
+\begin{lstlisting}[style=term,basicstyle=\termsm]
+$ dotnet run -- nulls
+max, no shipped: DBNull
+no rows: null
+\end{lstlisting}
+
+  \rulegap
+  \aside{Приведение к числу упадёт на обоих, по-разному. \texttt{count} всегда
+    возвращает строку; «максимальную дату» проверяют \hi{явно}.}
+\end{frame}
+
+% 32
+\begin{frame}{Число поездок}
+  \slidetop
+  \claim{Число поездок к базе важнее размера каждой.}
+
+  \versus{Один запрос}{%
+    \begin{cbul}{accent}
+      \item заказы --- одним запросом
+      \item позиции --- соединением
+      \item \hi{2} поездки
+    \end{cbul}}{Запрос в цикле}{%
+    \begin{cbul}{alt}
+      \item сто заказов
+      \item для каждого --- запрос за позициями
+      \item \lo{101} поездка
+    \end{cbul}}
+
+  \slidegap
+  \hrulethin{0.42}
+  \rulegap
+  \aside{Проблема N + 1 живёт в любом коде, который запрашивает в цикле, а не
+    только в ORM.}
+\end{frame}
+
+% 33
+\begin{frame}[fragile]{Страница}
+  \slidetop
+  \versus{По ключу}{%
+    \begin{cbul}{accent}
+      \item «следующие после этого ключа»
+      \item по индексу
+      \item любая страница --- за одно время
+    \end{cbul}}{Пропустить и взять}{%
+    \begin{cbul}{alt}
+      \item «пропусти 20\,000, дай 20»
+      \item база перебирает пропущенные
+      \item тысячная страница \lo{медленнее}
+    \end{cbul}}
+
+  \slidegap
+\begin{lstlisting}[style=plain,basicstyle=\codesm]
+select id, total from orders where id > @lastId order by id limit 20;
+select id, total from orders order by id offset 20000 limit 20;
+\end{lstlisting}
+
+  \rulegap
+  \aside{В контракте API это курсор вместо номера страницы.}
+\end{frame}
+
+% 34
+\begin{frame}[fragile]{Читатель}
+  \vspace{0.3em}
+\begin{lstlisting}[style=csharp,basicstyle=\codexs,escapechar=|]
+|\mk{r1}|await using var reader = await command.ExecuteReaderAsync(ct);
+|\mk{r2}|int idOrdinal = reader.GetOrdinal("id"),
+    totalOrdinal = reader.GetOrdinal("total"),
+    shippedOrdinal = reader.GetOrdinal("shipped_at");
+
+|\mk{r3}|while (await reader.ReadAsync(ct))
+{
+|\mk{r4}|    yield return new OrderRow(
+        reader.GetInt32(idOrdinal),
+        reader.GetDecimal(totalOrdinal),
+|\mk{r5}|        await reader.IsDBNullAsync(shippedOrdinal, ct)
+            ? null : reader.GetDateTime(shippedOrdinal));
+}
+
+public sealed record OrderRow(int Id, decimal Total, DateTime? ShippedAt);
+\end{lstlisting}
+  \begin{tikzpicture}[remember picture,overlay,every node/.style={rawlab}]
+    \node[text=accent] at ([xshift=9.6cm]r1) {читатель --- поток};
+    \node at ([xshift=9.6cm]r2) {номера --- один раз, до цикла};
+    \node at ([xshift=9.6cm]r3) {строки приходят по одной};
+    \node at ([xshift=9.6cm]r4) {наружу --- по мере чтения};
+    \node at ([xshift=9.6cm]r5) {проверка \texttt{null}};
+  \end{tikzpicture}
+
+  \aside{Тип не совпал --- исключение при чтении: компилятор схему
+    \lo{не видит}.}
+\end{frame}
+
+% 35
+\begin{frame}[fragile]{Поток строк}
+  \slidetop
+  \claim{Не список и не массив: в памяти --- \hi{одна} строка.}
+
+\begin{lstlisting}[style=term,basicstyle=\termsm]
+$ dotnet run -- read
+OrderRow { Id = 1, Total = 300.00, ShippedAt = 11/10/2026 9:30:00 AM }
+OrderRow { Id = 2, Total = 120.00, ShippedAt =  }
+\end{lstlisting}
+
+  \slidegap
+  \begin{cbul}{accent}
+    \item тот же контракт, что перечислитель: курсор перед первой строкой
+    \item каждое \texttt{ReadAsync} --- ожидание сети, поток не занят
+    \item от базы до HTTP-ответа --- без единого списка в памяти
+    \item соединение открыто, пока последовательность \hi{перебирают}
+  \end{cbul}
+\end{frame}
+
+% 36
+\begin{frame}[plain]
+  \vote{Вы прочитали три строки из читателя и вышли из цикла по
+    \texttt{break}. Что с соединением?}
+\end{frame}
+
+% 37
+\begin{frame}[fragile]{Один читатель на соединение}
+  \slidetop
+  \claim{Пока читатель открыт, соединение \lo{занято} им.}
+
+\begin{lstlisting}[style=csharp,basicstyle=\codesm]
+var reader = await cmd.ExecuteReaderAsync();          // no using
+await reader.ReadAsync();
+await using var cmd2 = new NpgsqlCommand("select count(*) from orders", c);
+await cmd2.ExecuteScalarAsync();
+\end{lstlisting}
+
+\begin{lstlisting}[style=term,basicstyle=\termsm]
+$ dotnet run -- break
+NpgsqlOperationInProgressException: A command is already in progress: select id from orders
+\end{lstlisting}
+
+  \rulegap
+  \aside{\texttt{using} закрывает читатель и дочитывает остаток. Он не
+    украшение: он делает \texttt{break} \hi{безопасным}.}
+\end{frame}
+
+% 38
+\begin{frame}{Общие типы}
+  \slidetop
+  \claim{Переносимость \hi{механики}, не переносимость SQL.}
+
+  \versus{Переносится}{%
+    \begin{cbul}{accent}
+      \item \texttt{DbConnection}, \texttt{DbCommand}
+      \item код не знает, какая под ним база
+      \item переключается регистрацией
+    \end{cbul}}{Не переносится}{%
+    \begin{cbul}{alt}
+      \item \texttt{returning}, типы дат, регистр имён
+      \item диалект остаётся в тексте запроса
+      \item тесты на SQLite, прод на PostgreSQL
+    \end{cbul}}
+
+  \slidegap
+  \hrulethin{0.42}
+  \rulegap
+  \aside{Тесты доступа к данным гоняют на той базе, что в проде, --- в
+    контейнере.}
+\end{frame}
+
+% 39
+\begin{frame}[fragile]{Транзакция: вставка}
+  \slidetop
+  \claim{Создать заказ и уменьшить остаток: вторая упала --- первой \lo{нет}.}
+
+\begin{lstlisting}[style=csharp,basicstyle=\codexs,escapechar=|]
+await using var connection = await dataSource.OpenConnectionAsync(ct);
+|\mk{x1}|await using var transaction =
+    await connection.BeginTransactionAsync(ct);
+
+await using var insert = new NpgsqlCommand(
+    "insert into orders (customer_id, product_id, quantity) " +
+|\mk{x2}|    "values (@c, @p, @q) returning id", connection, transaction);
+insert.Parameters.AddWithValue("c", customerId);
+insert.Parameters.AddWithValue("p", productId);
+insert.Parameters.AddWithValue("q", quantity);
+|\mk{x3}|var orderId = (int)(await insert.ExecuteScalarAsync(ct))!;
+\end{lstlisting}
+  \begin{tikzpicture}[remember picture,overlay,every node/.style={rawlab}]
+    \node[text=accent] at ([xshift=9.9cm]x1) {начать на соединении};
+    \node at ([xshift=9.9cm]x2) {команда в транзакции};
+    \node at ([xshift=9.9cm]x3) {идентификатор --- сразу};
+  \end{tikzpicture}
+
+  \slidegap
+  \aside{\texttt{returning} --- диалект PostgreSQL: вставка и идентификатор одной
+    поездкой.}
+\end{frame}
+
+% 40
+\begin{frame}[fragile]{Транзакция: условие и фиксация}
+  \vspace{0.3em}
+\begin{lstlisting}[style=csharp,basicstyle=\codexs,escapechar=|]
+await using var update = new NpgsqlCommand(
+    "update products set stock = stock - @q " +
+|\mk{y1}|    "where id = @p and stock >= @q", connection, transaction);
+update.Parameters.AddWithValue("q", quantity);
+update.Parameters.AddWithValue("p", productId);
+|\mk{y2}|if (await update.ExecuteNonQueryAsync(ct) == 0)
+    throw new InsufficientStockException(productId);
+
+|\mk{y3}|await transaction.CommitAsync(ct);
+return orderId;
+\end{lstlisting}
+  \begin{tikzpicture}[remember picture,overlay,every node/.style={rawlab}]
+    \node at ([xshift=9.9cm]y1) {проверка --- в самом SQL};
+    \node at ([xshift=9.9cm]y2) {ноль строк --- остатка нет};
+    \node[text=accent] at ([xshift=9.9cm]y3) {зафиксировать в конце};
+  \end{tikzpicture}
+  \vspace{-1.2em}
+
+\begin{lstlisting}[style=term,basicstyle=\termsm]
+$ dotnet run -- tx
+order 4
+InsufficientStockException: Insufficient stock for product 1
+orders: 4, stock: 0
+\end{lstlisting}
+
+  \aside{Явного отката \lo{нет}: вышли без фиксации --- драйвер откатил сам.}
+\end{frame}
+
+% 41
+\begin{frame}{Проверка --- в одной команде}
+  \slidetop
+  \versus{Условие в update}{%
+    \begin{cbul}{accent}
+      \item проверка и изменение неразделимы
+      \item второй запрос видит уже ноль
+      \item затронуто ноль строк --- отказ
+    \end{cbul}}{Прочитать, проверить, записать}{%
+    \begin{cbul}{alt}
+      \item три шага из кода
+      \item оба видят остаток «один»
+      \item продано \lo{два} при одном на складе
+    \end{cbul}}
+
+  \slidegap
+  \hrulethin{0.42}
+  \rulegap
+  {\large Что должно быть атомарным --- делается \hi{одной командой} базы.}
+\end{frame}
+
+% 42
+\begin{frame}{Правила транзакции}
+  \slidetop
+  {\renewcommand{\arraystretch}{1.45}\small
+  \begin{tabular}{@{}L{3.9cm}L{8.9cm}@{}}
+    \hi{\textbf{короткая}}        & внутри только команды к базе; вызовы наружу
+      --- \hi{до} неё \\
+    \hi{\textbf{откат сам}}       & через \texttt{using}; забыли \texttt{CommitAsync} ---
+      откатится \\
+    \hi{\textbf{вложенных нет}}   & есть точки сохранения, и нужны они редко \\
+    \hi{\textbf{повтор}}          & временная ошибка --- по коду состояния; вся
+      транзакция с начала \\
+    \hi{\textbf{версия строки}}   & «обновить, где версия та же»: ноль строк ---
+      \lo{409}, перечитать \\
+    \hi{\textbf{блокировка при чтении}} & второй ждёт первого: для частых
+      конфликтов \\
+  \end{tabular}}
+
+  \rulegap
+  \aside{Пока транзакция открыта, база держит блокировки на изменённых строках
+    --- остальные \lo{стоят}.}
+\end{frame}
+
+% 43
+\begin{frame}[plain]
+  \vote{Запрос собран плюсом: текст SQL и значение из строки запроса. Что не
+    так?}
+\end{frame}
+
+% 44
+\begin{frame}[fragile]{Инъекция}
+  \slidetop
+  \claim{Данные попали в \lo{текст программы}.}
+
+\begin{lstlisting}[style=csharp,basicstyle=\codesm]
+var sql = "select count(*) from orders where customer_id = " + input;
+\end{lstlisting}
+
+\begin{lstlisting}[style=term,basicstyle=\termsm]
+$ dotnet run -- inject
+concat [1] -> 2
+concat [1 or 1=1] -> 3
+concat [1; drop table orders; --] -> 2
+PostgresException: 42P01: relation "orders" does not exist
+\end{lstlisting}
+
+  \rulegap
+  \begin{cbul}{alt}
+    \item \texttt{or 1=1} --- все заказы всех клиентов: тихая выгрузка
+    \item \texttt{drop table} --- второй запрос: таблицы \lo{нет}
+  \end{cbul}
+\end{frame}
+
+% 45
+\begin{frame}[fragile]{Параметр}
+  \slidetop
+  \claim{Значение уходит \hi{отдельно} от текста.}
+
+\begin{lstlisting}[style=csharp,basicstyle=\codesm]
+var sql = "select count(*) from orders where customer_id::text = @customerId";
+cmd.Parameters.AddWithValue("customerId", input);
+\end{lstlisting}
+
+\begin{lstlisting}[style=term,basicstyle=\termsm]
+$ dotnet run -- param
+param [1] -> 2
+param [1 or 1=1] -> 0
+param [1; drop table orders; --] -> 0
+3
+\end{lstlisting}
+
+  \begin{cbul}{accent}
+    \item база не разбирает значение как SQL: оно \hi{не в SQL}
+    \item экранирование руками --- гонка с теми, кто ищет обходы
+    \item один текст --- один план на все значения: ещё и быстрее
+  \end{cbul}
+\end{frame}
+
+% 46
+\begin{frame}[plain]
+  \statement{В текст запроса не попадает \lo{ни один байт}, пришедший снаружи.
+    Только \hi{параметры}.}
+\end{frame}
+
+% 47
+\begin{frame}{Где параметр не спасает}
+  \slidetop
+  {\renewcommand{\arraystretch}{1.6}
+  \begin{tabular}{@{}L{4.4cm}L{8.4cm}@{}}
+    \lo{\textbf{шаблон \texttt{like}}}    & \texttt{\%} в значении найдёт всё:
+      экранировать или запретить \\
+    \lo{\textbf{имена таблиц и колонок}}  & не параметризуются: \hi{белый список}
+      констант в коде \\
+    \lo{\textbf{сырой SQL в ORM}}         & склеили строку --- инъекция
+      вернулась \\
+  \end{tabular}}
+
+  \slidegap
+  \aside{«Снаружи» --- это и строка запроса, и тело, и заголовки, и сама база: в
+    неё всё тоже когда-то пришло снаружи.}
+\end{frame}
+
+% 48
+\begin{frame}[plain]
+  \vote{Что не так со звёздочкой в \texttt{select *}?}
+\end{frame}
+
+% 49
+\begin{frame}{Колонки --- явно}
+  \slidetop
+  \claim{Колонки перечисляются \hi{всегда}.}
+
+  \begin{cbul}{alt}
+    \item читаете ненужное: трафик и память на каждой строке
+    \item новая колонка \lo{сдвигает} порядковые номера
+    \item в коде не видно, от каких колонок он зависит
+  \end{cbul}
+
+  \slidegap
+  \hrulethin{0.42}
+  \rulegap
+  \aside{SQL живёт в классе хранилища, рядом с методом: его читают и ревьюят как
+    код. Ошибки базы там же становятся исключениями домена.}
+\end{frame}
+
+% 50
+\begin{frame}[plain]
+  \keyline{Соединение: взять поздно, вернуть рано.\\
+    Читатель --- поток. Транзакция откатывается сама.\\
+    Данные не должны становиться программой.}
+\end{frame}
+
+% ======================================================= 4. BRIDGE TO ORM ==
+\section{4. Мост к ORM}
+
+% 51
+\begin{frame}[plain]
+  \sectionopener{4}{Мост к ORM}{ORM не заменяет драйвер: она пишет то, что вы
+    писали \hi{руками}.}
+\end{frame}
+
+% 52
+\begin{frame}[plain]
+  \vote{В листинге с читателем: сколько строк про то, что мы хотим получить, и
+    сколько про то, как?}
+\end{frame}
+
+% 53
+\begin{frame}{Три боли}
+  \slidetop
+  {\renewcommand{\arraystretch}{1.7}
+  \begin{tabular}{@{}L{3.8cm}L{9.0cm}@{}}
+    \lo{\textbf{маппинг руками}}  & десять строк механики на строку смысла;
+      ошибка --- при чтении \\
+    \lo{\textbf{дублирование}}    & тот же запрос в пяти местах; строку SQL
+      дополняют только склейкой \\
+    \lo{\textbf{схема и типы}}    & колонку переименовали --- компилятор
+      \lo{не заметил} \\
+  \end{tabular}}
+
+  \slidegap
+  \hrulethin{0.42}
+  \rulegap
+  \aside{В списке нет «SQL сложный». 20 таблиц $\times$ 10 запросов $\times$ 10
+    строк --- две тысячи строк без единого бизнес-решения. Для пяти запросов ORM
+    \hi{не нужна}.}
+\end{frame}
+
+% 54
+\begin{frame}{Алгебра и LINQ}
+  \slidetop
+  \claim{Те же операции --- в другом синтаксисе. Это \hi{дизайн}.}
+
+  {\renewcommand{\arraystretch}{1.25}\small
+  \begin{tabular}{@{}L{4.2cm}L{4.2cm}L{4.2cm}@{}}
+    \eyebrow{реляционная алгебра} & \colhead{alt}{SQL} & \colhead{accent}{LINQ} \\
+    выборка     & \texttt{where}    & \texttt{Where} \\
+    проекция    & \texttt{select}   & \texttt{Select} \\
+    соединение  & \texttt{join}     & \texttt{Join} \\
+    группировка & \texttt{group by} & \texttt{GroupBy} \\
+    объединение & \texttt{union}    & \texttt{Union} \\
+    сортировка  & \texttt{order by} & \texttt{OrderBy} \\
+  \end{tabular}}
+
+  \rulegap
+  \aside{Края есть: оконные функции, рекурсивные запросы. Запрос на LINQ стал
+    длиннее своего SQL --- пишите SQL.}
+\end{frame}
+
+% 55
+\begin{frame}[fragile]{Из LINQ в SQL}
+  \vspace{0.3em}
+\begin{lstlisting}[style=csharp,basicstyle=\codesm,escapechar=`]
+var paid = context.Orders
+`\mk{q1}`    .Where(o => o.CustomerId == customerId
+             && o.Status == OrderStatus.Paid)
+`\mk{q2}`    .OrderByDescending(o => o.CreatedAt)
+`\mk{q3}`    .Select(o => new { o.Id, o.Total })
+`\mk{q4}`    .Take(10);
+\end{lstlisting}
+  \begin{tikzpicture}[remember picture,overlay,every node/.style={rawlab}]
+    \node at ([xshift=9.2cm]q1) {\texttt{WHERE}};
+    \node at ([xshift=9.2cm]q2) {\texttt{ORDER BY ... DESC}};
+    \node[text=accent] at ([xshift=9.2cm]q3) {\texttt{SELECT}: две колонки};
+    \node at ([xshift=9.2cm]q4) {\texttt{LIMIT}};
+  \end{tikzpicture}
+  \vspace{-1.2em}
+
+\begin{lstlisting}[style=plain,basicstyle=\codesm]
+SELECT o.id, o.total
+FROM orders AS o
+WHERE o.customer_id = @customerId AND o.status = 'Paid'
+ORDER BY o.created_at DESC
+LIMIT 10
+\end{lstlisting}
+
+  \rulegap
+  \aside{\texttt{customerId} стал \hi{параметром}: провайдер не вклеивает
+    значения. Инъекция невозможна по построению.}
+\end{frame}
+
+% 56
+\begin{frame}{Механизм}
+  \slidetop
+  \begin{center}
+    \begin{tikzpicture}
+      \foreach \i/\t in {1/лямбда,2/{дерево\\выражений},3/{провайдер\\обходит},
+                         4/{SQL и\\параметры},5/{драйвер\\ADO.NET},6/читатель,
+                         7/объекты} {
+        \node[box,minimum width=1.62cm,minimum height=1.1cm,inner sep=1pt,
+              font=\scriptsize] (m\i) at ({(\i-1)*1.95},0) {\t};
+      }
+      \foreach \i [evaluate=\i as \j using int(\i+1)] in {1,...,6}
+        \draw[arr] (m\i) -- (m\j);
+      \node[box,draw=accent,line width=1.0pt,minimum width=1.62cm,
+            minimum height=1.1cm,inner sep=1pt,font=\scriptsize\bfseries]
+        at (7.8,0) {драйвер\\ADO.NET};
+      \draw[rawbrace] ([yshift=-0.25cm]m4.south west) -- ([yshift=-0.25cm]m1.south west);
+      \draw[rawbrace] ([yshift=-0.25cm]m7.south east) -- ([yshift=-0.25cm]m5.south west);
+      \node[font=\scriptsize,text=muted] at ([yshift=-0.75cm]$(m1.south west)!0.5!(m4.south west)$)
+        {пишет ORM};
+      \node[font=\scriptsize,text=accent] at ([yshift=-0.75cm]$(m5.south west)!0.5!(m7.south east)$)
+        {сегодня --- руками};
+    \end{tikzpicture}
+  \end{center}
+
+  \slidegap
+  \begin{cbul}{accent}
+    \item ORM --- генератор SQL и генератор маппинга \hi{поверх драйвера}
+    \item перевод кэшируется: микросекунды против миллисекунд сети
+    \item цена: абстракция \lo{протекает}, когда вы перестали смотреть на SQL
+  \end{cbul}
+\end{frame}
+
+% 57
+\begin{frame}[plain]
+  \vote{В условие \texttt{Where} вы написали вызов своего метода. Над списком
+    это работало. Что произойдёт над таблицей?}
+\end{frame}
+
+% 58
+\begin{frame}{Оба варианта хуже}
+  \slidetop
+  \versus{Исключение}{%
+    \begin{cbul}{accent}
+      \item «не удалось перевести»
+      \item честно, но при выполнении
+      \item тесты над списком не поймают
+    \end{cbul}}{Вычисление на клиенте}{%
+    \begin{cbul}{alt}
+      \item в базу уходит запрос без условия
+      \item \lo{миллион} строк в память ради десяти
+      \item в логе SQL выглядит прилично
+    \end{cbul}}
+
+  \slidegap
+  \hrulethin{0.42}
+  \rulegap
+  \aside{Родственный сюрприз: сто заказов, покупатель каждого по обращению ---
+    сто запросов. Оба лечатся одним: \hi{смотреть SQL}.}
+\end{frame}
+
+% 59
+\begin{frame}{IQueryable --- это описание SQL}
+  \slidetop
+  \claim{Три шага, минута на запрос.}
+
+  {\renewcommand{\arraystretch}{1.6}
+  \begin{tabular}{@{}L{1.0cm}L{11.8cm}@{}}
+    \hi{\textbf{1}} & представьте SQL: какие таблицы, условия, колонки \\
+    \hi{\textbf{2}} & напишите LINQ так, чтобы он лёг на этот SQL \\
+    \hi{\textbf{3}} & посмотрите в лог: \hi{совпало} ли \\
+  \end{tabular}}
+
+  \slidegap
+  \aside{ORM --- инструмент, а не архитектура: DTO, интерфейсы хранилищ и
+    границы остаются в силе.}
+\end{frame}
+
+% 60
+\begin{frame}[plain]
+  \keyline{ORM --- генератор SQL и маппинга поверх драйвера.\\
+    Граница между базой и памятью --- ваша забота.}
+\end{frame}
+
+\end{document}
