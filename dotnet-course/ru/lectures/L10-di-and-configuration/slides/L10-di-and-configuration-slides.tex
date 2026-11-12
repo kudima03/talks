@@ -1,0 +1,1117 @@
+% Л10 -- DI, исходящие вызовы и конфигурация. Slides.
+%
+% Companion to the spoken script in ../L10-di-and-configuration.md, which is
+% the source of truth: the slides carry diagrams, code, real terminal output
+% and short marks, and the delivery lives in the script only -- this deck
+% carries no speaker notes. Slide text is in Russian because that is the
+% content; everything else in this file is English.
+%
+% Build:  make          (latexmk -pdf; engine: pdflatex)
+%
+% Every C# listing was compiled in a scratch `dotnet new web -n HelloWorld`;
+% terminal output on the slides is captured from runs of that project. See
+% ../CLAUDE.md for the verification table.
+%
+% House rules: ../CLAUDE.md and ../../../CLAUDE.md. Theme: ../../../../theme/.
+
+\documentclass[aspectratio=169,10pt,t]{beamer}
+
+\usetheme{dotnet}
+\usetikzlibrary{arrows.meta,positioning,calc,decorations.pathreplacing,fit}
+\usepackage{array}   % ragged-right table columns
+
+% A ragged-right paragraph column: justified cells in narrow columns hyphenate
+% badly, and a split word is the one thing the back row cannot read.
+\newcolumntype{L}[1]{>{\raggedright\arraybackslash}p{#1}}
+
+\dotnetlecture{Л10}
+
+\title[Л10. DI, исходящие вызовы и конфигурация]{DI, исходящие вызовы и конфигурация}
+\author{Дмитрий Курочкин}
+\date{}
+
+% Code sizes, one step down from \footnotesize. Smaller than 6.6pt does not
+% carry to the back of the room.
+\newcommand{\codesm}{\ttfamily\fontsize{7.6}{9.0}\selectfont}
+\newcommand{\codexs}{\ttfamily\fontsize{7.0}{8.3}\selectfont}
+\newcommand{\codexxs}{\ttfamily\fontsize{6.8}{7.8}\selectfont}
+\newcommand{\termsm}{\ttfamily\fontsize{6.6}{7.9}\selectfont}
+
+% A mark at the start of a listing line, for labels set beside the listing.
+% Used through the listing's escapechar; the labels are drawn by an overlay
+% picture after the listing, so the build needs two passes (latexmk does that).
+\newcommand{\mk}[1]{\tikz[remember picture,overlay]\coordinate (#1) at (0,0.55ex);}
+
+\tikzset{
+  rawbrace/.style={decorate,decoration={brace,amplitude=4pt},hairline,
+                   line width=0.8pt},
+  rawlab/.style={anchor=west,font=\footnotesize,inner sep=0pt},
+  box/.style={draw=hairline,line width=0.8pt,fill=codebg,inner sep=4pt,
+              align=center,minimum height=0.9cm},
+  arr/.style={-{Straight Barb[length=1.6mm]},muted,line width=0.7pt},
+  arra/.style={-{Straight Barb[length=1.8mm]},accent,line width=0.9pt},
+  arrl/.style={-{Straight Barb[length=1.8mm]},alt,line width=0.9pt},
+}
+
+\begin{document}
+\shorthandoff{"}
+
+% ------------------------------------------------------------------ title --
+% 1
+\begin{frame}[plain]
+  \titlepagednc{Лекция 10}{DI, исходящие вызовы и конфигурация}{}{Дмитрий Курочкин}
+\end{frame}
+
+% ================================================ 1. DEPENDENCY INJECTION ==
+\section{1. Внедрение зависимостей}
+
+% 2
+\begin{frame}[plain]
+  \sectionopener{1}{Внедрение зависимостей}{Сервис не знает, \hi{из чего} он
+    состоит.}
+\end{frame}
+
+% 3
+\begin{frame}[plain]
+  \vote{Сервису заказов нужно хранилище. Что вы пишете в конструкторе?}
+\end{frame}
+
+% 4
+\begin{frame}[fragile]{Было}
+  \slidetop
+\begin{lstlisting}[style=csharp,basicstyle=\codesm,escapechar=|]
+public sealed class OrderServiceOld
+{
+    private readonly SqlOrderRepository _repository =
+|\mk{o1}|        new("Server=prod;Database=orders");
+    public Task<Order?> FindAsync(int id, CancellationToken ct) =>
+        _repository.FindAsync(id, ct);
+}
+\end{lstlisting}
+  \begin{tikzpicture}[remember picture,overlay,every node/.style={rawlab}]
+    \node[text=alt] at ([xshift=8.6cm]o1) {«я знаю, из чего состою»};
+  \end{tikzpicture}
+
+  \rulegap
+  \begin{cbul}{alt}
+    \item сервис \lo{прибит} к SQL-хранилищу
+    \item строка подключения в коде: другая база --- пересборка
+    \item тест требует настоящую базу
+    \item десять сервисов --- десять \texttt{new}, десять экземпляров
+  \end{cbul}
+\end{frame}
+
+% 5
+\begin{frame}{Три слова}
+  \slidetop
+  \claim{Принцип можно соблюдать и \hi{без контейнера}.}
+
+  {\renewcommand{\arraystretch}{1.6}
+  \begin{tabular}{@{}L{4.6cm}L{8.2cm}@{}}
+    \hi{\textbf{инверсия управления}}    & принцип: класс объявляет потребность,
+      удовлетворяет её кто-то снаружи \\
+    \hi{\textbf{внедрение зависимостей}} & способ: зависимость приходит через
+      конструктор \\
+    \hi{\textbf{контейнер}}              & инструмент: собирает объекты за вас \\
+  \end{tabular}}
+
+  \slidegap
+  \aside{Пять классов собирают руками в \texttt{Main}. Контейнер нужен, когда
+    классов сто.}
+\end{frame}
+
+% 6
+\begin{frame}[fragile]{Стало}
+  \slidetop
+\begin{lstlisting}[style=csharp,basicstyle=\codesm,escapechar=|]
+public sealed class OrderService(
+|\mk{n1}|    IOrderRepository repository)
+{
+    public Task<Order?> FindAsync(int id, CancellationToken ct) =>
+        repository.FindAsync(id, ct);
+}
+
+|\mk{n2}|// composition root
+builder.Services.AddScoped<IOrderRepository, SqlOrderRepository>();
+builder.Services.AddScoped<OrderService>();
+\end{lstlisting}
+  \begin{tikzpicture}[remember picture,overlay,every node/.style={rawlab}]
+    \node[text=accent] at ([xshift=8.6cm]n1) {говорит, что ему нужно};
+    \node at ([xshift=8.6cm]n2) {единственное место, где виден состав};
+  \end{tikzpicture}
+
+  \slidegap
+  \aside{Кто создаст реализацию, какую и с какой строкой подключения ---
+    сервис \hi{не знает}. Состав описан до \texttt{Build}.}
+\end{frame}
+
+% 7
+\begin{frame}[fragile]{Формы регистрации}
+  \slidetop
+\begin{lstlisting}[style=csharp,basicstyle=\codexs,escapechar=|]
+|\mk{f1}|services.AddScoped<IOrderRepository, SqlOrderRepository>();
+
+|\mk{f2}|services.AddScoped<OrderService>();
+
+|\mk{f3}|services.AddSingleton(TimeProvider.System);
+
+|\mk{f4}|services.AddScoped<IOrderRepository>(provider =>
+    new CachedOrderRepository(
+        provider.GetRequiredService<SqlOrderRepository>()));
+
+|\mk{f5}|services.TryAddSingleton<INotifier, EmailNotifier>();
+\end{lstlisting}
+  \begin{tikzpicture}[remember picture,overlay,every node/.style={rawlab}]
+    \node[text=accent] at ([xshift=9.6cm]f1) {интерфейс и реализация};
+    \node[text=accent] at ([xshift=9.6cm]f2) {только реализация};
+    \node at ([xshift=9.6cm]f3) {готовый экземпляр};
+    \node at ([xshift=9.6cm]f4) {фабрика};
+    \node at ([xshift=9.6cm]f5) {если ещё не зарегистрировано};
+  \end{tikzpicture}
+
+  \slidegap
+  \aside{Все формы про одно: как получить экземпляр. Почти всегда хватает
+    \hi{первых двух}.}
+\end{frame}
+
+% 8
+\begin{frame}{Регистрировать и разрешать}
+  \slidetop
+  \claim{Регистрация --- правило в списке. Разрешение --- \hi{дерево} по
+    конструкторам.}
+
+  \begin{center}
+    \begin{tikzpicture}[font=\scriptsize,
+      tb/.style={box,minimum width=2.25cm,minimum height=1.0cm,inner sep=2pt}]
+      \node[tb,draw=accent,line width=1.0pt] (d1) at (0,0) {обработчик};
+      \node[tb] (d2) at (2.85,0)  {\texttt{OrderService}};
+      \node[tb] (d3) at (5.7,0)   {\texttt{IOrderRepository}\\\texttt{SqlOrderRepository}};
+      \node[tb] (d4) at (8.55,0)  {\texttt{DbConnection}};
+      \node[tb] (d5) at (11.4,0)  {\texttt{Options}};
+      \foreach \i [evaluate=\i as \j using int(\i+1)] in {1,...,4}
+        \draw[arr] (d\i) -- (d\j);
+      \draw[arr] ([yshift=0.45cm]d1.north west) --
+        node[above,text=muted] {строит сверху вниз} ([yshift=0.45cm]d5.north east);
+      \draw[arra] ([yshift=-0.45cm]d5.south east) --
+        node[below,text=accent] {создаёт снизу вверх} ([yshift=-0.45cm]d1.south west);
+    \end{tikzpicture}
+  \end{center}
+
+  \slidegap
+  \aside{План создания строится один раз и кэшируется: дерево из десяти
+    объектов --- микросекунды. Разрешение вызывает фреймворк, вы --- почти
+    никогда.}
+\end{frame}
+
+% 9
+\begin{frame}{Конструктор не делает работу}
+  \slidetop
+  \versus{Конструктор}{%
+    \begin{cbul}{accent}
+      \item берёт зависимости
+      \item кладёт их в поля
+      \item создаётся в тесте без побочных эффектов
+    \end{cbul}}{Не в конструкторе}{%
+    \begin{cbul}{alt}
+      \item открыть соединение
+      \item прочитать файл, сходить в сеть
+      \item запустить поток
+    \end{cbul}}
+
+  \slidegap
+  \hrulethin{0.42}
+  \rulegap
+  \aside{Инициализация --- в явном асинхронном методе или в фоновом сервисе.
+    Контейнер бесплатен, пока конструкторы \hi{только присваивают}.}
+\end{frame}
+
+% 10
+\begin{frame}[plain]
+  \statement{Конструктор --- единственная \hi{честная} точка входа
+    зависимостей.}
+\end{frame}
+
+% 11
+\begin{frame}[plain]
+  \vote{Зачем интерфейс, если реализация одна и второй не планируется?}
+\end{frame}
+
+% 12
+\begin{frame}{Времена жизни}
+  \slidetop
+  {\renewcommand{\arraystretch}{1.6}
+  \begin{tabular}{@{}L{2.8cm}L{4.6cm}L{5.4cm}@{}}
+    & \colhead{accent}{сколько живёт} & \colhead{alt}{пример} \\
+    \textbf{Singleton} & один на приложение        & настройки, кэш, логгер \\
+    \textbf{Scoped}    & один на запрос            & контекст базы, текущий
+      пользователь \\
+    \textbf{Transient} & новый на каждое разрешение & лёгкие объекты без
+      состояния \\
+  \end{tabular}}
+
+  \slidegap
+  \aside{Создаются \hi{лениво}, при первом обращении. Singleton --- один раз
+    даже при одновременных первых обращениях из разных потоков.}
+\end{frame}
+
+% 13
+\begin{frame}{Контейнер владеет тем, что создал}
+  \slidetop
+  \begin{center}
+    \begin{tikzpicture}[font=\scriptsize]
+      \node[box,draw=accent,line width=1.0pt,minimum width=12.4cm,minimum height=0.6cm,
+            inner sep=1pt] (s) at (6.2,1.0) {singleton: от первого обращения до остановки приложения};
+      \foreach \i/\x in {1/1.9,2/6.2,3/10.5} {
+        \node[box,minimum width=3.4cm,minimum height=0.6cm,inner sep=1pt]
+          (q\i) at (\x,0) {scoped: запрос \i};
+        \node[text=alt,font=\scriptsize,anchor=north] at (q\i.south east)
+          {\texttt{Dispose}};
+      }
+    \end{tikzpicture}
+  \end{center}
+
+  \slidegap
+  \begin{cbul}{accent}
+    \item scoped и transient освобождаются вместе с областью --- в конце запроса
+    \item singleton --- при остановке приложения
+    \item асинхронное освобождение контейнер вызывает сам
+    \item пришло через конструктор --- \hi{вы не владелец}: \texttt{Dispose} не
+      пишете
+  \end{cbul}
+\end{frame}
+
+% 14
+\begin{frame}[plain]
+  \vote{Singleton-сервис принимает в конструктор scoped-зависимость. Что
+    произойдёт?}
+\end{frame}
+
+% 15
+\begin{frame}[fragile]{Captive dependency}
+  \slidetop
+  \begin{center}
+    \begin{tikzpicture}[font=\footnotesize,
+      tb/.style={box,minimum width=4.4cm,minimum height=1.1cm}]
+      \node[tb] (c1) at (0,0)   {\textbf{singleton}\\живёт всегда};
+      \node[tb,draw=alt,line width=1.0pt] (c2) at (7.6,0)
+        {\textbf{scoped}\\должен жить один запрос};
+      \draw[arrl] (c1) -- node[above,text=alt,font=\scriptsize\bfseries] {держит}
+        node[below,text=muted,font=\scriptsize] {дольше, чем тот живёт} (c2);
+    \end{tikzpicture}
+  \end{center}
+
+  \rulegap
+\begin{lstlisting}[style=term,basicstyle=\termsm]
+$ dotnet run 2>&1 | grep -o "Cannot consume[^.]*\." | head -1
+Cannot consume scoped service 'IOrderRepository' from singleton 'PriceCache'.
+\end{lstlisting}
+
+  \rulegap
+  \aside{Все следующие запросы работают с \lo{мёртвым} объектом первого.
+    Проверка --- только в Development: в проде тот же код стартует молча.}
+\end{frame}
+
+% 16
+\begin{frame}{Как выбрать время жизни}
+  \slidetop
+  \claim{Три вопроса к объекту.}
+
+  {\renewcommand{\arraystretch}{1.6}
+  \begin{tabular}{@{}L{5.6cm}L{7.2cm}@{}}
+    есть изменяемое состояние?   & нет --- \hi{singleton}, самый дешёвый \\
+    кому оно принадлежит?        & запросу --- \hi{scoped}; никому ---
+      \hi{transient} \\
+    держит ресурс?               & scoped; \lo{не} transient из корня \\
+  \end{tabular}}
+
+  \slidegap
+  \aside{Хоть одна зависимость scoped --- сам объект тоже scoped. Контекст
+    базы --- всегда scoped.}
+\end{frame}
+
+% 17
+\begin{frame}{Пять аварий}
+  \slidetop
+  {\renewcommand{\arraystretch}{1.45}
+  \begin{tabular}{@{}L{0.5cm}L{5.3cm}L{7.0cm}@{}}
+    \lo{\textbf{1}} & singleton держит scoped        & один мёртвый объект на всё
+      приложение \\
+    \lo{\textbf{2}} & изменяемый singleton           & тысяча потоков пишут в один
+      словарь \\
+    \lo{\textbf{3}} & контекст базы не той длительности & transient --- два
+      контекста; singleton --- аварии 1 и 2 \\
+    \lo{\textbf{4}} & transient из корня             & не освобождается до
+      остановки: утечка \\
+    \lo{\textbf{5}} & \texttt{Dispose} чужого        & контейнер освободит второй
+      раз \\
+  \end{tabular}}
+
+  \slidegap
+  \aside{Что пришло через конструктор, освобождает контейнер. Что создали через
+    \texttt{new} --- \hi{вы}.}
+\end{frame}
+
+% 18
+\begin{frame}[fragile]{Несколько реализаций}
+  \slidetop
+\begin{lstlisting}[style=csharp,basicstyle=\codexs,escapechar=|]
+services.AddScoped<IOrderCheck, StockCheck>();
+services.AddScoped<IOrderCheck, LimitCheck>();
+
+|\mk{m1}|public sealed class OrderChecks(IEnumerable<IOrderCheck> checks)
+
+|\mk{m2}|public sealed class CachedOrderRepository(IOrderRepository inner)
+    : IOrderRepository
+
+|\mk{m3}|services.AddScoped(typeof(IRepository<>), typeof(SqlRepository<>));
+\end{lstlisting}
+  \begin{tikzpicture}[remember picture,overlay,every node/.style={rawlab}]
+    \node[text=accent] at ([xshift=10.5cm]m1) {все, по порядку};
+    \node at ([xshift=10.5cm]m2) {декоратор};
+    \node at ([xshift=10.5cm]m3) {открытые обобщения};
+  \end{tikzpicture}
+
+  \slidegap
+  \begin{cbul}{accent}
+    \item «вызвать всех» --- в порядке регистрации: проверки, валидаторы
+    \item декоратор --- обёртка снаружи: кэш, повтор; класс внутри \hi{не знает}
+    \item одна регистрация на всё семейство хранилищ
+  \end{cbul}
+\end{frame}
+
+% 19
+\begin{frame}[fragile]{Сервисы с ключом}
+  \slidetop
+  \claim{«Вызвать \hi{конкретную}» --- ключ в сигнатуре.}
+
+\begin{lstlisting}[style=csharp,basicstyle=\codexs,escapechar=|]
+|\mk{k1}|builder.Services.AddKeyedScoped<INotifier, EmailNotifier>("email");
+builder.Services.AddKeyedScoped<INotifier, SmsNotifier>("sms");
+
+public sealed class OrderConfirmation(
+|\mk{k2}|    [FromKeyedServices("email")] INotifier notifier)
+{
+    public Task SendAsync(Order order, CancellationToken ct) =>
+        notifier.SendAsync(order.CustomerEmail,
+            $"Order {order.Id} confirmed", ct);
+}
+\end{lstlisting}
+  \begin{tikzpicture}[remember picture,overlay,every node/.style={rawlab}]
+    \node at ([xshift=10.4cm]k1) {ключ при регистрации};
+    \node[text=accent] at ([xshift=10.4cm]k2) {атрибут на параметре};
+  \end{tikzpicture}
+
+  \slidegap
+  \aside{Ключ-перечисление безопаснее строки: опечатка --- ошибка компиляции.}
+\end{frame}
+
+% 20
+\begin{frame}{Service locator}
+  \slidetop
+  \versus{Конструктор}{%
+    \begin{cbul}{accent}
+      \item видно всё, что нужно
+      \item ошибка --- на старте
+      \item тест подставляет заглушки
+      \item времена жизни проверяет \texttt{Build}
+    \end{cbul}}{IService Provider}{%
+    \begin{cbul}{alt}
+      \item зависимости спрятаны в теле
+      \item ошибка --- на первом вызове
+      \item тест собирает контейнер
+      \item scoped из корня --- и никто не заметит
+    \end{cbul}}
+
+  \slidegap
+  \hrulethin{0.42}
+  \rulegap
+  \aside{Законен \hi{на границе}: фабрика областей в фоновом сервисе, фильтр,
+    middleware. В бизнес-логике --- сигнал на ревью.}
+\end{frame}
+
+% 21
+\begin{frame}[plain]
+  \vote{Кто писал «для удобства» статический класс, который внутри ходит в
+    базу, читает файл или время?}
+\end{frame}
+
+% 22
+\begin{frame}[plain]
+  \vote{Сто сервисов --- сто строк с \texttt{Add} в файле запуска. Что делать?}
+\end{frame}
+
+% 23
+\begin{frame}[fragile]{Модули}
+  \vspace{0.3em}
+\begin{lstlisting}[style=csharp,basicstyle=\codexxs,escapechar=|]
+// Program.cs
+|\mk{u1}|builder.Services
+    .AddOrders()
+    .AddNotifications()
+    .AddPersistence(builder.Configuration);
+
+// Orders/OrdersModule.cs
+public static class OrdersModule
+{
+|\mk{u2}|    public static IServiceCollection AddOrders(
+        this IServiceCollection services)
+    {
+|\mk{u3}|        services.AddScoped<IOrderRepository, SqlOrderRepository>();
+        services.AddScoped<OrderService>();
+        services.AddScoped<IValidator<CreateOrderDto>, CreateOrderDtoValidator>();
+|\mk{u4}|        return services;
+    }
+}
+\end{lstlisting}
+  \begin{tikzpicture}[remember picture,overlay,every node/.style={rawlab}]
+    \node[text=accent] at ([xshift=10.2cm]u1) {читается как оглавление};
+    \node at ([xshift=10.2cm]u2) {метод расширения на модуль};
+    \node at ([xshift=10.2cm]u3) {состав --- рядом с модулем};
+    \node at ([xshift=10.2cm]u4) {чтобы шли цепочкой};
+  \end{tikzpicture}
+\end{frame}
+
+% 24
+\begin{frame}{Явно или по соглашению}
+  \slidetop
+  \versus{Явные модули}{%
+    \begin{cbul}{accent}
+      \item состав виден в одном месте
+      \item модуль регистрирует только своё
+      \item порядок вызовов не важен
+      \item длиннее, зато ревьюится
+    \end{cbul}}{Сканирование сборки}{%
+    \begin{cbul}{alt}
+      \item сотня строк исчезает
+      \item состав --- по именам классов
+      \item публичный класс регистрируется сам
+      \item ограничивайте узко
+    \end{cbul}}
+
+  \slidegap
+  \hrulethin{0.42}
+  \rulegap
+  \aside{Composition root стоит проверять \hi{тестом}: собрать контейнер и
+    попросить у него каждый зарегистрированный тип.}
+\end{frame}
+
+% 25
+\begin{frame}[plain]
+  \keyline{Состав приложения --- в одном месте.\\
+    Зависимости --- в конструкторе.\\
+    Времена жизни --- контракт с контейнером.}
+\end{frame}
+
+% ==================================================== 2. OUTGOING CALLS ==
+\section{2. Исходящие HTTP-вызовы}
+
+% 26
+\begin{frame}[plain]
+  \sectionopener{2}{Исходящие HTTP-вызовы}{Внешний сервис --- это
+    \hi{зависимость}, как хранилище.}
+\end{frame}
+
+% 27
+\begin{frame}[plain]
+  \vote{Нужно сделать HTTP-запрос из метода. Что вы пишете?}
+\end{frame}
+
+% 28
+\begin{frame}{Две ошибки}
+  \slidetop
+  \versus{Клиент на каждый вызов}{%
+    \begin{cbul}{accent}
+      \item \texttt{new HttpClient} и \texttt{using}
+      \item \texttt{using} закрывает соединение
+      \item сотни соединений ждут закрытия
+      \item сокеты \hi{кончились}
+    \end{cbul}}{Один статический}{%
+    \begin{cbul}{alt}
+      \item создан один раз, навсегда
+      \item соединение живёт, пока работает
+      \item DNS разрешён один раз
+      \item адрес сменился --- ходим на \lo{старый}
+    \end{cbul}}
+
+  \slidegap
+  \hrulethin{0.42}
+  \rulegap
+  \aside{Клиент должен жить долго, чтобы переиспользовать соединения, но не
+    вечно, чтобы они обновлялись.}
+\end{frame}
+
+% 29
+\begin{frame}{Фабрика клиентов}
+  \slidetop
+  \begin{center}
+    \begin{tikzpicture}[font=\scriptsize,
+      tb/.style={box,minimum width=3.3cm,minimum height=1.0cm}]
+      \node[tb] (h1) at (0,0)    {\textbf{клиенты}\\лёгкие, короткоживущие};
+      \node[tb,draw=accent,line width=1.0pt] (h2) at (4.4,0)
+        {\textbf{пул обработчиков}\\держат соединения};
+      \node[tb] (h3) at (8.8,0)  {\textbf{внешний сервис}\\адрес из DNS};
+      \draw[arr] (h1) -- (h2);
+      \draw[arr] (h2) -- (h3);
+      \node[text=accent,font=\scriptsize,anchor=north] at ([yshift=-0.15cm]h2.south)
+        {заменяются раз в пару минут};
+    \end{tikzpicture}
+  \end{center}
+
+  \slidegap
+  \begin{cbul}{accent}
+    \item клиент от фабрики создавайте сколько угодно
+    \item обработчики делятся: соединения \hi{переиспользуются}
+    \item обработчик заменён --- соединение переоткрыто, DNS перечитан
+  \end{cbul}
+
+  \rulegap
+  \aside{Именованные клиенты --- строки вместо типов. Типизированные --- класс.}
+\end{frame}
+
+% 30
+\begin{frame}[fragile]{Типизированный клиент}
+  \vspace{0.3em}
+\begin{lstlisting}[style=csharp,basicstyle=\codexxs,escapechar=`]
+`\mk{r1}`public sealed class RatesClient(HttpClient http)
+{
+    public async Task<decimal> GetRateAsync(string currency, CancellationToken ct)
+    {
+        var response = await http.GetFromJsonAsync<RateResponse>($"rates/{currency}", ct);
+        return response?.Rate
+`\mk{r2}`            ?? throw new RatesUnavailableException(currency);
+    }
+}
+
+builder.Services
+`\mk{r3}`    .AddHttpClient<RatesClient>(client =>
+    {
+        client.BaseAddress = new Uri(builder.Configuration["Rates:BaseUrl"]
+            ?? throw new InvalidOperationException("Rates:BaseUrl is not set"));
+        client.Timeout = TimeSpan.FromSeconds(5);
+    })
+`\mk{r4}`    .AddStandardResilienceHandler();
+
+`\mk{r5}`public sealed class PricingService(RatesClient rates) { /* ... */ }
+\end{lstlisting}
+  \begin{tikzpicture}[remember picture,overlay,every node/.style={rawlab}]
+    \node[text=accent] at ([xshift=10.9cm]r1) {получает клиент};
+    \node at ([xshift=10.9cm]r2) {своё исключение};
+    \node at ([xshift=10.9cm]r3) {адрес и таймаут};
+    \node at ([xshift=10.9cm]r4) {устойчивость};
+    \node[text=accent] at ([xshift=10.9cm]r5) {обычная зависимость};
+  \end{tikzpicture}
+\end{frame}
+
+% 31
+\begin{frame}{Что живёт в клиенте}
+  \slidetop
+  \versus{Внутри клиента}{%
+    \begin{cbul}{accent}
+      \item адреса и параметры чужого API
+      \item заголовки, которые он требует
+      \item чужой DTO: \texttt{RateResponse}
+      \item его ошибки --- ваши исключения
+    \end{cbul}}{Снаружи}{%
+    \begin{cbul}{alt}
+      \item что делать с курсом
+      \item потребитель не знает про HTTP
+      \item ваш тип или примитив: \texttt{decimal}
+      \item в тесте --- заглушка, сети нет
+    \end{cbul}}
+
+  \slidegap
+  \hrulethin{0.42}
+  \rulegap
+  \aside{Три \texttt{new HttpClient} с адресом в строке превращаются в три
+    параметра конструкторов.}
+\end{frame}
+
+% 32
+\begin{frame}{Три инструмента}
+  \slidetop
+  \begin{center}
+    \begin{tikzpicture}[font=\footnotesize,
+      tb/.style={box,minimum width=4.0cm,minimum height=1.25cm}]
+      \node[tb] (i1) at (0,0)    {\textbf{таймаут}\\не ждать вечно};
+      \node[tb,draw=accent,line width=1.0pt] (i2) at (4.5,0)
+        {\textbf{повтор}\\только идемпотентное};
+      \node[tb] (i3) at (9.0,0)  {\textbf{выключатель}\\падать быстро,\\пока сосед лежит};
+    \end{tikzpicture}
+  \end{center}
+
+  \slidegap
+  \begin{cbul}{accent}
+    \item таймаут --- секунды, а не умолчание в десятки секунд
+    \item \texttt{GET} повторяется безопасно; \texttt{POST} --- \lo{только} с
+      ключом идемпотентности
+    \item выключатель считает ошибки и отвечает отказом сразу, без ожидания
+  \end{cbul}
+
+  \rulegap
+  \aside{Повторы без паузы добивают перегруженного соседа: \lo{шторм повторов}.}
+\end{frame}
+
+% 33
+\begin{frame}[plain]
+  \vote{Внешний сервис ответил ошибкой. Сколько раз повторять?}
+\end{frame}
+
+% 34
+\begin{frame}[fragile]{Стандартный набор}
+  \slidetop
+\begin{lstlisting}[style=csharp,basicstyle=\codesm]
+builder.Services.AddHttpClient<RatesClient>(/* ... */)
+    .AddStandardResilienceHandler();
+\end{lstlisting}
+
+  \slidegap
+  \begin{center}
+    \begin{tikzpicture}[font=\scriptsize,
+      tb/.style={box,minimum width=2.7cm,minimum height=0.9cm,inner sep=2pt}]
+      \node[tb] (t1) at (0,0)    {общий таймаут};
+      \node[tb] (t2) at (3.2,0)  {повтор};
+      \node[tb] (t3) at (6.4,0)  {выключатель};
+      \node[tb] (t4) at (9.6,0)  {таймаут попытки};
+      \foreach \i [evaluate=\i as \j using int(\i+1)] in {1,...,3}
+        \draw[arr] (t\i) -- (t\j);
+    \end{tikzpicture}
+  \end{center}
+
+  \slidegap
+  \begin{cbul}{accent}
+    \item таймаутов \hi{два}: на одну попытку и на всю операцию с повторами
+    \item попыток немного, пауза растёт, разброс случайный
+    \item начинайте с умолчаний: они \hi{согласованы} между собой
+  \end{cbul}
+\end{frame}
+
+% 35
+\begin{frame}[fragile]{Когда сосед лежит}
+  \slidetop
+  {\renewcommand{\arraystretch}{1.5}
+  \begin{tabular}{@{}L{3.4cm}L{9.4cm}@{}}
+    \hi{\textbf{курс валюты}} & взять из кэша и пометить приблизительным: сервис
+      деградировал, но работает \\
+    \lo{\textbf{платёж}}      & честная ошибка «попробуйте позже»: 503 \\
+  \end{tabular}}
+
+  \slidegap
+\begin{lstlisting}[style=term,basicstyle=\termsm]
+info: System.Net.Http.HttpClient.RatesClient.LogicalHandler[100]
+      Start processing HTTP request GET http://localhost:5090/stub/rates/USD
+...
+info: System.Net.Http.HttpClient.RatesClient.LogicalHandler[101]
+      End processing HTTP request after 103.371ms - 200
+\end{lstlisting}
+
+  \rulegap
+  \aside{Решение принимает ваш сервис, и \hi{заранее}. Каждый исходящий вызов
+    фабрика пишет в лог: длительность и статус.}
+\end{frame}
+
+% 36
+\begin{frame}[plain]
+  \keyline{\texttt{HttpClient} выдаёт фабрика; внешний сервис приходит в
+    конструктор.\\ Повторять можно только то, что безопасно повторить.}
+\end{frame}
+
+% ================================================== 3. CONFIGURATION ==
+\section{3. Конфигурация и окружение}
+
+% 37
+\begin{frame}[plain]
+  \sectionopener{3}{Конфигурация и окружение}{Код один, окружений много;
+    разница живёт \hi{снаружи}.}
+\end{frame}
+
+% 38
+\begin{frame}[plain]
+  \vote{Какую ошибку в первом листинге лекции мы исправили не до конца?}
+\end{frame}
+
+% 39
+\begin{frame}{Что считать конфигурацией}
+  \slidetop
+  \versus{Конфигурация}{%
+    \begin{cbul}{accent}
+      \item адреса, строки подключения, порты
+      \item лимиты и таймауты
+      \item уровни логов
+      \item переключатели возможностей
+    \end{cbul}}{Код}{%
+    \begin{cbul}{alt}
+      \item бизнес-правила
+      \item как считается скидка
+      \item выбор класса по флагу
+      \item всё, что нужно тестировать
+    \end{cbul}}
+
+  \slidegap
+  \hrulethin{0.42}
+  \rulegap
+  \aside{Граница: значение может поменять \hi{администратор}, и от этого ничего
+    не сломается.}
+\end{frame}
+
+% 40
+\begin{frame}{Слои}
+  \slidetop
+  \begin{center}
+    \begin{tikzpicture}[font=\scriptsize,
+      lay/.style={box,minimum width=5.6cm,minimum height=0.56cm,inner sep=1pt},
+      txt/.style={anchor=west,text=muted,font=\scriptsize,inner sep=0pt}]
+      \node[lay] (l1) at (0,0)    {\texttt{appsettings.json}};
+      \node[lay] (l2) at (0,0.68) {\texttt{appsettings.\{Environment\}.json}};
+      \node[lay] (l3) at (0,1.36) {секреты пользователя};
+      \node[lay] (l4) at (0,2.04) {переменные окружения};
+      \node[lay] (l5) at (0,2.72) {аргументы командной строки};
+      \node[lay,draw=accent,line width=1.0pt] (l6) at (0,3.6) {хранилище секретов};
+      \node[txt] at ([xshift=0.4cm]l1.east) {умолчания};
+      \node[txt] at ([xshift=0.4cm]l2.east) {перекрывает по своим ключам};
+      \node[txt] at ([xshift=0.4cm]l3.east) {только в разработке, вне репозитория};
+      \node[txt] at ([xshift=0.4cm]l4.east) {окружение процесса};
+      \node[txt] at ([xshift=0.4cm]l5.east) {\texttt{args}};
+      \node[txt,text=accent] at ([xshift=0.4cm]l6.east) {в проде, подключается последним};
+      \draw[arra] ([xshift=-0.5cm]l1.south west) --
+        node[left,text=accent,align=right,font=\scriptsize] {позднее\\перекрывает\\раннее}
+        ([xshift=-0.5cm]l6.north west);
+    \end{tikzpicture}
+  \end{center}
+
+  \rulegap
+  \aside{Каждый источник --- плоский набор пар «ключ --- значение». Побеждает
+    верхний, у которого ключ есть.}
+\end{frame}
+
+% 41
+\begin{frame}[fragile]{Три записи одного ключа}
+  \slidetop
+\begin{lstlisting}[style=json,basicstyle=\codexs]
+{
+  "ConnectionStrings": { "Orders": "Host=localhost;Database=orders" },
+  "Rates": { "BaseUrl": "https://rates.local/", "TimeoutSeconds": 5 },
+  "Logging": { "LogLevel": { "Default": "Information" } }
+}
+\end{lstlisting}
+
+\begin{lstlisting}[style=bash,basicstyle=\codexs]
+export ConnectionStrings__Orders="Host=db.prod.internal;Database=orders"
+export Rates__TimeoutSeconds=2
+dotnet HelloWorld.dll --Logging:LogLevel:Default=Warning
+\end{lstlisting}
+
+  \rulegap
+  {\renewcommand{\arraystretch}{1.25}\small
+  \begin{tabular}{@{}L{3.6cm}L{9.2cm}@{}}
+    в приложении          & \hi{\texttt{Rates:TimeoutSeconds}} \\
+    JSON                  & вложенные объекты \\
+    переменная окружения  & \texttt{Rates\_\_TimeoutSeconds} --- два подчёркивания \\
+    аргумент              & \texttt{-{}-Rates:TimeoutSeconds=2} \\
+  \end{tabular}}
+\end{frame}
+
+% 42
+\begin{frame}[fragile]{Что видит приложение}
+  \slidetop
+  \claim{Отладочное представление: ключ, значение и \hi{откуда} оно пришло.}
+
+\begin{lstlisting}[style=term,basicstyle=\termsm]
+$ curl -s localhost:5090/config | grep -E "Orders=|Default=|BaseUrl=|TimeoutSeconds="
+  Orders=Host=db.prod.internal;Database=orders (EnvironmentVariablesConfigurationProvider)
+    Default=Warning (CommandLineConfigurationProvider)
+  BaseUrl=https://rates.local/ (JsonConfigurationProvider for 'appsettings.json' (Optional))
+  TimeoutSeconds=2 (EnvironmentVariablesConfigurationProvider)
+\end{lstlisting}
+
+  \slidegap
+  \begin{cbul}{accent}
+    \item нет ключа --- \texttt{null}, а \lo{не} исключение: опечатка молчит
+    \item по ключу читает файл запуска; бизнес-логика --- \lo{нет}
+    \item в этом выводе будут и секреты: в прод --- никогда
+  \end{cbul}
+\end{frame}
+
+% 43
+\begin{frame}{Окружения}
+  \slidetop
+  \claim{Имя окружения --- строка в \hi{переменной}.}
+
+  {\renewcommand{\arraystretch}{1.6}
+  \begin{tabular}{@{}L{4.4cm}L{8.4cm}@{}}
+    \hi{\textbf{второй файл}}          & \texttt{appsettings.Production.json}
+      читается только в проде \\
+    \hi{\textbf{поведение фреймворка}} & страница ошибок, проверка контейнера,
+      сертификат разработки \\
+    \lo{\textbf{ваши развилки}}        & «если разработка, то» --- чем меньше, тем
+      лучше \\
+  \end{tabular}}
+
+  \slidegap
+  \aside{Локально имя задаёт файл настроек запуска. В опубликованное приложение
+    он не попадает.}
+\end{frame}
+
+% 44
+\begin{frame}{Разница --- в значениях}
+  \slidetop
+  \versus{В конфигурации}{%
+    \begin{cbul}{accent}
+      \item адрес шлюза --- из конфигурации
+      \item в разработке там адрес заглушки
+      \item код один и тот же
+      \item в проде работает то, что тестировали
+    \end{cbul}}{В коде}{%
+    \begin{cbul}{alt}
+      \item «если прод --- настоящий шлюз»
+      \item «иначе --- заглушка»
+      \item две ветки
+      \item в проде работает другая ветка
+    \end{cbul}}
+
+  \slidegap
+  \hrulethin{0.42}
+  \rulegap
+  \aside{Стенд похож на прод во всём, кроме адресов. Проверка окружения в
+    домене --- тот же запах, что \texttt{HttpContext} в домене.}
+\end{frame}
+
+% 45
+\begin{frame}[plain]
+  \vote{Переменная с именем окружения не задана вовсе. Каким приложение себя
+    считает?}
+\end{frame}
+
+% 46
+\begin{frame}{Рантайм настраивается так же}
+  \slidetop
+  {\renewcommand{\arraystretch}{1.22}\small
+  \begin{tabular}{@{}L{6.2cm}L{6.6cm}@{}}
+    \texttt{ASPNETCORE\_ENVIRONMENT}          & окружение \\
+    \texttt{ASPNETCORE\_URLS}                 & адреса Kestrel \\
+    \texttt{Logging\_\_LogLevel\_\_Default}   & уровень логов \\
+    \hi{\texttt{DOTNET\_gcServer}}            & серверный GC (Л2) \\
+    \hi{\texttt{DOTNET\_GCHeapHardLimit}}     & потолок памяти (Л2) \\
+    \hi{\texttt{DOTNET\_ThreadPool\_MinThreads}} & минимум потоков пула (Л6) \\
+    \hi{\texttt{DOTNET\_TieredCompilation}}   & многоуровневая компиляция (Л1) \\
+    \hi{\texttt{DOTNET\_ROLL\_FORWARD}}       & накат версии рантайма (Л2) \\
+  \end{tabular}}
+
+  \slidegap
+  \aside{\hi{\texttt{DOTNET\_}} читает рантайм, до первой строки вашего кода.
+    Сервис в проде ведёт себя иначе --- сравните \hi{окружение}, а не код.}
+\end{frame}
+
+% 47
+\begin{frame}[plain]
+  \vote{Один образ нужно запустить на стенде и в проде, с разными базами. Что
+    делать с файлом настроек?}
+\end{frame}
+
+% 48
+\begin{frame}{Образ один}
+  \slidetop
+  \begin{center}
+    \begin{tikzpicture}[font=\footnotesize,
+      env/.style={box,minimum width=2.6cm,minimum height=0.8cm},
+      var/.style={font=\codexxs,text=muted,fill=paper,inner sep=2pt}]
+      \node[box,draw=accent,line width=1.0pt,minimum width=2.4cm,minimum height=1.4cm]
+        (img) at (0,0) {\textbf{образ}\\собран один раз};
+      \node[env] (e1) at (10.2,1.35)  {разработка};
+      \node[env] (e2) at (10.2,0)     {стенд};
+      \node[env] (e3) at (10.2,-1.35) {прод};
+      \draw[arr] (img.east) -- node[var,pos=0.55] {Host=localhost} (e1.west);
+      \draw[arr] (img.east) -- node[var,pos=0.55] {Host=db.stage.internal} (e2.west);
+      \draw[arr] (img.east) -- node[var,pos=0.55] {Host=db.prod.internal} (e3.west);
+      \node[font=\scriptsize,text=muted,anchor=north] at (0,-0.85)
+        {\texttt{ConnectionStrings\_\_Orders}};
+    \end{tikzpicture}
+  \end{center}
+
+  \slidegap
+  {\large Образ один, среды разные, разница --- в \hi{переменных}.}
+
+  \rulegap
+  \aside{Ровно то, что протестировали, едет в прод. Секретов в образе нет: ни в
+    файле, ни в коде, ни в истории.}
+\end{frame}
+
+% 49
+\begin{frame}{Почему переменные}
+  \slidetop
+  \versus{Переменные окружения}{%
+    \begin{cbul}{accent}
+      \item процесс просто их видит
+      \item задаёт всё: оркестратор, скрипт, CI
+      \item существуют только у процесса
+    \end{cbul}}{Файл в образе}{%
+    \begin{cbul}{alt}
+      \item монтирование, пути, права
+      \item его нужно куда-то положить
+      \item живёт в слоях образа навсегда
+    \end{cbul}}
+
+  \slidegap
+  \hrulethin{0.42}
+  \rulegap
+  \aside{Файл остаётся: умолчания и структура. Монтируют большие списки и
+    секреты. Переменные \lo{видно} в списке процессов и описании развёртывания.}
+\end{frame}
+
+% 50
+\begin{frame}[plain]
+  \vote{Где хранить строку подключения к локальной базе, чтобы она не попала в
+    репозиторий?}
+\end{frame}
+
+% 51
+\begin{frame}[fragile]{Секреты пользователя}
+  \slidetop
+\begin{lstlisting}[style=term,basicstyle=\termsm]
+$ dotnet user-secrets set "ConnectionStrings:Orders" "Host=localhost;Password=dev"
+Successfully saved ConnectionStrings:Orders to the secret store.
+$ curl -s localhost:5090/config | grep -A1 "^ConnectionStrings"
+ConnectionStrings:
+  Orders=Host=localhost;Password=dev (JsonConfigurationProvider for 'secrets.json' (Optional))
+\end{lstlisting}
+
+  \slidegap
+  \begin{cbul}{accent}
+    \item \texttt{dotnet user-secrets init} --- файл в домашней папке, привязан к проекту
+    \item читается \hi{только} в разработке, в репозитории не лежит
+    \item в \texttt{appsettings.json} --- структура и безобидные умолчания
+  \end{cbul}
+
+  \rulegap
+  \aside{Проверка: репозиторий завтра станет публичным --- что утечёт?}
+\end{frame}
+
+% 52
+\begin{frame}[plain]
+  \keyline{Разница между окружениями живёт в конфигурации.\\
+    Образ один, сред много: сверху --- переменные.}
+\end{frame}
+
+% ==================================================== 4. OPTIONS ==
+\section{4. Options pattern}
+
+% 53
+\begin{frame}[plain]
+  \sectionopener{4}{Options pattern}{Настройки --- это \hi{тип}, а не строка
+    по ключу.}
+\end{frame}
+
+% 54
+\begin{frame}[fragile]{Класс настроек}
+  \vspace{0.3em}
+\begin{lstlisting}[style=csharp,basicstyle=\codexxs,escapechar=|]
+public sealed class RatesOptions
+{
+|\mk{p1}|    public const string Section = "Rates";
+
+|\mk{p2}|    [Required, Url]
+    public string BaseUrl { get; set; } = "";
+
+    [Range(1, 60)]
+|\mk{p3}|    public int TimeoutSeconds { get; set; } = 5;
+}
+
+builder.Services
+    .AddOptions<RatesOptions>()
+|\mk{p4}|    .BindConfiguration(RatesOptions.Section)
+|\mk{p5}|    .ValidateDataAnnotations()
+|\mk{p6}|    .ValidateOnStart();
+
+public sealed class PricingService(
+|\mk{p7}|    IOptionsMonitor<RatesOptions> options) { /* ... */ }
+\end{lstlisting}
+  \begin{tikzpicture}[remember picture,overlay,every node/.style={rawlab}]
+    \node at ([xshift=10.6cm]p1) {имя секции --- в классе};
+    \node at ([xshift=10.6cm]p2) {правила атрибутами};
+    \node at ([xshift=10.6cm]p3) {единица --- в имени};
+    \node at ([xshift=10.6cm]p4) {привязать к секции};
+    \node at ([xshift=10.6cm]p5) {проверить атрибуты};
+    \node[text=accent] at ([xshift=10.6cm]p6) {упасть на старте};
+    \node at ([xshift=10.6cm]p7) {обычная зависимость};
+  \end{tikzpicture}
+\end{frame}
+
+% 55
+\begin{frame}{Три интерфейса}
+  \slidetop
+  \claim{Разница в одном: \hi{когда} значение перечитывается.}
+
+  {\renewcommand{\arraystretch}{1.6}
+  \begin{tabular}{@{}L{4.2cm}L{5.0cm}L{3.6cm}@{}}
+    \hi{\texttt{IOptions<T>}}     & один раз, до перезапуска        & singleton \\
+    \texttt{IOptionsSnapshot<T>}  & один раз на запрос              & scoped: в
+      singleton \lo{нельзя} \\
+    \texttt{IOptionsMonitor<T>}   & всегда актуальное, с уведомлением & singleton \\
+  \end{tabular}}
+
+  \slidegap
+  \aside{По умолчанию --- \texttt{IOptions}. Перечитываются файлы; переменные
+    окружения процесс читает один раз, при старте.}
+\end{frame}
+
+% 56
+\begin{frame}[fragile]{Клиент из настроек}
+  \slidetop
+  \claim{Адрес живёт в \hi{одном} классе. Строковых ключей нет.}
+
+\begin{lstlisting}[style=csharp,basicstyle=\codexs,escapechar=|]
+builder.Services
+|\mk{w1}|    .AddHttpClient<RatesClient>((provider, client) =>
+    {
+        RatesOptions options = provider
+|\mk{w2}|            .GetRequiredService<IOptions<RatesOptions>>().Value;
+        client.BaseAddress = new Uri(options.BaseUrl);
+        client.Timeout = TimeSpan.FromSeconds(options.TimeoutSeconds);
+    })
+    .AddStandardResilienceHandler();
+\end{lstlisting}
+  \begin{tikzpicture}[remember picture,overlay,every node/.style={rawlab}]
+    \node at ([xshift=10.4cm]w1) {перегрузка с контейнером};
+    \node[text=accent] at ([xshift=10.4cm]w2) {проверенные настройки};
+  \end{tikzpicture}
+
+  \slidegap
+  \aside{Контейнер в регистрации --- это граница, а не бизнес-логика.}
+\end{frame}
+
+% 57
+\begin{frame}[plain]
+  \vote{Вы забыли задать адрес курсов в проде. Когда вы об этом узнаете?}
+\end{frame}
+
+% 58
+\begin{frame}[fragile]{Падать на старте}
+  \slidetop
+  \versus{С Validate On Start}{%
+    \begin{cbul}{accent}
+      \item процесс не поднялся
+      \item трафик остался на старой версии
+      \item ошибка в логе запуска, в ту же минуту
+    \end{cbul}}{Без него}{%
+    \begin{cbul}{alt}
+      \item стартует, отвечает на \texttt{/health}
+      \item принимает трафик
+      \item падает первый запрос за курсом, через час
+    \end{cbul}}
+
+  \slidegap
+\begin{lstlisting}[style=term,basicstyle=\termsm]
+$ Rates__BaseUrl= dotnet run 2>&1 | grep -m1 -o "for 'RatesOptions.*"
+for 'RatesOptions' members: 'BaseUrl' with the error: 'The BaseUrl field is required.'.
+\end{lstlisting}
+
+  \rulegap
+  \aside{Сообщение пишите так, чтобы было понятно, какую переменную задать.}
+\end{frame}
+
+% 59
+\begin{frame}[plain]
+  \keyline{Настройки --- тип, а не строка по ключу.\\
+    Проверяются на старте, пока ошибка ничего не стоит.}
+\end{frame}
+
+\end{document}
