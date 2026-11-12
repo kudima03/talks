@@ -1,0 +1,1103 @@
+% Л6 -- Ресурсы, файлы и асинхронность. Slides.
+%
+% Companion to the spoken script in ../L06-resources-and-async.md, which is
+% the source of truth: the slides carry diagrams, code and short claims, and
+% the delivery lives in the script only -- this deck carries no speaker
+% notes. Slide text is in Russian because that is the content; everything
+% else in this file is English.
+%
+% Build:  make          (latexmk -pdf; engine: pdflatex)
+%
+% Every listing was compiled and run on dotnet SDK 10.0.112 in a stock
+% `dotnet new console`; outputs shown or described are real. See
+% ../CLAUDE.md for the verification table.
+%
+% House rules: ../CLAUDE.md and ../../../CLAUDE.md. Theme: ../../../../theme/.
+
+\documentclass[aspectratio=169,10pt,t]{beamer}
+
+\usetheme{dotnet}
+\usetikzlibrary{arrows.meta,positioning,calc,patterns}
+\usepackage{array}   % ragged-right table columns
+
+\dotnetlecture{Л6}
+
+\title[Л6. Ресурсы, файлы, асинхронность]{Ресурсы, файлы и асинхронность}
+\author{Дмитрий Курочкин}
+\date{}
+
+% Code sizes, one step down from \footnotesize. Smaller than 7pt does not
+% carry to the back of the room.
+\newcommand{\codesm}{\ttfamily\fontsize{7.6}{9.0}\selectfont}
+\newcommand{\codexs}{\ttfamily\fontsize{7.0}{8.3}\selectfont}
+
+\begin{document}
+
+% ------------------------------------------------------------------ title --
+\begin{frame}[plain]
+  \titlepagednc{Лекция 6}{Ресурсы, файлы и асинхронность}{}{Дмитрий
+    Курочкин}
+\end{frame}
+
+% ==================================================== 1. RESOURCE OWNERSHIP ==
+\section{1. Владение ресурсом}
+
+% 2
+\begin{frame}[plain]
+  \sectionopener{1}{Владение ресурсом}{За что отвечаете \hi{вы}, а не
+    рантайм.}
+\end{frame}
+
+% 3
+\begin{frame}{О чём первая часть}
+  \slidetop
+  \large
+  \begin{cbul}{accent}
+    \item managed и unmanaged ресурсы
+    \item \texttt{IDisposable} и \texttt{using}
+    \item три уровня работы с файлом
+    \item пути к файлам
+    \item финализаторы
+  \end{cbul}
+\end{frame}
+
+% 4
+\begin{frame}[plain]
+  \vote{Файл открыли, прочитали и не закрыли. Объект стал недостижим, и
+    сборщик мусора его убрал. Файл закрыт?}
+\end{frame}
+
+% 5
+\begin{frame}{Два вида ресурсов}
+  \slidetop
+  \versus{managed}{%
+    \begin{cbul}{accent}
+      \item объекты в куче
+      \item сборщик \hi{видит} их и убирает сам
+    \end{cbul}}{unmanaged}{%
+    \begin{cbul}{alt}
+      \item файловый дескриптор, сокет, соединение с БД
+      \item сборщик их \lo{не видит}
+    \end{cbul}}
+
+  \slidegap
+  \aside{Для сборщика \texttt{FileStream} --- несколько десятков байт с числом
+    внутри. Что число --- дескриптор, и ОС нужно сказать «я закончил», он не
+    знает.}
+\end{frame}
+
+% 6
+\begin{frame}[fragile]{\texttt{IDisposable}}
+  \slidetop
+  \claim{Договор: \hi{Dispose} значит «я закончил, освободи».}
+
+\begin{lstlisting}[style=csharp,basicstyle=\ttfamily\small]
+public interface IDisposable
+{
+    void Dispose();
+}
+\end{lstlisting}
+
+  \slidegap
+  {\renewcommand{\arraystretch}{1.35}\small
+  \begin{tabular}{@{}p{3.6cm}p{7cm}@{}}
+    \texttt{FileStream}  & закрывает дескриптор \\
+    \texttt{StreamReader} & закрывает свой \texttt{FileStream} \\
+    соединение с БД       & возвращается в пул \\
+    сокет                 & закрывается \\
+  \end{tabular}}
+\end{frame}
+
+% 7
+\begin{frame}[fragile]{\texttt{using}: блок}
+  \slidetop
+  \claim{Старая форма: объект живёт до конца \hi{блока}.}
+
+\begin{lstlisting}[style=csharp,basicstyle=\codesm]
+string? FindHello(string path)
+{
+    using (StreamReader reader = new StreamReader(path))
+    {
+        string? line = reader.ReadLine();
+        while (line != null && !line.Contains("Hello!"))
+        {
+            line = reader.ReadLine();
+        }
+        return line;
+    }
+}
+\end{lstlisting}
+
+  \slidegap
+  \aside{Файл читается \hi{подряд}, с начала, до первого совпадения.}
+\end{frame}
+
+% 8
+\begin{frame}[fragile]{\texttt{using}: объявление}
+  \slidetop
+  \claim{Современная форма: объект живёт до конца \hi{области}.}
+
+\begin{lstlisting}[style=csharp,basicstyle=\codesm]
+string? FindHello(string path)
+{
+    using StreamReader reader = new StreamReader(path);
+    string? line = reader.ReadLine();
+    while (line != null && !line.Contains("Hello!"))
+    {
+        line = reader.ReadLine();
+    }
+    return line;
+}
+\end{lstlisting}
+
+  \slidegap
+  \aside{Меньше отступов; несколько ресурсов подряд --- без лестницы блоков.}
+\end{frame}
+
+% 9
+\begin{frame}[fragile]{Во что разворачивается \texttt{using}}
+  \slidetop
+  \claim{Обе формы --- это \hi{try / finally}: ресурс освобождён при любом
+    исходе.}
+
+\begin{lstlisting}[style=csharp,basicstyle=\codesm]
+StreamReader reader = new StreamReader(path);
+try
+{
+    // your code
+}
+finally
+{
+    if (reader != null)
+    {
+        reader.Dispose();
+    }
+}
+\end{lstlisting}
+
+  \slidegap
+  \aside{Вернулись, бросили исключение, вышли через \texttt{break} ---
+    \texttt{finally} выполнится.}
+\end{frame}
+
+% 10
+\begin{frame}[fragile]{Несколько \texttt{using} подряд}
+  \slidetop
+  \claim{Освобождаются в \hi{обратном} порядке: последний созданный --- первым.}
+
+\begin{lstlisting}[style=csharp,basicstyle=\codesm]
+using FileStream stream = new FileStream(path, FileMode.Create);
+using StreamWriter writer = new StreamWriter(stream);
+writer.WriteLine("Hello!");
+\end{lstlisting}
+
+  \slidegap
+  \begin{center}
+    \begin{tikzpicture}[font=\small,
+      st/.style={draw=hairline,line width=0.8pt,fill=codebg,
+                 minimum width=5.6cm,minimum height=1.0cm,inner sep=4pt,
+                 align=center},
+      ar/.style={-{Straight Barb[length=1.8mm]},accent,line width=0.8pt}]
+      \node[st,draw=accent] (w) at (0,0)
+        {\textbf{1.} \texttt{writer.Dispose()}\\
+         {\scriptsize сбрасывает буфер в поток}};
+      \node[st] (s) at (6.8,0)
+        {\textbf{2.} \texttt{stream.Dispose()}\\
+         {\scriptsize закрывает дескриптор}};
+      \draw[ar] (w) -- (s);
+    \end{tikzpicture}
+  \end{center}
+
+  \slidegap
+  \aside{Перепутанный порядок --- \lo{потерянный хвост} файла.}
+\end{frame}
+
+% 11
+\begin{frame}[fragile]{Забытый \texttt{using}}
+  \slidetop
+  \claim{Незакрытый файл мешает вам \lo{самим}.}
+
+\begin{lstlisting}[style=csharp,basicstyle=\codesm]
+FileStream output = File.OpenWrite(path);
+output.WriteByte(1);
+string text = File.ReadAllText(path);   // throws
+\end{lstlisting}
+
+  \slidegap
+\begin{lstlisting}[style=term,basicstyle=\ttfamily\fontsize{6.6}{8}\selectfont]
+System.IO.IOException: The process cannot access the file
+'/home/user/data.txt' because it is being used by another process.
+\end{lstlisting}
+
+  \slidegap
+  \aside{«Другой процесс» --- это ваш дескриптор двумя строками выше. С \texttt{using}
+    он освобождён \hi{детерминированно}, в \texttt{finally}.}
+\end{frame}
+
+% 12
+\begin{frame}[fragile]{Свой тип: \texttt{LogWriter}}
+  \vspace{0.3em}
+\begin{lstlisting}[style=csharp,basicstyle=\ttfamily\fontsize{6.6}{7.6}\selectfont]
+sealed class LogWriter(string path) : IDisposable
+{
+    private readonly StreamWriter _writer = new StreamWriter(path, append: true);
+    private bool _disposed;
+
+    public void Write(string line)
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        _writer.WriteLine($"{DateTime.UtcNow:O} {line}");
+    }
+
+    public void Dispose()
+    {
+        if (!_disposed)
+        {
+            _writer.Dispose();
+            _disposed = true;
+        }
+    }
+}
+\end{lstlisting}
+
+  \vspace{-0.2em}
+  \aside{\hi{Повторный} Dispose безопасен; использование \hi{после} --- исключение.}
+\end{frame}
+
+% 13
+\begin{frame}{Владеет --- освобождает}
+  \slidetop
+  \versus{создали сами}{%
+    \begin{cbul}{accent}
+      \item вы владелец
+      \item освобождаете: \texttt{using} или \texttt{Dispose}
+    \end{cbul}}{получили снаружи}{%
+    \begin{cbul}{alt}
+      \item вы не владелец
+      \item не освобождаете: это сделает создатель
+    \end{cbul}}
+
+  \slidegap
+  \hrulethin{0.42}
+  \rulegap
+  {\large Владелец \hi{один}: двое --- двойное освобождение, никто --- утечка.}
+\end{frame}
+
+% 14
+\begin{frame}[fragile]{Уровень 1: \texttt{File}}
+  \slidetop
+  \claim{Одна строка: открыл, прочитал, закрыл --- \hi{сам}.}
+
+\begin{lstlisting}[style=csharp,basicstyle=\ttfamily\small]
+string text = File.ReadAllText(path);
+string[] lines = File.ReadAllLines(path);
+File.WriteAllText(path, text);
+\end{lstlisting}
+
+  \slidegap
+  \aside{Файл целиком в памяти. Верхнюю границу размера назвать не можете ---
+    \lo{не читаете целиком}.}
+\end{frame}
+
+% 15
+\begin{frame}{Уровень 2: \texttt{StreamReader}}
+  \slidetop
+  \claim{Читает блоками, отдаёт строки: в памяти один \hi{блок} и одна
+    \hi{строка}.}
+
+  \begin{center}
+    \begin{tikzpicture}[font=\small,
+      cell/.style={draw=hairline,line width=0.8pt,fill=codebg,
+                   minimum width=1.2cm,minimum height=0.8cm,inner sep=0pt},
+      ar/.style={-{Straight Barb[length=1.8mm]},accent,line width=0.7pt}]
+      \foreach \i in {0,...,7} \node[cell] (b\i) at (\i*1.2,0) {};
+      \node[cell,draw=accent,line width=1.2pt] at (b3) {};
+      \node[muted,font=\scriptsize,above=0.3em] at (b3.north) {файл на диске};
+      \node[draw=accent,line width=0.9pt,fill=codebg,minimum width=2.6cm,
+        minimum height=0.8cm] (buf) at (3.6,-1.9) {буфер: блок};
+      \node[draw=accent,line width=0.9pt,fill=codebg,minimum width=2.2cm,
+        minimum height=0.8cm] (ln) at (7.4,-1.9) {строка};
+      \draw[ar] (b3.south) -- (buf.north);
+      \draw[ar] (buf.east) -- node[above,font=\scriptsize,text=accent]
+        {\texttt{ReadLine}} (ln.west);
+    \end{tikzpicture}
+  \end{center}
+
+  \slidegap
+  \aside{Гигабайтный файл --- в постоянной памяти. Первый уровень, где нужен
+    \texttt{using}.}
+\end{frame}
+
+% 16
+\begin{frame}[fragile]{Уровень 3: \texttt{FileStream}}
+  \slidetop
+  \claim{Байты, позиция --- и \hi{доступ к файлу} задаётся явно.}
+
+  \begin{minipage}[t]{0.50\textwidth}
+\begin{lstlisting}[style=csharp,basicstyle=\codesm]
+FileStream stream = new FileStream(
+    path,
+    FileMode.Open,
+    FileAccess.Read,
+    FileShare.Read);
+\end{lstlisting}
+  \end{minipage}\hfill
+  \begin{minipage}[t]{0.46\textwidth}
+    {\renewcommand{\arraystretch}{1.5}\small
+    \begin{tabular}{@{}p{2.2cm}p{3.8cm}@{}}
+      \hi{FileMode}   & создать, открыть, дописать \\
+      \hi{FileAccess} & чтение, запись \\
+      \hi{FileShare}  & что разрешено другим \\
+    \end{tabular}}
+  \end{minipage}
+
+  \slidegap
+  \aside{Пока файл открыт у вас, другие смогут его читать, но не менять. Это
+    контракт с ОС --- выбирайте его сознательно.}
+\end{frame}
+
+% 17
+\begin{frame}[fragile]{Путь: разделители}
+  \slidetop
+  \claim{Путь собирает \hi{Path}, а не конкатенация строк.}
+
+\begin{lstlisting}[style=csharp,basicstyle=\ttfamily\small]
+Path.Combine("data", "logs", "app.txt")
+\end{lstlisting}
+
+  \slidegap
+  \versus{Windows}{\texttt{data\textbackslash logs\textbackslash app.txt}}{%
+    Linux, macOS}{\texttt{data/logs/app.txt}}
+
+  \slidegap
+  \aside{Разделитель подставляется по платформе. Склеенный строкой путь
+    работает на \lo{одной}.}
+\end{frame}
+
+% 18
+\begin{frame}[fragile]{\texttt{Path}: собрать и разобрать}
+  \slidetop
+  \claim{Не режьте путь руками: эти методы знают про все платформы.}
+
+\begin{lstlisting}[style=csharp,basicstyle=\codesm]
+string Path.Combine(string path1, string path2)
+string Path.Join(string path1, string path2)
+string Path.GetExtension(string path)
+string Path.GetFileName(string path)
+string Path.GetDirectoryName(string path)
+\end{lstlisting}
+
+  \slidegap
+  \aside{«Если файл есть, открыть» --- гонка между проверкой и открытием.
+    Открывайте и обрабатывайте \hi{исключение}.}
+\end{frame}
+
+% 19
+\begin{frame}{Относительный и абсолютный путь}
+  \slidetop
+  \versus{абсолютный}{%
+    \begin{cbul}{accent}
+      \item не зависит от места запуска
+      \item рядом с приложением --- от папки приложения
+      \item внешний файл --- путь из конфигурации
+    \end{cbul}}{относительный}{%
+    \begin{cbul}{alt}
+      \item отсчёт от \lo{рабочей директории процесса}, не от сборки
+      \item \texttt{dotnet run}, публикация, контейнер --- три разных места
+    \end{cbul}}
+
+  \slidegap
+  \hrulethin{0.42}
+  \rulegap
+  {\large Регистр: Windows не различает, Linux \lo{различает} ---
+    \texttt{Config.json} и \texttt{config.json} там два файла.}
+\end{frame}
+
+% 20
+\begin{frame}{Где приложению можно работать с файлами}
+  \slidetop
+  \claim{Приложение работает только со \hi{своей} папкой.}
+
+  \versus{своя папка --- читаем}{%
+    \begin{cbul}{accent}
+      \item конфигурация, шаблоны, данные приложения
+      \item в контейнере может быть только для чтения
+    \end{cbul}}{временная --- пишем}{%
+    \begin{cbul}{alt}
+      \item всё, что нужно записать
+      \item \texttt{Path.GetTempPath()}
+    \end{cbul}}
+\end{frame}
+
+% 21
+\begin{frame}[fragile]{Финализатор}
+  \slidetop
+  \claim{Метод с тильдой: сборщик вызовет его перед тем, как убрать объект.}
+
+\begin{lstlisting}[style=csharp,basicstyle=\ttfamily\small]
+class Holder
+{
+    ~Holder()
+    {
+        // called by the GC before the object is removed
+    }
+}
+\end{lstlisting}
+
+  \slidegap
+  \aside{Так \texttt{FileStream} закрывается «когда-нибудь». Когда именно ---
+    решает сборщик.}
+\end{frame}
+
+% 22
+\begin{frame}{Три причины не писать финализатор}
+  \slidetop
+  {\renewcommand{\arraystretch}{1.9}
+  \begin{tabular}{@{}p{4.2cm}p{8.6cm}@{}}
+    \lo{\textbf{недетерминированность}} & через миллисекунду, через час или
+      никогда \\
+    \lo{\textbf{цена}} & объект переживает лишнюю сборку --- дороже обычного
+      всегда \\
+    \lo{\textbf{сложность}} & отдельный поток, неизвестный момент, другие
+      объекты уже могли быть собраны \\
+  \end{tabular}}
+
+  \slidegap
+  \aside{Вместо финализатора --- \hi{Dispose}. Сырой дескриптор ОС --- готовая
+    обёртка из стандартной библиотеки.}
+\end{frame}
+
+% 23
+\begin{frame}[plain]
+  \keyline{Сборщик убирает память, а не ресурсы.\\ Ресурс освобождает
+    владелец: один раз, через \texttt{using}.}
+\end{frame}
+
+% ================================================================ 2. ASYNC ==
+\section{2. Асинхронность}
+
+% 24
+\begin{frame}[plain]
+  \sectionopener{2}{Асинхронность}{Поток --- \hi{дорогой} ресурс, и он не
+    должен ждать.}
+\end{frame}
+
+% 25
+\begin{frame}[plain]
+  \vote{Запрос идёт в базу данных, ответ приходит через 50 мс. Что делает
+    поток, обрабатывающий запрос, эти 50 мс?}
+\end{frame}
+
+% 26
+\begin{frame}{Что делает поток, пока ждёт}
+  \slidetop
+  \claim{Ждёт: занимает стек и запись в ядре, и не делает \lo{ничего}.}
+
+  \begin{center}
+    \begin{tikzpicture}[font=\small]
+      \node[draw=accent,line width=1.0pt,fill=codebg,minimum width=1.6cm,
+        minimum height=1.0cm] (a) at (0,0) {};
+      \node[draw=alt,line width=1.0pt,dashed,fill=paper,minimum width=7.4cm,
+        minimum height=1.0cm,anchor=west] (w) at (a.east) {};
+      \node[draw=accent,line width=1.0pt,fill=codebg,minimum width=1.6cm,
+        minimum height=1.0cm,anchor=west] (b) at (w.east) {};
+      \node[font=\scriptsize,text=accent,below=0.3em] at (a.south) {принял};
+      \node[font=\scriptsize,text=alt,below=0.3em] at (w.south)
+        {база думает: 50 мс, поток заблокирован};
+      \node[font=\scriptsize,text=accent,below=0.3em] at (b.south) {собрал};
+      \draw[-{Straight Barb[length=1.8mm]},muted,line width=0.6pt]
+        ([yshift=-1.3cm]a.west) -- node[below,font=\scriptsize,text=muted]
+        {время} ([yshift=-1.3cm]b.east);
+    \end{tikzpicture}
+  \end{center}
+
+  \slidegap
+  \aside{За эти 50 мс процессор мог выполнить десятки миллионов инструкций.
+    Поток не выполнил ни одной.}
+\end{frame}
+
+% 27
+\begin{frame}{Поток на запрос и асинхронность}
+  \slidetop
+  \begin{center}
+    \begin{tikzpicture}[font=\small]
+      \foreach \r in {0,...,4}
+        \foreach \c in {0,...,9}
+          \node[draw=alt,line width=0.6pt,fill=codebg,minimum size=0.28cm,
+            inner sep=0pt] at (\c*0.36,-\r*0.36) {};
+      \node[alt,font=\footnotesize\bfseries] at (1.6,-2.2) {1000 потоков, все ждут};
+
+      \foreach \c in {0,...,7}
+        \node[draw=accent,line width=0.9pt,fill=accent!15!paper,minimum size=0.42cm,
+          inner sep=0pt] at (7.3+\c*0.5,0) {};
+      \foreach \x/\y in {7.4/-0.9,8.0/-1.3,8.7/-0.8,9.3/-1.4,9.9/-0.9,10.5/-1.3,
+                         7.7/-1.8,8.4/-1.7,9.0/-2.0,9.7/-1.8,10.3/-2.0}
+        \node[fill=hairline,circle,minimum size=0.18cm,inner sep=0pt] at (\x,\y) {};
+      \node[accent,font=\footnotesize\bfseries] at (9.2,-2.6)
+        {8 потоков работают, ожидания --- объекты};
+    \end{tikzpicture}
+  \end{center}
+
+  \slidegap
+  \aside{Один запрос не станет быстрее: те же 50 мс. Меняется то, сколько
+    запросов сервер держит одновременно.}
+\end{frame}
+
+% 28
+\begin{frame}{Асинхронность и параллелизм}
+  \slidetop
+  {\renewcommand{\arraystretch}{1.9}
+  \begin{tabular}{@{}p{2.6cm}p{6.6cm}p{2.4cm}@{}}
+    \colhead{muted}{}      & \colhead{muted}{потоки}   & \colhead{muted}{когда} \\
+    \textbf{синхронно}     & один, ждёт                 & \\
+    \hi{\textbf{асинхронно}} & мало, никто не ждёт      & \hi{ввод-вывод} \\
+    \lo{\textbf{параллельно}} & по числу ядер, все считают & \lo{вычисления} \\
+  \end{tabular}}
+
+  \slidegap
+  \aside{Асинхронность про \hi{ожидание}, параллелизм про \lo{вычисления}.
+    Лишних ядер асинхронность не даёт.}
+\end{frame}
+
+% 29
+\begin{frame}{Правило}
+  \slidetop
+  \versus{ввод-вывод}{%
+    {\large \hi{асинхронно}, через \texttt{await}}}{вычисления}{%
+    {\large\dncnohyph \lo{параллельно}, если можно разрезать; синхронно, если нельзя}}
+
+  \slidegap
+  \hrulethin{0.42}
+  \rulegap
+  \aside{Ввод-вывод в \texttt{Task.Run} --- поток из пула, который только ждёт.
+    Тяжёлое вычисление под \texttt{async} --- всё тот же занятый поток.}
+\end{frame}
+
+% 30
+\begin{frame}[plain]
+  \vote{Что такое \texttt{Task}?}
+\end{frame}
+
+% 31
+\begin{frame}{\texttt{Task} --- обещание}
+  \slidetop
+  \claim{Не поток и не операция: результат \hi{будет}, возможно, не сейчас.}
+
+  \begin{center}
+    \begin{tikzpicture}[font=\small,
+      row/.style={draw=hairline,line width=0.6pt,fill=codebg,
+                  minimum width=5.4cm,minimum height=0.8cm,inner sep=4pt},
+      src/.style={draw=hairline,line width=0.8pt,fill=paper,
+                  minimum width=4.4cm,minimum height=0.9cm,inner sep=3pt,
+                  align=center},
+      ar/.style={-{Straight Barb[length=1.8mm]},line width=0.8pt}]
+      \node[row,draw=accent,line width=1.0pt] (s) at (7.4,0.85) {состояние};
+      \node[row] (r) at (7.4,0)    {результат / исключение};
+      \node[row] (c) at (7.4,-0.85) {список continuations};
+      \node[src] (run) at (1.4,0.7)  {\texttt{Task.Run}\\
+        {\scriptsize поток из пула}};
+      \node[src] (io)  at (1.4,-0.7) {ввод-вывод\\
+        {\scriptsize ОС сообщит}};
+      \draw[ar,accent] (run.east) -- ([xshift=-2pt]s.west |- run.east);
+      \draw[ar,alt] (io.east) -- ([xshift=-2pt]c.west |- io.east);
+    \end{tikzpicture}
+  \end{center}
+\end{frame}
+
+% 32
+\begin{frame}[fragile]{Источник 1: \texttt{Task.Run}}
+  \slidetop
+  \claim{Вычисление на потоке из пула: за задачей \hi{стоит поток}.}
+
+\begin{lstlisting}[style=csharp,basicstyle=\ttfamily\small]
+Task<int> task = Task.Run(() => Compute());
+\end{lstlisting}
+
+  \slidegap
+  \aside{Инструмент для вычислений. Для ввода-вывода не нужен: поток из пула
+    будет только ждать.}
+\end{frame}
+
+% 33
+\begin{frame}[fragile]{Источник 2: ввод-вывод}
+  \slidetop
+  \claim{Асинхронное чтение: за задачей \hi{потока нет}.}
+
+\begin{lstlisting}[style=csharp,basicstyle=\ttfamily\small]
+Task<string> task = File.ReadAllTextAsync(path);
+\end{lstlisting}
+
+  \slidegap
+  \aside{Библиотека попросила ОС прочитать и сообщить. Между запросом и ответом
+    задача есть, потока --- нет.}
+\end{frame}
+
+% 34
+\begin{frame}[fragile]{Пауза: два способа подождать секунду}
+  \slidetop
+  \versus{\texttt{Task.Delay}}{%
+    \begin{cbul}{accent}
+      \item регистрирует таймер в ОС
+      \item поток \hi{свободен}
+      \item таймер завершит задачу и запустит продолжение
+    \end{cbul}}{\texttt{Thread.Sleep}}{%
+    \begin{cbul}{alt}
+      \item блокирует поток
+      \item поток ничего не делает и никому не достаётся
+      \item в сервисе --- \lo{никогда}
+    \end{cbul}}
+\end{frame}
+
+% 35
+\begin{frame}[plain]
+  \statement{У асинхронного метода нет своего потока.}
+\end{frame}
+
+% 36
+\begin{frame}[fragile]{Пять \texttt{await} подряд}
+  \slidetop
+  \claim{Каждый \hi{await} --- место, где метод может улететь в ожидание.}
+
+\begin{lstlisting}[style=csharp,basicstyle=\codesm]
+async Task<string> HandleAsync(int id)
+{
+    User user = await LoadUserAsync(id);              // 1
+    int[] orders = await LoadOrdersAsync(user);       // 2
+    decimal price = await CalcPriceAsync(orders);     // 3
+    await SaveAsync(price);                           // 4
+    await NotifyAsync(user);                          // 5
+    return user.Name;
+}
+\end{lstlisting}
+
+  \slidegap
+  \aside{Выглядит как пять строк подряд, а по смыслу это callback: «всё, что
+    ниже, выполни, когда это завершится».}
+\end{frame}
+
+% 37
+\begin{frame}{Цепочка состояний}
+  \slidetop
+  \claim{Пять \hi{await} режут метод на шесть кусков; номер куска ---
+    состояние.}
+
+  \begin{center}
+    \begin{tikzpicture}[font=\small,
+      pc/.style={draw=hairline,line width=0.8pt,fill=codebg,
+                 minimum width=1.4cm,minimum height=1.0cm,inner sep=0pt},
+      ar/.style={-{Straight Barb[length=1.6mm]},alt,line width=0.8pt}]
+      \foreach \i in {0,...,5} \node[pc] (p\i) at (\i*2.2,0) {\textbf{\i}};
+      \foreach \i/\j in {0/1,1/2,2/3,3/4,4/5} {
+        \draw[ar] (p\i.east) -- node[above,font=\scriptsize\ttfamily,text=alt]
+          {await} (p\j.west);
+      }
+      \node[muted,font=\scriptsize,below=0.5em] at (p2.south)
+        {состояние = номер куска};
+    \end{tikzpicture}
+  \end{center}
+
+  \slidegap
+  \aside{На каждом \texttt{await} состояние запоминается, метод улетает; когда
+    ожидание кончилось, продолжение читает номер и прыгает на нужный кусок.}
+\end{frame}
+
+% 38
+\begin{frame}[fragile]{Исключение в асинхронном методе}
+  \slidetop
+  \claim{Исключение лежит в задаче и вылетает в строке \hi{await}.}
+
+\begin{lstlisting}[style=csharp,basicstyle=\ttfamily\fontsize{6.8}{7.9}\selectfont]
+async Task FailAsync()
+{
+    await Task.Delay(10);
+    throw new InvalidOperationException("boom");
+}
+
+try
+{
+    await FailAsync();   // the exception is thrown here
+}
+catch (InvalidOperationException ex)
+{
+    Console.WriteLine(ex.Message);
+}
+\end{lstlisting}
+
+  \vspace{0.2em}
+  \aside{Стека вызова уже нет, поэтому исключение ждёт в задаче.}
+\end{frame}
+
+% 39
+\begin{frame}{Как работает переключение: четыре шага}
+  \slidetop
+  {\renewcommand{\arraystretch}{1.55}\small
+  \begin{tabular}{@{}p{0.7cm}p{2.8cm}p{8.8cm}@{}}
+    \hi{\textbf{1}} & компилятор & метод становится \hi{state machine}: локальные
+      переменные --- поля, номер состояния, \texttt{MoveNext} \\
+    \hi{\textbf{2}} & \texttt{await} & завершена? да --- идём дальше; нет ---
+      регистрируем продолжение и \hi{возвращаемся} \\
+    \hi{\textbf{3}} & ОС & операция завершилась --- продолжение ставится в
+      очередь thread pool \\
+    \hi{\textbf{4}} & поток пула & \texttt{MoveNext} продолжает с
+      сохранённого состояния \\
+  \end{tabular}}
+
+  \slidegap
+  \aside{Часто задача уже завершена: тогда никакого переключения, метод идёт
+    дальше на том же потоке.}
+\end{frame}
+
+% 40
+\begin{frame}{Шаг 3: куда девается поток}
+  \slidetop
+  \begin{center}
+    \begin{tikzpicture}[font=\footnotesize,
+      bx/.style={draw=hairline,line width=0.8pt,fill=codebg,
+                 minimum width=2.6cm,minimum height=0.95cm,inner sep=3pt,
+                 align=center},
+      ar/.style={-{Straight Barb[length=1.6mm]},line width=0.7pt}]
+      \node[bx] (t) at (0,1.2) {ваш поток:\\ «прочитай сокет»};
+      \node[bx] (os1) at (3.6,1.2) {ОС: запомнила\\ запрос};
+      \node[bx,draw=accent] (pool) at (7.2,1.2) {поток --- в пул,\\ берёт другую работу};
+      \draw[ar,muted] (t) -- (os1);
+      \draw[ar,accent] (os1.east) -- (pool.west);
+
+      \node[alt,font=\scriptsize] at (5.4,0.1)
+        {ожидание: записи в таблице ядра, потока нет};
+
+      \node[bx] (os2) at (0,-1.2) {ОС: данные\\ пришли};
+      \node[bx] (svc) at (3.0,-1.2) {служебный поток:\\ задаче --- результат};
+      \node[bx] (q) at (6.0,-1.2) {очередь\\ thread pool};
+      \node[bx,draw=accent] (w) at (9.0,-1.2) {любой поток пула:\\ \texttt{MoveNext}};
+      \draw[ar,muted] (os2) -- (svc);
+      \draw[ar,muted] (svc) -- (q);
+      \draw[ar,accent] (q) -- (w);
+    \end{tikzpicture}
+  \end{center}
+
+  \slidegap
+  \aside{«There is no thread»: между запросом и ответом вашим запросом не занят
+    ни один поток.}
+\end{frame}
+
+% 41
+\begin{frame}[plain]
+  \vote{Код до \texttt{await} выполнялся на потоке номер 5 из пула. На каком
+    потоке выполнится код после \texttt{await}?}
+\end{frame}
+
+% 42
+\begin{frame}{Куски метода на разных потоках}
+  \slidetop
+  \claim{Метод начался на одном потоке и закончится на \hi{другом}.}
+
+  \begin{center}
+    \begin{tikzpicture}[font=\small,
+      lane/.style={draw=none},
+      pc/.style={draw=accent,line width=1.0pt,fill=codebg,minimum width=2.2cm,
+                 minimum height=0.8cm,inner sep=0pt},
+      ar/.style={-{Straight Barb[length=1.6mm]},alt,line width=0.7pt,dashed}]
+      \foreach \y/\n in {1.5/5, 0/2, -1.5/7} {
+        \node[muted,font=\scriptsize,anchor=east] at (-0.3,\y) {поток \n};
+        \draw[hairline,line width=0.5pt] (0,\y) -- (11.4,\y);
+      }
+      \node[pc] (a) at (1.4,1.5)  {кусок 0};
+      \node[pc] (b) at (5.6,0)    {кусок 1};
+      \node[pc] (c) at (9.8,-1.5) {кусок 2};
+      \draw[ar] (a.east) -- node[above,font=\scriptsize,text=alt] {await} (b.north west);
+      \draw[ar] (b.east) -- node[above,font=\scriptsize,text=alt] {await} (c.north west);
+    \end{tikzpicture}
+  \end{center}
+
+  \slidegap
+  \aside{Пятый поток давно обслуживает другие запросы. Продолжение берёт тот,
+    кто свободен.}
+\end{frame}
+
+% 43
+\begin{frame}{Что переживает \texttt{await}}
+  \slidetop
+  \versus{переживает}{%
+    \begin{cbul}{accent}
+      \item локальные переменные: они поля state machine в куче
+      \item \texttt{this}
+      \item \texttt{AsyncLocal}
+    \end{cbul}}{не переживает}{%
+    \begin{cbul}{alt}
+      \item данные, локальные для потока
+      \item блокировка \texttt{lock}: \texttt{await} внутри запрещён
+    \end{cbul}}
+
+  \slidegap
+  \aside{Большой массив в локальной переменной живёт всё время ожидания, даже
+    если после \texttt{await} он не нужен.}
+\end{frame}
+
+% 44
+\begin{frame}{Thread pool}
+  \slidetop
+  \claim{Очередь элементов работы и потоки, которые её разбирают.}
+
+  \begin{center}
+    \begin{tikzpicture}[font=\footnotesize,
+      it/.style={draw=hairline,line width=0.8pt,fill=codebg,
+                 minimum width=2.1cm,minimum height=0.7cm,inner sep=2pt},
+      th/.style={draw=accent,line width=1.0pt,fill=accent!12!paper,
+                 minimum width=1.3cm,minimum height=0.7cm,inner sep=2pt},
+      ar/.style={-{Straight Barb[length=1.6mm]},muted,line width=0.7pt}]
+      \node[it] (q1) at (0,0.8)  {продолжение};
+      \node[it] (q2) at (0,0)    {\texttt{Task.Run}};
+      \node[it] (q3) at (0,-0.8) {таймер};
+      \node[muted,font=\scriptsize] at (0,1.4) {очередь};
+      \foreach \i in {0,1,2,3} \node[th] (w\i) at (5.4,1.2-\i*0.8) {поток};
+      \node[muted,font=\scriptsize] at (5.4,1.9) {по числу ядер};
+      \draw[ar] (q2.east) -- ([xshift=-2pt]w1.west);
+      \draw[ar] (q1.east) -- ([xshift=-2pt]w0.west);
+      \draw[ar] (q3.east) -- ([xshift=-2pt]w2.west);
+    \end{tikzpicture}
+  \end{center}
+
+  \vspace{0.4em}
+  \aside{Если очередь растёт, пул добавляет потоки, но \lo{медленно}: он не
+    отличает тяжёлую работу от заблокированных потоков.}
+\end{frame}
+
+% 45
+\begin{frame}{Голодание пула}
+  \slidetop
+  \begin{center}
+    \begin{tikzpicture}[font=\footnotesize,
+      it/.style={draw=hairline,line width=0.8pt,fill=codebg,
+                 minimum width=0.9cm,minimum height=0.6cm,inner sep=2pt},
+      th/.style={draw=alt,line width=1.0pt,fill=alt!12!paper,
+                 minimum width=1.4cm,minimum height=0.6cm,inner sep=2pt}]
+      \foreach \i in {0,...,7} \node[it] at (\i*1.0,0) {};
+      \node[muted,font=\scriptsize,above=0.5em] at (3.5,0.3)
+        {очередь растёт: продолжениям некому выполниться};
+      \foreach \i in {0,...,3} \node[th] at (9.6+\i*1.6-3.2,-1.5) {ждёт};
+      \node[alt,font=\scriptsize] at (9.6,-2.15)
+        {все потоки заблокированы синхронным ожиданием};
+    \end{tikzpicture}
+  \end{center}
+
+  \slidegap
+  \begin{center}
+    {\LARGE\bfseries\lo{Не блокируй поток!}}
+  \end{center}
+
+  \aside{Симптом: задержки в секунды при простаивающем процессоре и быстрой
+    базе; очередь пула растёт.}
+\end{frame}
+
+% 46
+\begin{frame}{Один запрос от начала до конца}
+  \slidetop
+  \begin{center}
+    \begin{tikzpicture}[font=\footnotesize,
+      bx/.style={draw=hairline,line width=0.8pt,fill=codebg,
+                 minimum height=1.05cm,inner sep=4pt,align=center},
+      ar/.style={-{Straight Barb[length=1.6mm]},line width=0.7pt}]
+      \foreach \y/\n in {1.5/{поток 3}, 0/{база}, -1.5/{поток 7}} {
+        \node[muted,font=\scriptsize,anchor=east] at (0.9,\y) {\n};
+        \draw[hairline,line width=0.5pt] (1.0,\y) -- (13.0,\y);
+      }
+      \node[bx,minimum width=4.5cm,draw=accent] (a1) at (3.4,1.5)
+        {\textbf{1. Запрос А идёт вниз}\\
+         \textcolor{muted}{\scriptsize до драйвера БД; на каждом \texttt{await}}\\
+         \textcolor{muted}{\scriptsize возвращается вверх}};
+      \node[bx,minimum width=3.3cm] (b) at (7.7,1.5)
+        {\textbf{2. Поток 3 свободен}\\
+         \textcolor{muted}{\scriptsize берёт запрос Б}};
+      \node[bx,minimum width=4.2cm,draw=alt,dashed,fill=paper] (db) at (8.3,0)
+        {\textbf{3. База отвечает через 40 мс}\\
+         \textcolor{muted}{\scriptsize ни один поток не занят}};
+      \node[bx,minimum width=4.5cm,draw=accent] (a2) at (10.5,-1.5)
+        {\textbf{4. Запрос А идёт вверх}\\
+         \textcolor{muted}{\scriptsize на потоке 7, до ответа клиенту}};
+      \draw[ar,muted] (a1.south) |- (db.west);
+      \draw[ar,accent] (db.east) -| (a2.north);
+    \end{tikzpicture}
+  \end{center}
+
+  \slidegap
+  \aside{Запрос А начался на потоке 3, закончился на потоке 7 и в
+    промежутке не занимал \hi{ни одного}.}
+\end{frame}
+
+% 47
+\begin{frame}[plain]
+  \keyline{Await --- не ожидание, а регистрация продолжения и возврат.\\
+    Между кусками метода потока нет вообще.}
+\end{frame}
+
+% 48
+\begin{frame}[plain]
+  \vote{Два независимых похода по 50 мс, два \texttt{await} подряд. Сколько
+    займёт метод?}
+\end{frame}
+
+% 49
+\begin{frame}[fragile]{\texttt{Task.WhenAll}}
+  \slidetop
+  \claim{Задачи созданы \hi{до} await; await один --- на \texttt{WhenAll}.}
+
+\begin{lstlisting}[style=csharp,basicstyle=\codesm]
+async Task<int> TotalLengthAsync(string first, string second, CancellationToken ct)
+{
+    Task<string> firstTask = File.ReadAllTextAsync(first, ct);
+    Task<string> secondTask = File.ReadAllTextAsync(second, ct);
+
+    string[] texts = await Task.WhenAll(firstTask, secondTask);
+
+    return texts[0].Length + texts[1].Length;
+}
+\end{lstlisting}
+
+  \slidegap
+  \aside{50 мс вместо 100, ни одного лишнего потока. Но \lo{десять тысяч}
+    задач --- это десять тысяч одновременных запросов: параллелизм ограничивают.}
+\end{frame}
+
+% 50
+\begin{frame}[fragile]{\texttt{CancellationToken}}
+  \vspace{0.3em}
+  \claim{Последний параметр каждого метода --- и передаётся \hi{дальше}.}
+
+\begin{lstlisting}[style=csharp,basicstyle=\ttfamily\fontsize{6.6}{7.6}\selectfont]
+async Task<string> HandleAsync(string path, CancellationToken ct)
+{
+    int count = await CountOrdersAsync(path, ct);
+    return "orders: " + count;
+}
+
+async Task<int> CountOrdersAsync(string path, CancellationToken ct)
+{
+    string[] lines = await ReadLinesAsync(path, ct);
+    return lines.Length;
+}
+
+Task<string[]> ReadLinesAsync(string path, CancellationToken ct)
+{
+    return File.ReadAllLinesAsync(path, ct);
+}
+\end{lstlisting}
+
+  \vspace{-0.3em}
+  \aside{Клиент закрыл вкладку --- отмена доходит до самого нижнего вызова.}
+\end{frame}
+
+% 51
+\begin{frame}[fragile]{Токен в своём цикле}
+  \slidetop
+  \claim{Ввод-вывод прервётся сам; свой цикл токен нужно \hi{спросить}.}
+
+\begin{lstlisting}[style=csharp,basicstyle=\ttfamily\fontsize{6.8}{7.9}\selectfont]
+int Sum(int[] items, CancellationToken ct)
+{
+    int total = 0;
+    for (int i = 0; i < items.Length; i++)
+    {
+        ct.ThrowIfCancellationRequested();   // throws OperationCanceledException
+        total += items[i];
+    }
+    if (ct.IsCancellationRequested)          // asks without throwing
+    {
+        return -1;
+    }
+    return total;
+}
+\end{lstlisting}
+
+  \vspace{0.2em}
+  \aside{Отмена --- исключение, его \lo{не глушат}. Код, который токен не
+    проверяет, доработает до конца.}
+\end{frame}
+
+% 52
+\begin{frame}[fragile]{Файлы, асинхронно}
+  \slidetop
+  \begin{minipage}[t]{0.67\textwidth}
+\begin{lstlisting}[style=csharp,basicstyle=\codexs]
+async Task CopyNonEmptyLinesAsync(
+    string source, string target, CancellationToken ct)
+{
+    using StreamReader reader = new StreamReader(source);
+    await using StreamWriter writer = new StreamWriter(target);
+
+    string? line = await reader.ReadLineAsync(ct);
+    while (line != null)
+    {
+        if (line.Length > 0)
+        {
+            await writer.WriteLineAsync(line.AsMemory(), ct);
+        }
+        line = await reader.ReadLineAsync(ct);
+    }
+}
+\end{lstlisting}
+  \end{minipage}\hfill
+  \begin{minipage}[t]{0.29\textwidth}
+    \eyebrow{что здесь используется}\par\vspace{0.6em}
+    \small
+    \begin{cbul}{accent}
+      \item \texttt{using} --- читателю нечего сбрасывать
+      \item \texttt{await using} --- писатель сбрасывает буфер
+      \item \texttt{ReadLineAsync(ct)}
+      \item \texttt{AsMemory()}: \texttt{Memory}, не \texttt{Span}
+    \end{cbul}
+  \end{minipage}
+\end{frame}
+
+% 53
+\begin{frame}[fragile]{\texttt{IAsyncEnumerable}}
+  \slidetop
+\begin{lstlisting}[style=csharp,basicstyle=\codexs]
+async IAsyncEnumerable<string> ErrorsAsync(
+    string path, [EnumeratorCancellation] CancellationToken ct = default)
+{
+    await foreach (string line in File.ReadLinesAsync(path, ct))
+    {
+        if (line.Contains("ERROR"))
+        {
+            yield return line;
+        }
+    }
+}
+
+await foreach (string error in ErrorsAsync("app.log", token))
+{
+    Console.WriteLine(error);
+}
+\end{lstlisting}
+
+  \vspace{0.3em}
+  \aside{Строки не загружены заранее: в памяти одна. Атрибут на токене нужен,
+    чтобы токен из \texttt{await foreach} доехал до тела метода.}
+\end{frame}
+
+% 54
+\begin{frame}{Три опасности}
+  \slidetop
+  {\renewcommand{\arraystretch}{1.9}
+  \begin{tabular}{@{}p{4.0cm}p{8.8cm}@{}}
+    \lo{\textbf{\texttt{.Result} / \texttt{.Wait()}}} & поток выбыл ---
+      голодание пула \\
+    \lo{\textbf{\texttt{async void}}} & исключению некуда деться: процесс
+      падает \\
+    \lo{\textbf{забытый \texttt{await}}} & исключение исчезает, порядок
+      нарушен \\
+  \end{tabular}}
+
+  \slidegap
+  \aside{Асинхронность \hi{до конца}: если внизу есть \texttt{await}, он есть
+    во всех вызывающих. \texttt{async void} --- только для обработчиков
+    событий.}
+\end{frame}
+
+% 55
+\begin{frame}[plain]
+  \keyline{Await регистрирует продолжение и отдаёт поток.\\ Всё, что заставляет
+    поток ждать, ломает эту схему.}
+\end{frame}
+
+\end{document}
