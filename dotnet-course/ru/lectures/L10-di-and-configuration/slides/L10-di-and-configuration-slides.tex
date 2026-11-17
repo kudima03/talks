@@ -53,52 +53,6 @@
   arrl/.style={-{Straight Barb[length=1.8mm]},alt,line width=0.9pt},
 }
 
-% The plan of a section, shown again at the start of each of its steps with
-% that step picked out, so the room always knows which part it is in.
-% #1 current step, #2 pitch in cm, #3 box width, #4 list: number/title/caption
-\newcommand{\roadmap}[4]{%
-  \vfill
-  \begin{center}
-    \begin{tikzpicture}[font=\small]
-      \foreach \rn/\rt/\rc [evaluate=\rn as \rp using int(\rn-1)] in {#4} {
-        \ifnum\rn=#1\relax
-          \node[box,draw=accent,line width=1.2pt,minimum width=#3,
-                minimum height=1.25cm] (s\rn) at ({(\rn-1)*#2},0)
-            {\textbf{\color{accent}\rt}};
-          \node[font=\footnotesize,
-                align=center,anchor=north,text width=#3]
-            at ([yshift=-0.3cm]s\rn.south) {\hyphenpenalty=10000\relax\exhyphenpenalty=10000\relax \rc};
-        \else
-          \node[box,minimum width=#3,minimum height=1.25cm,text=muted]
-            (s\rn) at ({(\rn-1)*#2},0) {\rt};
-          \node[font=\footnotesize,
-                text=muted,align=center,anchor=north,text width=#3] at ([yshift=-0.3cm]s\rn.south) {\hyphenpenalty=10000\relax\exhyphenpenalty=10000\relax \rc};
-        \fi
-        \node[font=\scriptsize,text=muted,anchor=south west,inner sep=0pt]
-          at ([yshift=0.15cm]s\rn.north west) {шаг \rn};
-        \ifnum\rn>1\relax
-          \draw[arr] (s\rp.east) -- (s\rn.west);
-        \fi
-      }
-    \end{tikzpicture}
-  \end{center}
-  \vfill
-}
-
-\newcommand{\roadmapdi}[1]{\roadmap{#1}{3.45}{2.95cm}{%
-  1/Идея/{зачем отдавать зависимости наружу},
-  2/Схема/{как устроен контейнер},
-  3/Времена жизни/{сколько живёт объект},
-  4/Код/{как пишут и как писать не надо}}}
-\newcommand{\roadmapcfg}[1]{\roadmap{#1}{4.6}{3.9cm}{%
-  1/Источники/{откуда значения и какое побеждает},
-  2/Окружения/{разработка, стенд, Production},
-  3/Один образ/{как это работает в контейнере}}}
-\newcommand{\roadmaphttp}[1]{\roadmap{#1}{4.6}{3.9cm}{%
-  1/Проблема/{почему очевидный код неправильный},
-  2/Фабрика и клиент/{внешний сервис как зависимость},
-  3/Устойчивость/{когда сосед не отвечает}}}
-
 \begin{document}
 \shorthandoff{"}
 
@@ -119,16 +73,6 @@
 \end{frame}
 
 % 3
-\begin{frame}{Четыре шага}
-  \roadmapdi{1}
-\end{frame}
-
-% 4
-\begin{frame}[plain]
-  \vote{Сервису заказов нужно хранилище. Что вы пишете в конструкторе?}
-\end{frame}
-
-% 5
 \begin{frame}{Класс создаёт зависимость сам}
   \slidetop
   \begin{center}
@@ -154,7 +98,7 @@
   \aside{\texttt{new} внутри класса значит «я знаю, из чего состою».}
 \end{frame}
 
-% 6
+% 4
 \begin{frame}{Три слова}
   \slidetop
   \claim{Принцип можно соблюдать и \hi{без контейнера}.}
@@ -173,7 +117,7 @@
     классов сто.}
 \end{frame}
 
-% 7
+% 5
 \begin{frame}{Зависимость приходит снаружи}
   \slidetop
   \begin{center}
@@ -202,23 +146,13 @@
   \end{cbul}
 \end{frame}
 
-% 8
+% 6
 \begin{frame}[plain]
   \statement{Конструктор --- единственная \hi{честная} точка входа
     зависимостей.}
 \end{frame}
 
-% 9
-\begin{frame}[plain]
-  \vote{Зачем интерфейс, если реализация одна и второй не планируется?}
-\end{frame}
-
-% 10
-\begin{frame}{Четыре шага}
-  \roadmapdi{2}
-\end{frame}
-
-% 11
+% 7
 \begin{frame}{Контейнер: две операции}
   \slidetop
   \begin{center}
@@ -251,7 +185,7 @@
   \end{cbul}
 \end{frame}
 
-% 12
+% 8
 \begin{frame}{Дерево зависимостей}
   \slidetop
   \claim{Контейнер читает конструкторы и собирает \hi{дерево}.}
@@ -278,7 +212,7 @@
     объектов --- микросекунды.}
 \end{frame}
 
-% 13
+% 9
 \begin{frame}{Конструктор не делает работу}
   \slidetop
   \versus{Конструктор}{%
@@ -300,12 +234,7 @@
     Контейнер бесплатен, пока конструкторы \hi{только присваивают}.}
 \end{frame}
 
-% 14
-\begin{frame}{Четыре шага}
-  \roadmapdi{3}
-\end{frame}
-
-% 15
+% 10
 \begin{frame}{Времена жизни}
   \slidetop
   {\renewcommand{\arraystretch}{1.6}
@@ -323,7 +252,7 @@
     даже при одновременных первых обращениях из разных потоков.}
 \end{frame}
 
-% 16
+% 11
 \begin{frame}{Контейнер владеет тем, что создал}
   \slidetop
   \begin{center}
@@ -349,13 +278,13 @@
   \end{cbul}
 \end{frame}
 
-% 17
+% 12
 \begin{frame}[plain]
   \vote{Singleton-сервис принимает в конструктор scoped-зависимость. Что
     произойдёт?}
 \end{frame}
 
-% 18
+% 13
 \begin{frame}[fragile]{Captive dependency}
   \slidetop
   \begin{center}
@@ -381,7 +310,7 @@ Cannot consume scoped service 'IOrderRepository' from singleton 'PriceCache'.
     молча.}
 \end{frame}
 
-% 19
+% 14
 \begin{frame}{Пять ошибок}
   \slidetop
   {\renewcommand{\arraystretch}{1.45}
@@ -403,7 +332,7 @@ Cannot consume scoped service 'IOrderRepository' from singleton 'PriceCache'.
     \texttt{new} --- \hi{вы}.}
 \end{frame}
 
-% 20
+% 15
 \begin{frame}{Как выбрать время жизни}
   \slidetop
   \claim{Три вопроса к объекту.}
@@ -421,12 +350,7 @@ Cannot consume scoped service 'IOrderRepository' from singleton 'PriceCache'.
     базы --- всегда scoped.}
 \end{frame}
 
-% 21
-\begin{frame}{Четыре шага}
-  \roadmapdi{4}
-\end{frame}
-
-% 22
+% 16
 \begin{frame}[fragile]{Было и стало}
   \vspace{0.3em}
 \begin{lstlisting}[style=csharp,basicstyle=\codexs,escapechar=|]
@@ -455,7 +379,7 @@ builder.Services.AddScoped<OrderService>();
   \end{tikzpicture}
 \end{frame}
 
-% 23
+% 17
 \begin{frame}[fragile]{Формы регистрации}
   \slidetop
 \begin{lstlisting}[style=csharp,basicstyle=\codexs,escapechar=|]
@@ -487,7 +411,7 @@ builder.Services.AddScoped<OrderService>();
     \hi{первых двух}.}
 \end{frame}
 
-% 24
+% 18
 \begin{frame}[fragile]{Несколько реализаций}
   \slidetop
 \begin{lstlisting}[style=csharp,basicstyle=\codexs,escapechar=|]
@@ -514,7 +438,7 @@ services.AddScoped<IOrderCheck, LimitCheck>();
   \aside{Одной строкой декоратор не регистрируется --- только фабрикой.}
 \end{frame}
 
-% 25
+% 19
 \begin{frame}[fragile]{Service locator: пример}
   \slidetop
 \begin{lstlisting}[style=csharp,basicstyle=\codexs,escapechar=|]
@@ -545,7 +469,7 @@ services.AddScoped<IOrderCheck, LimitCheck>();
   \aside{Кода не больше. Разница в том, что \hi{видно снаружи}.}
 \end{frame}
 
-% 26
+% 20
 \begin{frame}[fragile]{Регистрацию забыли}
   \slidetop
   \claim{Регистрации \texttt{INotifier} нет. \hi{Когда} об этом станет известно?}
@@ -572,7 +496,7 @@ Unable to resolve service for type 'INotifier' while attempting to activate 'Ord
   \aside{С конструктором в сообщении названы и класс, и параметр.}
 \end{frame}
 
-% 27
+% 21
 \begin{frame}{Service locator: цена}
   \slidetop
   \versus{Конструктор}{%
@@ -596,18 +520,7 @@ Unable to resolve service for type 'INotifier' while attempting to activate 'Ord
     middleware. В бизнес-логике --- сигнал на ревью.}
 \end{frame}
 
-% 28
-\begin{frame}[plain]
-  \vote{Кто писал «для удобства» статический класс, который внутри ходит в
-    базу, читает файл или время?}
-\end{frame}
-
-% 29
-\begin{frame}[plain]
-  \vote{Сто сервисов --- сто строк с \texttt{Add} в файле запуска. Что делать?}
-\end{frame}
-
-% 30
+% 22
 \begin{frame}[fragile]{Модули}
   \vspace{0.3em}
 \begin{lstlisting}[style=csharp,basicstyle=\codexxs,escapechar=|]
@@ -638,7 +551,7 @@ public static class OrdersModule
   \end{tikzpicture}
 \end{frame}
 
-% 31
+% 23
 \begin{frame}{Явно или по соглашению}
   \slidetop
   \versus{Явные модули}{%
@@ -662,7 +575,7 @@ public static class OrdersModule
     попросить у него каждый зарегистрированный тип.}
 \end{frame}
 
-% 32
+% 24
 \begin{frame}[plain]
   \keyline{Состав приложения --- в одном месте.\\
     Зависимости --- в конструкторе.\\
@@ -672,23 +585,13 @@ public static class OrdersModule
 % ==================== 2. CONFIGURATION ==
 \section{2. Конфигурация и окружение}
 
-% 33
+% 25
 \begin{frame}[plain]
   \sectionopener{2}{Конфигурация и окружение}{Код один, окружений много;
     разница живёт \hi{снаружи}.}
 \end{frame}
 
-% 34
-\begin{frame}{Три шага}
-  \roadmapcfg{1}
-\end{frame}
-
-% 35
-\begin{frame}[plain]
-  \vote{Какую ошибку в листинге «было и стало» мы исправили не до конца?}
-\end{frame}
-
-% 36
+% 26
 \begin{frame}{Что считать конфигурацией}
   \slidetop
   \versus{Конфигурация}{%
@@ -712,7 +615,7 @@ public static class OrdersModule
     не сломается.}
 \end{frame}
 
-% 37
+% 27
 \begin{frame}{Слои}
   \slidetop
   \begin{center}
@@ -742,7 +645,7 @@ public static class OrdersModule
     верхний, у которого ключ есть.}
 \end{frame}
 
-% 38
+% 28
 \begin{frame}[fragile]{Три записи одного ключа}
   \slidetop
 \begin{lstlisting}[style=json,basicstyle=\codexs]
@@ -769,7 +672,7 @@ dotnet HelloWorld.dll --Logging:LogLevel:Default=Warning
   \end{tabular}}
 \end{frame}
 
-% 39
+% 29
 \begin{frame}[fragile]{Что видит приложение}
   \slidetop
   \claim{Отладочное представление: ключ, значение и \hi{откуда} оно пришло.}
@@ -790,12 +693,7 @@ $ curl -s localhost:5090/config | grep -E "Orders=|Default=|BaseUrl=|TimeoutSeco
   \end{cbul}
 \end{frame}
 
-% 40
-\begin{frame}{Три шага}
-  \roadmapcfg{2}
-\end{frame}
-
-% 41
+% 30
 \begin{frame}{Окружения}
   \slidetop
   \claim{Имя окружения --- строка в \hi{переменной}.}
@@ -811,11 +709,11 @@ $ curl -s localhost:5090/config | grep -E "Orders=|Default=|BaseUrl=|TimeoutSeco
   \end{tabular}}
 
   \slidegap
-  \aside{Стандартные имена: Development, Staging, Production. Локально имя
-    задаёт файл настроек запуска; в опубликованное приложение он не попадает.}
+  \aside{Стандартные имена: Development, Staging, Production. Переменная не
+    задана --- приложение считает себя \hi{Production}.}
 \end{frame}
 
-% 42
+% 31
 \begin{frame}{Разница --- в значениях}
   \slidetop
   \versus{В конфигурации}{%
@@ -839,13 +737,7 @@ $ curl -s localhost:5090/config | grep -E "Orders=|Default=|BaseUrl=|TimeoutSeco
     домене --- тот же запах, что \texttt{HttpContext} в домене.}
 \end{frame}
 
-% 43
-\begin{frame}[plain]
-  \vote{Переменная с именем окружения не задана вовсе. Каким приложение себя
-    считает?}
-\end{frame}
-
-% 44
+% 32
 \begin{frame}{Рантайм настраивается так же}
   \slidetop
   {\renewcommand{\arraystretch}{1.22}\small
@@ -866,18 +758,7 @@ $ curl -s localhost:5090/config | grep -E "Orders=|Default=|BaseUrl=|TimeoutSeco
     а не код.}
 \end{frame}
 
-% 45
-\begin{frame}{Три шага}
-  \roadmapcfg{3}
-\end{frame}
-
-% 46
-\begin{frame}[plain]
-  \vote{Один образ нужно запустить на стенде и в Production, с разными базами.
-    Что делать с файлом настроек?}
-\end{frame}
-
-% 47
+% 33
 \begin{frame}{Образ один}
   \slidetop
   \begin{center}
@@ -905,7 +786,7 @@ $ curl -s localhost:5090/config | grep -E "Orders=|Default=|BaseUrl=|TimeoutSeco
     файле, ни в коде, ни в истории.}
 \end{frame}
 
-% 48
+% 34
 \begin{frame}{Почему переменные}
   \slidetop
   \versus{Переменные окружения}{%
@@ -927,13 +808,7 @@ $ curl -s localhost:5090/config | grep -E "Orders=|Default=|BaseUrl=|TimeoutSeco
     секреты. Переменные \lo{видно} в списке процессов и описании развёртывания.}
 \end{frame}
 
-% 49
-\begin{frame}[plain]
-  \vote{Где хранить строку подключения к локальной базе, чтобы она не попала в
-    репозиторий?}
-\end{frame}
-
-% 50
+% 35
 \begin{frame}[fragile]{Секреты пользователя}
   \slidetop
 \begin{lstlisting}[style=term,basicstyle=\termsm]
@@ -955,7 +830,7 @@ ConnectionStrings:
   \aside{Проверка: репозиторий завтра станет публичным --- что утечёт?}
 \end{frame}
 
-% 51
+% 36
 \begin{frame}[plain]
   \keyline{Разница между окружениями живёт в конфигурации.\\
     Образ один, сред много: сверху --- переменные.}
@@ -964,13 +839,13 @@ ConnectionStrings:
 % ==================== 3. OPTIONS ==
 \section{3. Options pattern}
 
-% 52
+% 37
 \begin{frame}[plain]
   \sectionopener{3}{Options pattern}{Настройки --- это \hi{тип}, а не строка
     по ключу.}
 \end{frame}
 
-% 53
+% 38
 \begin{frame}[fragile]{Класс настроек}
   \vspace{0.3em}
 \begin{lstlisting}[style=csharp,basicstyle=\codexxs,escapechar=|]
@@ -1005,7 +880,7 @@ public sealed class PricingService(
   \end{tikzpicture}
 \end{frame}
 
-% 54
+% 39
 \begin{frame}{Три интерфейса}
   \slidetop
   \claim{Разница в одном: \hi{когда} значение перечитывается.}
@@ -1023,13 +898,7 @@ public sealed class PricingService(
     окружения процесс читает один раз, при старте.}
 \end{frame}
 
-% 55
-\begin{frame}[plain]
-  \vote{При выкладке забыли задать адрес сервиса курсов. Когда вы об этом
-    узнаете?}
-\end{frame}
-
-% 56
+% 40
 \begin{frame}[fragile]{Падать на старте}
   \slidetop
   \versus{С Validate On Start}{%
@@ -1054,7 +923,7 @@ for 'RatesOptions' members: 'BaseUrl' with the error: 'The BaseUrl field is requ
   \aside{Сообщение пишите так, чтобы было понятно, какую переменную задать.}
 \end{frame}
 
-% 57
+% 41
 \begin{frame}[plain]
   \keyline{Настройки --- тип, а не строка по ключу.\\
     Проверяются на старте, пока ошибка ничего не стоит.}
@@ -1063,23 +932,18 @@ for 'RatesOptions' members: 'BaseUrl' with the error: 'The BaseUrl field is requ
 % ==================== 4. OUTGOING CALLS ==
 \section{4. Исходящие HTTP-вызовы}
 
-% 58
+% 42
 \begin{frame}[plain]
   \sectionopener{4}{Исходящие HTTP-вызовы}{Внешний сервис --- это
     \hi{зависимость}, как хранилище.}
 \end{frame}
 
-% 59
-\begin{frame}{Три шага}
-  \roadmaphttp{1}
-\end{frame}
-
-% 60
+% 43
 \begin{frame}[plain]
   \vote{Нужно сделать HTTP-запрос из метода. Что вы пишете?}
 \end{frame}
 
-% 61
+% 44
 \begin{frame}[fragile]{Клиент на каждый запрос}
   \slidetop
 \begin{lstlisting}[style=csharp,basicstyle=\codexs,escapechar=|]
@@ -1118,7 +982,7 @@ public async Task<decimal> GetRateAsync(string currency, CancellationToken ct)
     чтобы платить за него \hi{один раз}.}
 \end{frame}
 
-% 62
+% 45
 \begin{frame}{Что происходит с соединением}
   \slidetop
   \begin{center}
@@ -1151,7 +1015,7 @@ public async Task<decimal> GetRateAsync(string currency, CancellationToken ct)
   \end{cbul}
 \end{frame}
 
-% 63
+% 46
 \begin{frame}[fragile]{Проверим}
   \slidetop
   \claim{2000 запросов подряд к сервису на той же машине.}
@@ -1179,7 +1043,7 @@ $ ss -tan state time-wait | grep -c ":5090"
     не на ошибку в коде.}
 \end{frame}
 
-% 64
+% 47
 \begin{frame}{Две ошибки}
   \slidetop
   \versus{Клиент на каждый запрос}{%
@@ -1203,12 +1067,7 @@ $ ss -tan state time-wait | grep -c ":5090"
     \hi{долго, но не вечно}.}
 \end{frame}
 
-% 65
-\begin{frame}{Три шага}
-  \roadmaphttp{2}
-\end{frame}
-
-% 66
+% 48
 \begin{frame}{Фабрика клиентов}
   \slidetop
   \begin{center}
@@ -1236,7 +1095,7 @@ $ ss -tan state time-wait | grep -c ":5090"
   \aside{Именованные клиенты --- строки вместо типов. Типизированные --- класс.}
 \end{frame}
 
-% 67
+% 49
 \begin{frame}[fragile]{Типизированный клиент}
   \vspace{0.3em}
 \begin{lstlisting}[style=csharp,basicstyle=\codexs,escapechar=`]
@@ -1266,7 +1125,7 @@ $ ss -tan state time-wait | grep -c ":5090"
   \end{cbul}
 \end{frame}
 
-% 68
+% 50
 \begin{frame}[fragile]{Регистрация клиента}
   \slidetop
   \claim{Адрес и таймаут --- из \hi{проверенных} настроек. Строковых ключей нет.}
@@ -1294,7 +1153,7 @@ builder.Services
     обработчики перестанут обновляться.}
 \end{frame}
 
-% 69
+% 51
 \begin{frame}{Что живёт в клиенте}
   \slidetop
   \versus{Внутри клиента}{%
@@ -1318,12 +1177,7 @@ builder.Services
     параметра конструкторов.}
 \end{frame}
 
-% 70
-\begin{frame}{Три шага}
-  \roadmaphttp{3}
-\end{frame}
-
-% 71
+% 52
 \begin{frame}{Три инструмента}
   \slidetop
   \begin{center}
@@ -1348,12 +1202,7 @@ builder.Services
   \aside{Повторы без паузы добивают перегруженного соседа: \lo{шторм повторов}.}
 \end{frame}
 
-% 72
-\begin{frame}[plain]
-  \vote{Внешний сервис ответил ошибкой. Сколько раз повторять?}
-\end{frame}
-
-% 73
+% 53
 \begin{frame}[fragile]{Стандартный набор}
   \slidetop
 \begin{lstlisting}[style=csharp,basicstyle=\codesm]
@@ -1383,7 +1232,7 @@ builder.Services.AddHttpClient<RatesClient>(/* ... */)
   \end{cbul}
 \end{frame}
 
-% 74
+% 54
 \begin{frame}[fragile]{Когда сосед лежит}
   \slidetop
   {\renewcommand{\arraystretch}{1.5}
@@ -1407,7 +1256,7 @@ info: System.Net.Http.HttpClient.RatesClient.LogicalHandler[101]
     фабрика пишет в лог: длительность и статус.}
 \end{frame}
 
-% 75
+% 55
 \begin{frame}[plain]
   \keyline{\texttt{HttpClient} выдаёт фабрика; внешний сервис приходит в
     конструктор.\\ Повторять можно только то, что безопасно повторить.}
