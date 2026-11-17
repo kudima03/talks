@@ -1,6 +1,6 @@
 # Лабораторная 10. Сборка сервиса: DI, options и typed client
 
-**К лекции:** [Л10. DI, исходящие вызовы и конфигурация](../L10-di-and-configuration.md)
+**К лекции:** [Л10. DI, конфигурация и исходящие вызовы](../L10-di-and-configuration.md)
 **Условие:** всё из терминала, запросы — `curl`. Нужны `Shop.Domain` и `Shop.Api` из девятой
 лабораторной: `OrderStore`, группа `/orders`, `OrderStatsService`, `CreateOrderDtoValidator`,
 `ErrorHandlingMiddleware`. Порт в примерах — 5090; ваш — в строке `Now listening on`.

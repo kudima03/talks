@@ -1,4 +1,4 @@
-# Л10. DI, исходящие вызовы и конфигурация — house rules
+# Л10. DI, конфигурация и исходящие вызовы — house rules
 
 Working notes for this lecture's directory. Course-wide rules live in
 [`../../../CLAUDE.md`](../../../CLAUDE.md); read that first.
@@ -15,42 +15,61 @@ tags in `README.md`, in the same commit.
 
 ## Shape
 
-- **59 frames**: §1 2–25, §2 26–36, §3 37–52, §4 53–59. Timings 30 + 15 + 25 + 10.
-- **Twelve `\vote` frames** (3, 11, 14, 21, 22, 27, 33, 38, 45, 47, 50, 57), one
+- **Section order is DI → configuration → options → HTTP** (review of the first
+  deck). §4 is built on §1 and §3: the typed client is registered from
+  `RatesOptions`, so there is no «read by key now, fix later» step any more.
+- **75 frames**: §1 2–32, §2 33–51, §3 52–57, §4 58–75. Timings 30 + 25 + 10 + 15.
+- **§1 runs in four steps: идея → схема → времена жизни → код.** No listing
+  before frame 22; the idea and the container are drawn (5, 7, 11, 12). Do not
+  move code back up. **Keyed services are not shown at all**, on a slide or by voice.
+- **Ten plan frames** (`\roadmapdi`, `\roadmapcfg`, `\roadmaphttp`: 3, 10, 14, 21,
+  34, 40, 45, 59, 65, 70), one before each step of §1, §2 and §4, with the
+  current step picked out. Each has its own `[СЛАЙД n — план раздела …]` cue. §3
+  is ten minutes and has none. Adding a step means a new entry in the macro's
+  list and one more plan frame.
+- **Twelve `\vote` frames** (4, 9, 17, 28, 29, 35, 43, 46, 49, 55, 60, 72), one
   per `[ВОПРОС В ЗАЛ]` in the script. Cutting one means removing its marker too.
-- **Keylines close all four sections** (25, 36, 52, 59). **Frame 10 is the one
+- **Keylines close all four sections** (32, 51, 57, 75). **Frame 8 is the one
   `\statement`** («единственная честная точка входа»). No `\shout`, no `\note{}`.
-- **Frame order follows the script's order of speech**, not the tidiest
-  grouping: «Три слова» (5) sits between «Было» (4) and «Стало» (6); «Как
-  выбрать» (16) precedes «Пять аварий» (17); the retry vote (33) comes after
-  «Три инструмента» (32); «Разница --- в значениях» (44) precedes its vote (45).
+- **The service locator gets three frames**: the listing (25), the real output of
+  a forgotten registration with the locator and with the constructor (26), the
+  price (27).
+- **§4 step 1 explains the per-request client in four frames**: the code and what
+  is inside `HttpClient` (61), the timeline (62), the measurement (63), the two
+  errors side by side (64).
 - **The closing thought of §4 stays last in the script**, after the summary and
-  the lab paragraph, so the last frame is keyline 59. The `[ЛАБА 10 — …]` block
-  moved into `lab/`; the spoken lab paragraph stays.
-- Two cues were moved, not just numbered: the tree (8) up to «Разрешение», «Три
-  инструмента» (32) up to «Внешний сервис ненадёжен».
-- Listings on 7 and 18 are composed from the script's prose (it has no code for
-  them). Frame 41 runs `dotnet HelloWorld.dll` where the script's listing says
-  `OrdersService.dll` — house sample name, and frame 42 is its real output.
-  Frame 54 shortens the consumer to its signature so the listing clears the footer.
+  the lab paragraph, so the last frame is keyline 75.
+- **Wording: no «в проде», «прод».** The environment is called Production where
+  environments are compared; elsewhere say «после выкладки», «на сервере»,
+  «развёрнутый сервис». «Ошибки», not «аварии», for the lifetime mistakes.
+  Hostnames such as `db.prod.internal` in listings and real output stay.
+- Listings on 23 and 24 are composed from the script's prose (it has no code for
+  them). Frame 38 runs `dotnet HelloWorld.dll` where the script's listing says
+  `OrdersService.dll` — house sample name, and frame 39 is its real output.
+  Frame 53 shortens the consumer to its signature so the listing clears the footer.
 - `term` lines must stay under ~99 characters at `\termsm` or they leave the ground.
 
 ## How the slides were checked
 
-Scratch `dotnet new web -n HelloWorld` (not in the repo) with every C# listing and
-`Microsoft.Extensions.Http.Resilience` 11.0.0; built and run inside
-`mcr.microsoft.com/dotnet/sdk:10.0` (SDK 10.0.403) at `/home/user/HelloWorld`, port
-5090, curl 8.5.0 — in a container only because port 5090 was taken on the host.
+Two passes. The first deck: scratch `dotnet new web -n HelloWorld` (not in the
+repo) with every C# listing and `Microsoft.Extensions.Http.Resilience` 11.0.0,
+built and run inside `mcr.microsoft.com/dotnet/sdk:10.0` (SDK 10.0.403) at
+`/home/user/HelloWorld`, port 5090, curl 8.5.0. The review pass: the same scratch
+project retargeted to `net11.0`, **SDK 11.0.100 on the host** (Linux 7.0, default
+`ip_local_port_range` 32768–60999, `tcp_tw_reuse` 2), same port and curl.
 
 | Frames | How |
 |---|---|
-| 4, 6, 7, 18, 19, 23, 30, 54, 56 | Compiled, 0 warnings. |
-| 15 | `AddSingleton<PriceCache>()` over a scoped repository: `dotnet run` output as shown; the same build started normally with `ASPNETCORE_ENVIRONMENT=Production`. |
-| 35 | Log of `GET /price/USD` against a stub route in the same app; lines between the two shown are cut (`...`). |
-| 42 | `/config` returns `GetDebugView()`; run from `bin/Debug/net10.0` with the two exports and the argument of frame 41 (plus `--urls`). |
-| 51 | `dotnet user-secrets set` and `/config` in Development. `init` was run first; its output line is too long for the slide and is named in the bullet. |
-| 58 | `Rates__BaseUrl= dotnet run`, output as shown. |
-| 34 | Strategy order is from the docs; only the retries were observed (lab run). |
+| 22, 23, 24, 25, 61, 67, 68 | Compiled on SDK 11.0.100, 0 warnings (25 in both forms, behind `#if`). |
+| 30, 53 | Compiled on SDK 10 in the first pass; unchanged. |
+| 18 | `AddSingleton<PriceCache>()` over a scoped repository: `dotnet run` output as shown; the same build started normally with `ASPNETCORE_ENVIRONMENT=Production`. First pass. |
+| 26 | SDK 11. The `INotifier` registration commented out. Constructor form: `dotnet run` as shown. Locator form: `dotnet run > app.log` in Development, then the two commands as shown. |
+| 39 | `/config` returns `GetDebugView()`; run from `bin/Debug/net10.0` with the two exports and the argument of frame 38 (plus `--urls`). First pass. |
+| 50 | `dotnet user-secrets set` and `/config` in Development. `init` was run first; its output line is too long for the slide and is named in the bullet. First pass. |
+| 56 | `Rates__BaseUrl= dotnet run`, output as shown; the message is the same on SDK 11. |
+| 63 | SDK 11. A console probe (`per-call`: `new HttpClient()` in the loop; `shared`: one client) sends 2000 sequential `GET /stub/rates/USD` to the scratch service on localhost:5090. Output as shown; more than a minute was left between the two runs so the first run's `TIME_WAIT` sockets expired (0 before each run). Over loopback Linux reuses such ports, so the run cannot exhaust them: the slide shows time and socket count, not a failure. |
+| 73 | Strategy order is from the docs. Observed on SDK 11: a `POST` to a stub answering 503 is sent four times (`Attempt: '0'`…`'3'`); with `options.Retry.DisableForUnsafeHttpMethods()` once. The first script said the standard handler retries only safe methods — it does not. |
+| 74 | Log of `GET /price/USD` against a stub route in the same app; lines between the two shown are cut (`...`). First pass. |
 
 ## Lab
 
