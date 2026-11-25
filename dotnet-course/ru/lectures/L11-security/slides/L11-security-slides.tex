@@ -1,0 +1,1121 @@
+% Л11 -- Безопасность: аутентификация и авторизация. Slides.
+%
+% Companion to the spoken script in ../L11-security.md, which is the source of
+% truth: the slides carry diagrams, code, real terminal output and short
+% marks, and the delivery lives in the script only -- this deck carries no
+% speaker notes. Slide text is in Russian because that is the content;
+% everything else in this file is English.
+%
+% Build:  make          (latexmk -pdf; engine: pdflatex)
+%
+% Every C# listing was compiled on dotnet SDK 10.0 in a scratch
+% `dotnet new web -n HelloWorld`; terminal output on the slides is captured
+% from runs of that project with tokens from `dotnet user-jwts`. See
+% ../CLAUDE.md for the verification table.
+%
+% House rules: ../CLAUDE.md and ../../../CLAUDE.md. Theme: ../../../../theme/.
+
+\documentclass[aspectratio=169,10pt,t]{beamer}
+
+\usetheme{dotnet}
+\usetikzlibrary{arrows.meta,positioning,calc,decorations.pathreplacing,fit}
+\usepackage{array}   % ragged-right table columns
+
+% A ragged-right paragraph column: justified cells in narrow columns hyphenate
+% badly, and a split word is the one thing the back row cannot read.
+\newcolumntype{L}[1]{>{\raggedright\arraybackslash}p{#1}}
+
+\dotnetlecture{Л11}
+
+\title[Л11. Безопасность: аутентификация и авторизация]{Безопасность:
+  аутентификация и авторизация}
+\author{Дмитрий Курочкин}
+\date{}
+
+% Code sizes, one step down from \footnotesize. Smaller than 6.6pt does not
+% carry to the back of the room.
+\newcommand{\codesm}{\ttfamily\fontsize{7.6}{9.0}\selectfont}
+\newcommand{\codexs}{\ttfamily\fontsize{7.0}{8.3}\selectfont}
+\newcommand{\codexxs}{\ttfamily\fontsize{6.8}{7.8}\selectfont}
+\newcommand{\termsm}{\ttfamily\fontsize{6.6}{7.9}\selectfont}
+
+% A mark at the start of a listing line, for labels set beside the listing.
+% Used through the listing's escapechar; the labels are drawn by an overlay
+% picture after the listing, so the build needs two passes (latexmk does that).
+\newcommand{\mk}[1]{\tikz[remember picture,overlay]\coordinate (#1) at (0,0.55ex);}
+
+\tikzset{
+  rawbrace/.style={decorate,decoration={brace,amplitude=4pt},hairline,
+                   line width=0.8pt},
+  rawlab/.style={anchor=west,font=\footnotesize,inner sep=0pt},
+  box/.style={draw=hairline,line width=0.8pt,fill=codebg,inner sep=4pt,
+              align=center,minimum height=0.9cm},
+  arr/.style={-{Straight Barb[length=1.6mm]},muted,line width=0.7pt},
+  arra/.style={-{Straight Barb[length=1.8mm]},accent,line width=0.9pt},
+  arrl/.style={-{Straight Barb[length=1.8mm]},alt,line width=0.9pt},
+}
+
+\begin{document}
+\shorthandoff{"}
+
+% ------------------------------------------------------------------ title --
+% 1
+\begin{frame}[plain]
+  \titlepagednc{Лекция 11}{Безопасность: аутентификация и авторизация}{}{Дмитрий Курочкин}
+\end{frame}
+
+% ===================================== 1. AUTHENTICATION VS AUTHORIZATION ==
+\section{1. Аутентификация vs авторизация}
+
+% 2
+\begin{frame}[plain]
+  \sectionopener{1}{Аутентификация vs авторизация}{Сначала \hi{кто}, потом ---
+    что можно.}
+\end{frame}
+
+% 3
+\begin{frame}[plain]
+  \vote{Аутентификация и авторизация. В чём разница?}
+\end{frame}
+
+% 4
+\begin{frame}{Два вопроса}
+  \slidetop
+  \versus{Аутентификация}{%
+    \begin{cbul}{accent}
+      \item кто вы
+      \item пароль, токен, сертификат
+      \item проверяется доказательство
+      \item отказ --- \hi{401}: «предъявите»
+    \end{cbul}}{Авторизация}{%
+    \begin{cbul}{alt}
+      \item что вам можно
+      \item правила для известной личности
+      \item проверяется право
+      \item отказ --- \lo{403}: предъявлять нечего
+    \end{cbul}}
+
+  \slidegap
+  \hrulethin{0.42}
+  \rulegap
+  {\large Порядок жёсткий: нельзя решить, можно ли, не зная \hi{кому}.}
+\end{frame}
+
+% 5
+\begin{frame}[fragile]{401 и 403}
+  \slidetop
+  \claim{Два разных ответа на два разных вопроса.}
+
+\begin{lstlisting}[style=term,basicstyle=\termsm,escapechar=|]
+$ curl -s -i http://localhost:5090/orders/1
+|\mk{u1}|HTTP/1.1 401 Unauthorized
+Content-Length: 0
+Date: Thu, 12 Nov 2026 06:02:59 GMT
+Server: Kestrel
+WWW-Authenticate: Bearer
+
+$ curl -s -i -H "Authorization: Bearer $TOKEN" http://localhost:5090/orders/7
+|\mk{u2}|HTTP/1.1 403 Forbidden
+Content-Length: 0
+Date: Thu, 12 Nov 2026 06:02:59 GMT
+Server: Kestrel
+\end{lstlisting}
+  \begin{tikzpicture}[remember picture,overlay,every node/.style={rawlab}]
+    \node[text=accent] at ([xshift=5.0cm]u1) {не знаем, кто ты};
+    \node[text=alt] at ([xshift=5.0cm]u2) {знаем --- и нельзя};
+  \end{tikzpicture}
+
+  \aside{401 на «нельзя» заставляет входить заново. 403 на «не знаем» не говорит,
+    что нужно войти. Оба --- баги контракта.}
+\end{frame}
+
+% 6
+\begin{frame}{Три слова фреймворка}
+  \slidetop
+  {\renewcommand{\arraystretch}{1.6}
+  \begin{tabular}{@{}L{3.0cm}L{4.6cm}L{5.2cm}@{}}
+    \hi{\textbf{схема}}     & способ доказать: имя и обработчик & токен в заголовке,
+      cookie, сертификат \\
+    \hi{\textbf{challenge}} & личности нет, а её требуют: «иди докажи» & токен --- 401;
+      cookie --- страница входа \\
+    \lo{\textbf{forbid}}    & личность есть, правило говорит «нельзя» & токен --- 403;
+      cookie --- «доступ запрещён» \\
+  \end{tabular}}
+
+  \slidegap
+  \aside{Код не пишет статус руками: он говорит «нужен пользователь», а форму
+    ответа выбирает схема.}
+\end{frame}
+
+% 7
+\begin{frame}{Где это в конвейере}
+  \slidetop
+  \claim{Авторизация работает с \hi{результатом} аутентификации.}
+
+  \begin{center}
+    \begin{tikzpicture}[font=\footnotesize,
+      tb/.style={box,minimum width=3.3cm,minimum height=1.15cm}]
+      \node[font=\footnotesize,text=muted] (rq) at (-2.6,0) {запрос};
+      \node[tb] (a1) at (0,0)   {\textbf{аутентификация}\\схема заполняет \texttt{User}};
+      \node[tb] (a2) at (4.3,0) {\textbf{авторизация}\\требования маршрута};
+      \node[tb,draw=accent,line width=1.0pt] (a3) at (8.6,0)
+        {\textbf{обработчик}\\только если всё прошло};
+      \draw[arr] (rq) -- (a1);
+      \draw[arr] (a1) -- (a2);
+      \draw[arra] (a2) -- (a3);
+      \node[font=\footnotesize,text=accent] (c1) at (2.9,-1.55) {challenge: 401};
+      \node[font=\footnotesize,text=alt] (c2) at (5.7,-1.55) {forbid: 403};
+      \draw[arra] ([xshift=-0.7cm]a2.south) -- (c1.north);
+      \draw[arrl] ([xshift=0.7cm]a2.south) -- (c2.north);
+    \end{tikzpicture}
+  \end{center}
+
+  \slidegap
+  \aside{Доказательства нет --- \texttt{User} пустой, и это не ошибка: анонимный
+    запрос нормален, пока никто не потребовал личность.}
+\end{frame}
+
+% 8
+\begin{frame}[fragile]{Закрытость по умолчанию}
+  \slidetop
+\begin{lstlisting}[style=csharp,basicstyle=\codexs,escapechar=|]
+builder.Services.AddAuthorizationBuilder()
+|\mk{f1}|    .SetFallbackPolicy(new AuthorizationPolicyBuilder()
+        .RequireAuthenticatedUser()
+        .Build());
+
+|\mk{f2}|app.MapGet("/health", () => "Healthy").AllowAnonymous();
+|\mk{f3}|app.MapGet("/forgotten", () => "new route, nobody protected it");
+\end{lstlisting}
+  \begin{tikzpicture}[remember picture,overlay,every node/.style={rawlab}]
+    \node[text=accent] at ([xshift=10.6cm]f1) {где не сказано иное};
+    \node at ([xshift=10.6cm]f2) {открыт явно};
+    \node at ([xshift=10.6cm]f3) {забыли защитить};
+  \end{tikzpicture}
+
+\begin{lstlisting}[style=term,basicstyle=\termsm]
+$ curl -s -i http://localhost:5090/forgotten
+HTTP/1.1 401 Unauthorized
+Content-Length: 0
+Date: Thu, 12 Nov 2026 06:03:00 GMT
+Server: Kestrel
+WWW-Authenticate: Bearer
+\end{lstlisting}
+
+  \aside{«Забыл открыть» видно сразу: 401. «Забыл закрыть» \lo{невидимо} до
+    инцидента.}
+\end{frame}
+
+% ============================================================ 2. THE TOKEN ==
+\section{2. Токен как способ остаться stateless}
+
+% 9
+\begin{frame}[plain]
+  \sectionopener{2}{Токен как способ остаться stateless}{Токен --- подписанное
+    \hi{утверждение}, которое клиент носит с собой.}
+\end{frame}
+
+% 10
+\begin{frame}[plain]
+  \vote{Три куска через точку: буквы, цифры, минусы. Это зашифрованные данные
+    или закодированные?}
+\end{frame}
+
+% 11
+\begin{frame}[fragile]{JWT: три части через точку}
+  \slidetop
+\begin{lstlisting}[style=term,basicstyle=\termsm,escapechar=`]
+$ echo $TOKEN | tr . '\n' | fold -w 88
+`\mk{w1}`eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9
+eyJ1bmlxdWVfbmFtZSI6IjQyIiwic3ViIjoiNDIiLCJqdGkiOiJhNzUzOTkxMSIsInJvbGUiOiJjdXN0b21lciIs
+ImF1ZCI6Imh0dHA6Ly9sb2NhbGhvc3Q6NTA5MCIsIm5iZiI6MTc5NDQ2MzM3MywiZXhwIjoxODAyNDEyMTczLCJp
+`\mk{w2}`YXQiOjE3OTQ0NjMzNzMsImlzcyI6ImRvdG5ldC11c2VyLWp3dHMifQ
+`\mk{w3}`O23hD9QOUmzjsrDBKtYY-zHTP2W0lyM_36qA19Ly4HA
+\end{lstlisting}
+  \begin{tikzpicture}[remember picture,overlay,every node/.style={rawlab}]
+    \node[text=accent] at ([xshift=9.4cm]w1) {заголовок};
+    \node[text=accent] at ([xshift=9.4cm]w2) {нагрузка};
+    \node[text=alt] at ([xshift=9.4cm]w3) {подпись};
+  \end{tikzpicture}
+
+  \slidegap
+  \begin{cbul}{accent}
+    \item заголовок и нагрузка --- \hi{JSON}, закодированный в текст: буквы, цифры,
+      минус и подчёркивание
+    \item подпись --- байты: результат криптографической операции над первыми двумя
+    \item около килобайта --- в \hi{каждом} запросе, в заголовке
+  \end{cbul}
+\end{frame}
+
+% 12
+\begin{frame}[fragile]{Закодирован --- не зашифрован}
+  \vspace{0.3em}
+\begin{lstlisting}[style=term,basicstyle=\termsm,escapechar=`]
+$ echo $TOKEN | jq -R 'split(".")[0:2][] | @base64d | fromjson'
+{
+`\mk{h1}`  "alg": "HS256",
+  "typ": "JWT"
+}
+{
+  "unique_name": "42",
+`\mk{h2}`  "sub": "42",
+  "jti": "a7539911",
+`\mk{h3}`  "role": "customer",
+`\mk{h4}`  "aud": "http://localhost:5090",
+  "nbf": 1794463373,
+`\mk{h5}`  "exp": 1802412173,
+  "iat": 1794463373,
+`\mk{h6}`  "iss": "dotnet-user-jwts"
+}
+\end{lstlisting}
+  \begin{tikzpicture}[remember picture,overlay,every node/.style={rawlab}]
+    \node at ([xshift=7.2cm]h1) {алгоритм подписи};
+    \node at ([xshift=7.2cm]h2) {субъект: о ком токен};
+    \node at ([xshift=7.2cm]h3) {добавил издатель};
+    \node at ([xshift=7.2cm]h4) {аудитория: для кого};
+    \node at ([xshift=7.2cm]h5) {срок, секунды эпохи};
+    \node at ([xshift=7.2cm]h6) {издатель: кто выдал};
+  \end{tikzpicture}
+
+  \aside{Раскодирует \lo{любой}, у кого есть строка: алфавит стандартный.}
+\end{frame}
+
+% 13
+\begin{frame}{Утверждения}
+  \slidetop
+  \claim{Нагрузка --- пары имя--значение: \hi{claims}.}
+
+  {\renewcommand{\arraystretch}{1.25}\small
+  \begin{tabular}{@{}L{1.6cm}L{4.4cm}@{\hspace{0.9cm}}L{1.6cm}L{4.6cm}@{}}
+    \hi{\texttt{iss}} & издатель: кто выдал          & \texttt{iat}   & момент выдачи \\
+    \hi{\texttt{sub}} & субъект: о ком               & \texttt{nbf}   & не раньше \\
+    \hi{\texttt{aud}} & аудитория: для кого          & \texttt{jti}   & идентификатор токена \\
+    \hi{\texttt{exp}} & срок: до какого момента      & \texttt{scope} & области: для чего дан доступ \\
+  \end{tabular}}
+
+  \slidegap
+  \aside{Остальное добавляет издатель: роли, отдел. Утверждение сделано \hi{в
+    момент выдачи} --- и до обновления не меняется.}
+\end{frame}
+
+% 14
+\begin{frame}[fragile]{Имена утверждений в .NET}
+  \slidetop
+  \claim{Короткие имена из токена становятся \lo{длинными}.}
+
+\begin{lstlisting}[style=term,basicstyle=\termsm]
+$ curl -s -H "Authorization: Bearer $TOKEN" http://localhost:5090/me | jq -c '.[]'
+{"type":"http://schemas.xmlsoap.org/ws/2005/05/identity/claims/name","value":"42"}
+{"type":"http://schemas.xmlsoap.org/ws/2005/05/identity/claims/nameidentifier","value":"42"}
+{"type":"jti","value":"a7539911"}
+{"type":"http://schemas.microsoft.com/ws/2008/06/identity/claims/role","value":"customer"}
+{"type":"aud","value":"http://localhost:5090"}
+{"type":"nbf","value":"1794463373"}
+{"type":"exp","value":"1802412173"}
+{"type":"iat","value":"1794463373"}
+{"type":"iss","value":"dotnet-user-jwts"}
+\end{lstlisting}
+
+  \rulegap
+  \aside{Ищут по константе --- \texttt{ClaimTypes.NameIdentifier}, а не по строке
+    \texttt{sub}. Переименование отключается одной настройкой; в команде это
+    решают \hi{один раз}.}
+\end{frame}
+
+% 15
+\begin{frame}{Токен --- не профиль}
+  \slidetop
+  \versus{В токене}{%
+    \begin{cbul}{accent}
+      \item идентификатор
+      \item роли, разрешения
+      \item срок
+      \item издатель, аудитория
+    \end{cbul}}{У издателя и в базе}{%
+    \begin{cbul}{alt}
+      \item имя, почта, телефон
+      \item отдел, должность
+      \item лимит на заказы
+      \item всё, что устаревает
+    \end{cbul}}
+
+  \slidegap
+  \hrulethin{0.42}
+  \rulegap
+  \aside{Утверждений ровно столько, сколько нужно сервису для \hi{решений}.
+    Чем больше в токене, тем больше того, что может устареть.}
+\end{frame}
+
+% 16
+\begin{frame}[plain]
+  \vote{Можно ли положить в токен номер карты, чтобы сервис оплаты не ходил за
+    ним в базу?}
+\end{frame}
+
+% 17
+\begin{frame}[plain]
+  \statement{Токен \hi{подписывается}, а не шифруется. Подпись защищает от
+    подделки, \lo{не от чтения}.}
+\end{frame}
+
+% 18
+\begin{frame}[fragile]{Подпись}
+  \slidetop
+  \claim{Изменили символ --- подпись \lo{не сошлась}.}
+
+\begin{lstlisting}[style=term,basicstyle=\termsm]
+$ curl -s -i -H "Authorization: Bearer ${TOKEN/NDIi/NDMi}" http://localhost:5090/orders/1
+HTTP/1.1 401 Unauthorized
+Content-Length: 0
+Date: Thu, 12 Nov 2026 06:03:00 GMT
+Server: Kestrel
+WWW-Authenticate: Bearer error="invalid_token", error_description="The signature key was not found"
+\end{lstlisting}
+
+  \rulegap
+  \begin{cbul}{accent}
+    \item \texttt{NDIi} $\to$ \texttt{NDMi} в нагрузке: \texttt{sub} был 42, стал 43
+    \item проверяющий пересчитал подпись --- ни с одним его ключом она не сошлась
+    \item сошлась --- нагрузка \hi{ровно такая}, какой её подписал издатель
+  \end{cbul}
+\end{frame}
+
+% 19
+\begin{frame}{Два вида ключей}
+  \slidetop
+  \versus{Асимметричный}{%
+    \begin{cbul}{accent}
+      \item пара ключей
+      \item приватным подписывают
+      \item публичным только проверяют
+      \item приватный --- у издателя
+      \item для нескольких сервисов
+    \end{cbul}}{Симметричный}{%
+    \begin{cbul}{alt}
+      \item один секрет
+      \item им подписывают
+      \item им же и проверяют
+      \item секрет --- у каждого
+      \item для одного приложения
+    \end{cbul}}
+
+  \slidegap
+  \hrulethin{0.42}
+  \rulegap
+  \aside{Алгоритм определяете \hi{вы}, а не токен: заголовок может написать кто
+    угодно. Настройка --- список разрешённых алгоритмов.}
+\end{frame}
+
+% 20
+\begin{frame}[fragile]{Откуда публичный ключ}
+  \slidetop
+\begin{lstlisting}[style=json,basicstyle=\codesm]
+{ "alg": "RS256", "typ": "JWT", "kid": "2026-09-key-1" }
+\end{lstlisting}
+
+  \begin{center}
+    \begin{tikzpicture}[font=\footnotesize,
+      tb/.style={box,minimum width=4.0cm,minimum height=1.1cm}]
+      \node[tb] (i) at (0,0) {\textbf{издатель}\\набор ключей (JWKS)};
+      \node[tb,draw=accent,line width=1.0pt] (s) at (8.2,0)
+        {\textbf{сервис}\\кэш публичных ключей};
+      \draw[arra] (i) -- node[above,font=\scriptsize,text=accent] {ключ с таким
+        \texttt{kid}} node[below,font=\scriptsize,text=muted] {один раз, потом из кэша} (s);
+    \end{tikzpicture}
+  \end{center}
+
+  \rulegap
+  \begin{cbul}{accent}
+    \item незнакомый \texttt{kid} --- сервис идёт за набором заново
+    \item издатель меняет ключи, \hi{не предупреждая} никого: ротация без простоя
+    \item издатель недоступен --- известные ключи работают, незнакомый \texttt{kid}
+      \lo{отклоняется}
+  \end{cbul}
+\end{frame}
+
+% 21
+\begin{frame}{Четыре проверки}
+  \slidetop
+  \begin{center}
+    \begin{tikzpicture}[font=\footnotesize,
+      tb/.style={box,minimum width=2.9cm,minimum height=1.25cm}]
+      \node[tb] (t1) at (0,0)    {\textbf{подпись}\\не подделан};
+      \node[tb] (t2) at (3.35,0) {\textbf{издатель}\\выдал тот,\\кому верим};
+      \node[tb] (t3) at (6.7,0)  {\textbf{аудитория}\\выдан для нас};
+      \node[tb] (t4) at (10.05,0) {\textbf{срок}\\ещё действует};
+    \end{tikzpicture}
+  \end{center}
+
+  \slidegap
+  {\large Все четыре, каждый запрос, \hi{без похода в базу}.}
+
+  \slidegap
+  \aside{Ключ в кэше, остальное --- математика и сравнение строк. На расхождение
+    часов между машинами --- допуск в несколько минут.}
+\end{frame}
+
+% 22
+\begin{frame}[fragile]{Отказ с причиной}
+  \slidetop
+\begin{lstlisting}[style=term,basicstyle=\termsm,escapechar=|]
+$ curl -s -i -H "Authorization: Bearer $EXPIRED" http://localhost:5090/orders/1
+HTTP/1.1 401 Unauthorized
+Content-Length: 0
+Date: Thu, 12 Nov 2026 06:03:00 GMT
+Server: Kestrel
+WWW-Authenticate: Bearer error="invalid_token",
+error_description="The token expired at '11/11/2026 10:10:00'"
+
+$ curl -s -i -H "Authorization: Bearer $REPORTS" http://localhost:5090/orders/1
+HTTP/1.1 401 Unauthorized
+Content-Length: 0
+Date: Thu, 12 Nov 2026 06:03:00 GMT
+Server: Kestrel
+WWW-Authenticate: Bearer error="invalid_token",
+error_description="The audience '(null)' is invalid"
+\end{lstlisting}
+
+  \rulegap
+  \aside{Первый токен истёк вчера. Второй подписан \hi{тем же} издателем, но выдан
+    сервису отчётов: чужая аудитория --- \lo{отказ}.}
+\end{frame}
+
+% 23
+\begin{frame}{Stateless}
+  \slidetop
+  \claim{Любой экземпляр узнаёт, кто пришёл, \hi{никого не спрашивая}.}
+
+  \begin{center}
+    \begin{tikzpicture}[font=\footnotesize,
+      tb/.style={box,minimum width=3.4cm,minimum height=0.72cm}]
+      \node[font=\footnotesize,text=muted,align=center] (c) at (-0.6,0) {запрос\\с токеном};
+      \node[tb,minimum width=2.8cm,minimum height=1.0cm] (lb) at (2.8,0) {балансировщик};
+      \node[tb] (e1) at (7.2,0.95)  {экземпляр 1};
+      \node[tb] (e2) at (7.2,0)     {экземпляр 2};
+      \node[tb] (e3) at (7.2,-0.95) {экземпляр 3};
+      \draw[arr] (c) -- (lb);
+      \draw[arr] (lb.east) -- (e1.west);
+      \draw[arr] (lb.east) -- (e2.west);
+      \draw[arr] (lb.east) -- (e3.west);
+      \draw[rawbrace] ([xshift=0.25cm]e1.north east) -- ([xshift=0.25cm]e3.south east);
+      \node[rawlab,text=accent] at ([xshift=0.6cm]e2.east) {тот же публичный ключ};
+    \end{tikzpicture}
+  \end{center}
+
+  \slidegap
+  \aside{Ни общего хранилища сессий, ни липких сессий. Десятый экземпляр сразу
+    принимает те же токены.}
+\end{frame}
+
+% 24
+\begin{frame}[plain]
+  \vote{Пользователя уволили в три часа дня. Его токен выдан в два, срок --- до
+    пяти. Что с его запросами с трёх до пяти?}
+\end{frame}
+
+% 25
+\begin{frame}{Мгновенного отзыва нет}
+  \slidetop
+  \versus{JWT}{%
+    \begin{cbul}{accent}
+      \item содержимое внутри
+      \item проверка без издателя
+      \item отозвать нельзя: ждём срока
+      \item сервис независим
+    \end{cbul}}{Непрозрачный токен}{%
+    \begin{cbul}{alt}
+      \item случайная строка
+      \item каждый запрос --- к издателю
+      \item отзыв мгновенный
+      \item издатель --- узкое место
+    \end{cbul}}
+
+  \slidegap
+  \hrulethin{0.42}
+  \rulegap
+  \aside{Отозвать --- значит где-то \lo{помнить}. Список отозванных на каждом
+    запросе --- то же хранилище, только с лишним слоем.}
+\end{frame}
+
+% 26
+\begin{frame}{Два токена}
+  \slidetop
+  \versus{Access}{%
+    \begin{cbul}{accent}
+      \item минуты: 5, 10, 15
+      \item stateless
+      \item предъявляют сервису
+      \item доживает свой срок
+    \end{cbul}}{Refresh}{%
+    \begin{cbul}{alt}
+      \item дни или недели
+      \item хранится у издателя
+      \item предъявляют только издателю
+      \item отзывается одной записью
+    \end{cbul}}
+
+  \slidegap
+  \hrulethin{0.42}
+  \rulegap
+  {\large Уволили $\to$ refresh отозван $\to$ через \hi{минуты} доступ закрыт.}
+\end{frame}
+
+% 27
+\begin{frame}[plain]
+  \vote{Часы на сервере отстают на десять минут. Срок токена --- пять минут. Что
+    увидит сервис?}
+\end{frame}
+
+% 28
+\begin{frame}[fragile]{Включить в сервисе}
+  \vspace{0.3em}
+\begin{lstlisting}[style=csharp,basicstyle=\codesm,escapechar=|]
+builder.Services
+|\mk{b1}|    .AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
+    .AddJwtBearer(options =>
+    {
+|\mk{b2}|        options.Authority =
+            builder.Configuration["Auth:Authority"];
+|\mk{b3}|        options.Audience =
+            builder.Configuration["Auth:Audience"];
+    });
+
+builder.Services.AddAuthorization();
+
+var app = builder.Build();
+
+|\mk{b4}|var orders = app.MapGroup("/orders").RequireAuthorization();
+\end{lstlisting}
+  \begin{tikzpicture}[remember picture,overlay,every node/.style={rawlab}]
+    \node at ([xshift=10.3cm]b1) {схема по умолчанию};
+    \node[text=accent] at ([xshift=10.3cm]b2) {издатель};
+    \node[text=accent] at ([xshift=10.3cm]b3) {аудитория --- мы};
+    \node at ([xshift=10.3cm]b4) {любой, но известный};
+  \end{tikzpicture}
+
+\end{frame}
+
+% 29
+\begin{frame}[fragile]{Пока издателя нет}
+  \vspace{0.3em}
+\begin{lstlisting}[style=term,basicstyle=\termsm]
+$ dotnet user-jwts create --name 42 --role customer
+New JWT saved with ID 'a7539911'.
+Name: 42
+Roles: [customer]
+
+Token: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1bmlxdWVfbmFtZSI6IjQyIiwic3ViIjoiNDIiLCJqdGki...
+$ curl -s -i -H "Authorization: Bearer $TOKEN" http://localhost:5090/orders/1
+HTTP/1.1 200 OK
+Content-Type: application/json; charset=utf-8
+Date: Thu, 12 Nov 2026 06:03:00 GMT
+Server: Kestrel
+Transfer-Encoding: chunked
+
+{"id":1,"status":"Paid","total":25.00}
+\end{lstlisting}
+
+  \rulegap
+  \aside{\texttt{user-jwts}: ключ подписи --- в секретах пользователя, издатель и
+    аудитория --- в конфигурации разработки. Авторизацию отлаживают \hi{до}
+    настоящего издателя.}
+\end{frame}
+
+% 30
+\begin{frame}{Что за двумя строками}
+  \slidetop
+  \claim{«Почти без кода» --- не «почти ничего не происходит».}
+
+  {\renewcommand{\arraystretch}{1.6}
+  \begin{tabular}{@{}L{3.2cm}L{9.6cm}@{}}
+    \hi{\textbf{один раз}}      & по адресу издателя --- документ с описанием; по ссылке
+      из него --- набор ключей; в кэш \\
+    \hi{\textbf{каждый запрос}} & токен из заголовка $\to$ ключ по \texttt{kid} $\to$
+      подпись, издатель, аудитория, срок \\
+    \hi{\textbf{удача}}         & утверждения становятся \texttt{User} в контексте \\
+    \lo{\textbf{неудача}}       & \texttt{User} пустой; группа потребует его --- challenge, 401 \\
+  \end{tabular}}
+
+  \slidegap
+  \aside{В обработчик пользователь приходит параметром по типу:
+    \texttt{ClaimsPrincipal}.}
+\end{frame}
+
+% 31
+\begin{frame}[plain]
+  \keyline{Токен --- подписанные утверждения: база не нужна.\\
+    Читается всеми --- в нём нет чувствительного.\\
+    Не отзывается --- поэтому короткий.}
+\end{frame}
+
+% ========================================================= 3. ACCESS RULES ==
+\section{3. Правила доступа}
+
+% 32
+\begin{frame}[plain]
+  \sectionopener{3}{Правила доступа}{Доступ к \hi{ресурсу}, а не только к
+    маршруту.}
+\end{frame}
+
+% 33
+\begin{frame}{Три ступени}
+  \slidetop
+  {\renewcommand{\arraystretch}{1.5}
+  \begin{tabular}{@{}L{3.4cm}L{4.7cm}L{4.7cm}@{}}
+    & \colhead{accent}{что это} & \colhead{alt}{когда} \\
+    \textbf{роли}          & слово в токене, одна строка на маршруте & правил не больше,
+      чем ролей \\
+    \textbf{политики}      & именованное правило из условий & правило меняется, маршруты
+      не тронуты \\
+    \hi{\textbf{требования и обработчики}} & данные и код, зависимости из контейнера
+      & условие требует кода: возраст, отдел, владелец \\
+  \end{tabular}}
+
+  \slidegap
+  \aside{Минимальные права: украденный токен с минимальными правами ---
+    \hi{минимальный} ущерб.}
+\end{frame}
+
+% 34
+\begin{frame}[fragile]{Политика}
+  \slidetop
+\begin{lstlisting}[style=csharp,basicstyle=\codesm,escapechar=|]
+builder.Services.AddAuthorizationBuilder()
+|\mk{p1}|    .AddPolicy("CanManageOrders", policy => policy
+|\mk{p2}|        .RequireRole("manager")
+|\mk{p3}|        .RequireClaim("department", "sales", "support"));
+
+orders.MapGet("/", (IOrderService service) =>
+        service.All().Select(o => o.ToDto()))
+|\mk{p4}|    .RequireAuthorization("CanManageOrders");
+\end{lstlisting}
+  \begin{tikzpicture}[remember picture,overlay,every node/.style={rawlab}]
+    \node[text=accent] at ([xshift=9.9cm]p1) {имя --- один раз};
+    \draw[rawbrace] ([xshift=9.65cm,yshift=0.35em]p2) -- ([xshift=9.65cm,yshift=-0.3em]p3);
+    \node at ([xshift=9.9cm]$(p2)!0.5!(p3)$) {условия --- как «и»};
+    \node at ([xshift=9.9cm]p4) {маршрут знает имя};
+  \end{tikzpicture}
+
+\begin{lstlisting}[style=term,basicstyle=\termsm]
+$ curl -s -w '\n%{http_code}\n' -H "Authorization: Bearer $TOKEN" http://localhost:5090/orders
+
+403
+$ curl -s -w '\n%{http_code}\n' -H "Authorization: Bearer $MANAGER" http://localhost:5090/orders
+[{"id":1,"status":"Paid","total":25.00},{"id":7,"status":"New","total":12.50}]
+200
+\end{lstlisting}
+\end{frame}
+
+% 35
+\begin{frame}[plain]
+  \vote{Маршрут защищён. Пользователь 42 запрашивает заказ 7 --- заказ
+    пользователя 9. Что вернёт сервис?}
+\end{frame}
+
+% 36
+\begin{frame}{Две проверки}
+  \slidetop
+  \versus{На маршруте}{%
+    \begin{cbul}{accent}
+      \item кто может вызывать \texttt{GET /orders/\{id\}}
+      \item видит пользователя и маршрут
+      \item до обработчика: заказа ещё нет
+      \item ловит анонимного
+    \end{cbul}}{На ресурсе}{%
+    \begin{cbul}{alt}
+      \item кому можно заказ 7
+      \item видит пользователя и заказ
+      \item после загрузки
+      \item ловит чужого
+    \end{cbul}}
+
+  \slidegap
+  \hrulethin{0.42}
+  \rulegap
+  {\large Только первая --- \lo{уязвимость}: поменял цифру в адресе --- получил
+    чужой заказ.}
+\end{frame}
+
+% 37
+\begin{frame}[fragile]{Требование и обработчик}
+  \vspace{0.3em}
+\begin{lstlisting}[style=csharp,basicstyle=\codexs,escapechar=`]
+`\mk{r1}`public sealed class OrderOwnerRequirement
+    : IAuthorizationRequirement;
+
+public sealed class OrderOwnerHandler
+`\mk{r2}`    : AuthorizationHandler<OrderOwnerRequirement, Order>
+{
+    protected override Task HandleRequirementAsync(
+        AuthorizationHandlerContext context,
+        OrderOwnerRequirement requirement, Order order)
+    {
+        var userId = context.User.FindFirstValue(ClaimTypes.NameIdentifier);
+`\mk{r3}`        if (userId == order.CustomerId
+            || context.User.IsInRole("admin"))
+`\mk{r4}`            context.Succeed(requirement);
+        return Task.CompletedTask;
+    }
+}
+\end{lstlisting}
+  \begin{tikzpicture}[remember picture,overlay,every node/.style={rawlab}]
+    \node at ([xshift=10.2cm]r1) {требование --- данные};
+    \node[text=accent] at ([xshift=10.2cm]r2) {и тип ресурса};
+    \node at ([xshift=10.2cm]r3) {правило --- кодом};
+    \node[text=alt] at ([xshift=10.2cm]r4) {промолчал --- отказ};
+  \end{tikzpicture}
+\end{frame}
+
+% 38
+\begin{frame}[fragile]{Проверка на ресурсе}
+  \vspace{0.3em}
+\begin{lstlisting}[style=csharp,basicstyle=\codexs,escapechar=`]
+orders.MapGet("/{id:int}",
+`\mk{e1}`    async Task<Results<Ok<OrderDto>, NotFound, ForbidHttpResult>> (
+        int id, ClaimsPrincipal user, IOrderService service,
+        IAuthorizationService auth, CancellationToken ct) =>
+{
+`\mk{e2}`    var order = await service.FindAsync(id, ct);
+    if (order is null) return TypedResults.NotFound();
+`\mk{e3}`    var result = await auth.AuthorizeAsync(
+        user, order, new OrderOwnerRequirement());
+    return result.Succeeded
+        ? TypedResults.Ok(order.ToDto())
+`\mk{e4}`        : TypedResults.Forbid();
+});
+\end{lstlisting}
+  \begin{tikzpicture}[remember picture,overlay,every node/.style={rawlab}]
+    \node at ([xshift=10.2cm]e1) {три исхода --- в типе};
+    \node at ([xshift=10.2cm]e2) {сначала загрузили};
+    \node[text=accent] at ([xshift=10.2cm]e3) {потом проверили};
+    \node[text=alt] at ([xshift=10.2cm]e4) {forbid: 403};
+  \end{tikzpicture}
+
+  \slidegap
+  \aside{Проверка на ресурсе \hi{не отменяет} проверку на маршруте: анонимный
+    запрос до загрузки заказа не доходит.}
+\end{frame}
+
+% 39
+\begin{frame}{403 или 404 для чужого}
+  \slidetop
+  \versus{403}{%
+    \begin{cbul}{accent}
+      \item строго по смыслу: есть, но нельзя
+      \item подтверждает: номер занят
+      \item перебором видно, сколько заказов
+    \end{cbul}}{404}{%
+    \begin{cbul}{alt}
+      \item «для тебя его нет»
+      \item существование не раскрыто
+      \item перебор ничего не даёт
+    \end{cbul}}
+
+  \slidegap
+  \hrulethin{0.42}
+  \rulegap
+  \aside{Осознанный выбор --- \hi{один} на весь сервис, а не в каждом маршруте
+    по-разному.}
+\end{frame}
+
+% 40
+\begin{frame}[fragile]{Свой, чужой, администратор}
+  \vspace{0.3em}
+\begin{lstlisting}[style=term,basicstyle=\termsm,escapechar=|]
+$ curl -s -w '\n%{http_code}\n' -H "Authorization: Bearer $TOKEN" http://localhost:5090/orders/1
+{"id":1,"status":"Paid","total":25.00}
+|\mk{o1}|200
+$ curl -s -w '\n%{http_code}\n' -H "Authorization: Bearer $TOKEN" http://localhost:5090/orders/7
+
+|\mk{o2}|403
+$ curl -s -w '\n%{http_code}\n' -H "Authorization: Bearer $ADMIN" http://localhost:5090/orders/7
+{"id":7,"status":"New","total":12.50}
+|\mk{o3}|200
+\end{lstlisting}
+  \begin{tikzpicture}[remember picture,overlay,every node/.style={rawlab}]
+    \node[text=accent] at ([xshift=1.6cm]o1) {свой};
+    \node[text=alt] at ([xshift=1.6cm]o2) {чужой};
+    \node at ([xshift=1.6cm]o3) {администратор};
+  \end{tikzpicture}
+
+  \rulegap
+  \begin{cbul}{accent}
+    \item один объект --- обработчик; список «мои заказы» --- \hi{фильтр} по владельцу
+      в запросе к базе
+    \item заказ загружают один раз: и для проверки, и для ответа
+    \item правило владения --- в \hi{одном} обработчике, для всех маршрутов с заказом
+  \end{cbul}
+\end{frame}
+
+% 41
+\begin{frame}[plain]
+  \keyline{Правило на маршруте --- кто может спрашивать.\\
+    Правило на ресурсе --- кому можно этот объект.\\
+    Только первое --- уязвимость.}
+\end{frame}
+
+% =================================================== 4. EXTERNAL PROVIDERS ==
+\section{4. Внешние провайдеры}
+
+% 42
+\begin{frame}[plain]
+  \sectionopener{4}{Внешние провайдеры}{Сервис не изобретает identity --- он к
+    ней \hi{подключается}.}
+\end{frame}
+
+% 43
+\begin{frame}[plain]
+  \vote{Вы нажали «Войти через Google» на чужом сайте. Сайт узнал ваш пароль?}
+\end{frame}
+
+% 44
+\begin{frame}{Четыре роли OAuth 2.0}
+  \slidetop
+  \begin{center}
+    \begin{tikzpicture}[font=\footnotesize,
+      tb/.style={box,minimum width=4.3cm,minimum height=1.15cm}]
+      \node[tb] (ro) at (0,0)    {\textbf{владелец ресурса}\\пользователь};
+      \node[tb] (as) at (8.4,0)  {\textbf{сервер авторизации}\\выдаёт токены};
+      \node[tb] (cl) at (0,-2.3) {\textbf{клиент}\\приложение, которому нужен доступ};
+      \node[tb,draw=accent,line width=1.0pt] (rs) at (8.4,-2.3)
+        {\textbf{ресурсный сервер}\\наш сервис};
+      \draw[arrl] (ro) -- node[above,font=\scriptsize,text=alt] {пароль --- только сюда} (as);
+      \draw[arr] (as) -- node[above,sloped,font=\scriptsize,text=muted] {токены} (cl);
+      \draw[arra] (cl) -- node[above,font=\scriptsize,text=accent] {токен доступа} (rs);
+    \end{tikzpicture}
+  \end{center}
+
+  \slidegap
+  \aside{Наш сервис не проверяет пароли и не знает пользователей: он принимает
+    токены и \hi{проверяет} их.}
+\end{frame}
+
+% 45
+\begin{frame}{Поток с кодом авторизации}
+  \slidetop
+  \claim{Пароль видел только \hi{сервер авторизации}.}
+
+  {\renewcommand{\arraystretch}{1.3}
+  \begin{tabular}{@{}L{0.7cm}L{12.1cm}@{}}
+    \hi{\textbf{1}} & клиент отправляет пользователя на сервер авторизации \\
+    \hi{\textbf{2}} & пользователь вводит пароль \hi{там} и соглашается дать доступ \\
+    \hi{\textbf{3}} & сервер авторизации возвращает его к клиенту с одноразовым кодом \\
+    \hi{\textbf{4}} & клиент обменивает код на токены --- напрямую \\
+    \hi{\textbf{5}} & клиент ходит к нашему сервису с токеном доступа \\
+  \end{tabular}}
+
+  \slidegap
+  \aside{Проверочный ключ: отпечаток случайной строки --- с первым запросом, сама
+    строка --- с обменом. Перехваченный код \lo{не обменять}.}
+\end{frame}
+
+% 46
+\begin{frame}{Потоки}
+  \slidetop
+  {\renewcommand{\arraystretch}{1.6}
+  \begin{tabular}{@{}L{4.6cm}L{8.2cm}@{}}
+    \hi{\textbf{код авторизации}}         & есть пользователь и браузер \\
+    \hi{\textbf{учётные данные клиента}}  & пользователя нет: сервис вызывает сервис от
+      своего имени \\
+    \textbf{устройство}                   & браузера нет: код вводят на другом
+      устройстве \\
+    \textbf{обмен токенов}                & цепочка сервисов: дальше --- тоже от имени
+      пользователя \\
+  \end{tabular}}
+
+  \slidegap
+  \aside{Субъект в токене сервиса --- сервис, а не человек, и правила доступа для
+    него \hi{свои}.}
+\end{frame}
+
+% 47
+\begin{frame}{OpenID Connect: два токена}
+  \slidetop
+  \versus{Токен доступа}{%
+    \begin{cbul}{accent}
+      \item для ресурсного сервера
+      \item с ним ходят к нам
+      \item что клиенту можно
+      \item аудитория --- наш сервис
+    \end{cbul}}{Токен идентичности}{%
+    \begin{cbul}{alt}
+      \item для клиента
+      \item к нам с ним нельзя
+      \item кто вошёл: имя в углу экрана
+      \item аудитория --- не наша
+    \end{cbul}}
+
+  \slidegap
+  \hrulethin{0.42}
+  \rulegap
+  \aside{OAuth --- про доступ. OpenID Connect добавляет личность: токен
+    идентичности, профиль и \hi{документ обнаружения} по известному адресу.}
+\end{frame}
+
+% 48
+\begin{frame}{Подключиться к чему угодно}
+  \slidetop
+  \begin{center}
+    \begin{tikzpicture}[font=\footnotesize,
+      tb/.style={box,minimum width=3.5cm,minimum height=0.85cm}]
+      \node[tb,draw=accent,line width=1.0pt,minimum width=3.3cm,minimum height=1.5cm]
+        (s) at (0,0) {\textbf{наш сервис}\\\texttt{Authority}\\\texttt{Audience}};
+      \node[tb] (k) at (-5.2,0.85)  {Keycloak};
+      \node[tb] (i) at (-5.2,-0.85) {IdentityServer};
+      \node[tb] (c) at (5.2,0.85)   {облачный провайдер};
+      \node[tb] (t) at (5.2,-0.85)  {тестовый из SDK};
+      \draw[arra] (k.east) -- (s);
+      \draw[arra] (i.east) -- (s);
+      \draw[arra] (c.west) -- (s);
+      \draw[arra] (t.west) -- (s);
+    \end{tikzpicture}
+  \end{center}
+
+  \slidegap
+  {\large Меняется \hi{конфигурация}, не код.}
+
+  \slidegap
+  \aside{Один протокол, одна структура токена, один стандарт публикации ключей.
+    Сервис, который сам хранит пароли, привязан к своей базе пользователей
+    \lo{навсегда}.}
+\end{frame}
+
+% 49
+\begin{frame}{Что настраиваем}
+  \slidetop
+  {\renewcommand{\arraystretch}{1.6}
+  \begin{tabular}{@{}L{3.6cm}L{9.2cm}@{}}
+    \hi{\textbf{издатель}}         & адрес сервера авторизации: документ обнаружения,
+      имя издателя, набор ключей \\
+    \hi{\textbf{аудитория}}        & имя сервиса у издателя: токен для соседнего
+      сервиса отвергается \\
+    \hi{\textbf{правила проверки}} & допуск на часы, алгоритмы подписи, откуда брать
+      роли \\
+  \end{tabular}}
+
+  \slidegap
+  \aside{Роли каждый издатель кладёт по-своему: их приводит к стандартным
+    \hi{один класс} --- преобразование утверждений. Адрес издателя --- только HTTPS:
+    подменили его --- подменили всех, кому сервис верит.}
+\end{frame}
+
+% 50
+\begin{frame}[plain]
+  \vote{А почему не просто ключ API --- строка в заголовке, которую сервис
+    сверяет с базой?}
+\end{frame}
+
+% 51
+\begin{frame}{Ключ API против токена}
+  \slidetop
+  \versus{Токен}{%
+    \begin{cbul}{accent}
+      \item живёт минуты, обновляется
+      \item личность пользователя
+      \item отзыв через издателя
+      \item единый вход
+    \end{cbul}}{Ключ API}{%
+    \begin{cbul}{alt}
+      \item выдан на месяцы
+      \item только приложение
+      \item утечка --- доступ на месяцы
+      \item ни срока, ни обновления
+    \end{cbul}}
+
+  \slidegap
+  \hrulethin{0.42}
+  \rulegap
+  \aside{Машина к машине, с ротацией и ограниченными правами --- ключ допустим.
+    Там, где есть пользователь, --- шаг назад на \lo{пятнадцать лет}.}
+\end{frame}
+
+% 52
+\begin{frame}[plain]
+  \keyline{Пароли и личности --- чужая работа по стандарту.\\
+    Сервис принимает токены.\\
+    Издателя меняет конфигурация, а не код.}
+\end{frame}
+
+% ================================================== 5. SECRETS AND HYGIENE ==
+\section{5. Секреты и гигиена}
+
+% 53
+\begin{frame}[plain]
+  \sectionopener{5}{Секреты и гигиена}{Не в репозитории, не в логах, не в
+    \hi{токене}.}
+\end{frame}
+
+% 54
+\begin{frame}[fragile]{Локально --- секреты пользователя}
+  \slidetop
+\begin{lstlisting}[style=term,basicstyle=\termsm,escapechar=|]
+|\mk{s1}|$ dotnet user-secrets init
+Set UserSecretsId to 'ebb9ffa5-e2b3-43da-9de9-d8ef98bb5d31' for MSBuild project
+'/home/user/HelloWorld/HelloWorld.csproj'.
+|\mk{s2}|$ dotnet user-secrets set "Auth:ClientSecret" "dev-only-value"
+Successfully saved Auth:ClientSecret to the secret store.
+|\mk{s3}|$ dotnet user-secrets list
+Auth:ClientSecret = dev-only-value
+\end{lstlisting}
+  \begin{tikzpicture}[remember picture,overlay,every node/.style={rawlab}]
+    \node at ([xshift=9.6cm]s1) {идентификатор проекта};
+    \node[text=accent] at ([xshift=9.6cm]s2) {ключ --- с двоеточиями};
+    \node at ([xshift=9.6cm]s3) {что лежит};
+  \end{tikzpicture}
+
+  \slidegap
+  \begin{cbul}{accent}
+    \item значение --- в домашней папке, \hi{вне репозитория}; у коллеги своё
+    \item читается только в разработке
+    \item в файле настроек в репозитории --- ключ с пустым значением: видна структура
+  \end{cbul}
+\end{frame}
+
+% 55
+\begin{frame}{Где секретам место}
+  \slidetop
+  {\renewcommand{\arraystretch}{1.6}
+  \begin{tabular}{@{}L{3.2cm}L{9.6cm}@{}}
+    \hi{\textbf{локально}} & секреты пользователя \\
+    \hi{\textbf{сборка}}   & хранилище секретов системы сборки: подставляет в
+      переменные окружения шага, маскирует в выводе \\
+    \hi{\textbf{прод}}     & переменные окружения или хранилище секретов: журнал
+      чтений, ротация, ещё один провайдер конфигурации \\
+  \end{tabular}}
+
+  \slidegap
+  \aside{Секрет, который не менялся два года, знают все, кто работал в компании за
+    эти два года. Лучшие учётные данные --- \hi{короткоживущие}: истекают сами.}
+\end{frame}
+
+% 56
+\begin{frame}[plain]
+  \vote{Вы закоммитили строку подключения с паролем, через минуту удалили и
+    закоммитили снова. Пароль в безопасности?}
+\end{frame}
+
+% 57
+\begin{frame}{Три места, где секретов нет}
+  \slidetop
+  {\renewcommand{\arraystretch}{1.6}
+  \begin{tabular}{@{}L{3.2cm}L{9.6cm}@{}}
+    \lo{\textbf{репозиторий}} & он в истории. Попавший секрет считается утёкшим:
+      его не удаляют, а \hi{меняют} \\
+    \lo{\textbf{логи}}        & заголовок \texttt{Authorization}, тело запроса на
+      вход, исключение со строкой подключения, токен в адресе \\
+    \lo{\textbf{токен}}       & читается всеми: идентификатор вместо имени, роль
+      вместо должности \\
+  \end{tabular}}
+
+  \slidegap
+  \aside{Логировать можно и нужно: \hi{идентификатор} пользователя и идентификатор
+    трассировки. Иначе не ответить, кто удалил заказ.}
+\end{frame}
+
+% 58
+\begin{frame}[plain]
+  \keyline{Секрет, попавший в репозиторий, в лог или в токен, --- уже не
+    секрет.\\ Его место --- секреты пользователя и хранилище.}
+\end{frame}
+
+\end{document}
